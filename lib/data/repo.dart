@@ -97,6 +97,54 @@ class Repo {
     await _c.from('courier_applications').insert({'user_id': u.id, 'full_name': name, 'phone': phone, 'transport': transport, 'zone': zone});
   }
 
+
+  static String err(Object e) => e is PostgrestException ? e.message : '$e';
+
+  static Future<List<Map<String, dynamic>>> myShops() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('shops').select('id,name,status,city').eq('owner_id', u.id).order('created_at');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> shopProducts(String shopId) async {
+    final rows = await _c.from('products').select('id,name,price_minor,currency,stock,status,image_url').eq('shop_id', shopId).order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish) async {
+    await _c.from('products').insert({'shop_id': shopId, 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
+  }
+
+  static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
+    await _c.from('products').update(patch).eq('id', id);
+  }
+
+  static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
+    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty)').eq('shop_id', shopId).order('created_at', ascending: false).limit(50);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> myOrders() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address) async {
+    final res = await _c.rpc('create_orders', params: {
+      'p_items': [for (final l in lines) {'product_id': l.id, 'qty': l.qty}],
+      'p_mode': mode,
+      'p_address': address,
+    });
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  static Future<void> cancelOrder(String id) async {
+    await _c.rpc('cancel_order', params: {'p_order': id});
+  }
+
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
   static Future<void> signOut() => _c.auth.signOut();
