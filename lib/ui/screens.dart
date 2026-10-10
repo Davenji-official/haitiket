@@ -6,6 +6,8 @@ import '../theme.dart';
 import 'home_screen.dart';
 import 'screens2.dart';
 import 'screens3.dart';
+import 'screens4.dart';
+import 'fx.dart';
 import 'widgets.dart';
 
 Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -13,6 +15,19 @@ Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAl
       if (sub != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(sub, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.4))),
       const SizedBox(height: 20),
     ]);
+
+Widget _promo(BuildContext context, String title, String text, String cta, IconData icon, VoidCallback onTap) => Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(28)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+        const SizedBox(height: 6),
+        Text(text, style: const TextStyle(fontSize: 16, color: C.green, height: 1.4, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 14),
+        PrimaryButton(label: cta, icon: icon, onPressed: onTap),
+      ]),
+    );
 
 Widget _notConfigured() => const EmptyState(title: 'En attente de configuration', text: "Le serveur n'est pas encore connecté. Ajoutez SUPABASE_URL et SUPABASE_ANON_KEY dans les secrets GitHub, puis relancez le build.");
 
@@ -27,7 +42,8 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   Widget build(BuildContext context) => ValueListenableBuilder<String>(
         valueListenable: Repo.search,
         builder: (_, q, __) => ListView(padding: const EdgeInsets.all(18), children: [
-          _title('Marketplace', 'Produits des boutiques vérifiées, disponibles maintenant.'),
+          _title('Marketplace', 'Produits des boutiques professionnelles vérifiées.'),
+          _promo(context, 'Vous êtes commerçant ?', 'Boutique professionnelle : 20 USD / mois. Vitrine, stock, commandes et livraison HAITIKET.', 'Ouvrir ma boutique', Icons.storefront, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen()))),
           SearchPill(onSubmit: (v) => Repo.search.value = v),
           if (q.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('Résultats pour « $q »', style: const TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
           const SizedBox(height: 20),
@@ -54,6 +70,7 @@ class BazarScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
         _title('Bazar', 'Achetez et vendez entre particuliers, près de chez vous.'),
+        _promo(context, 'Vous êtes particulier ?', 'Publiez votre article : 2 USD pour 14 jours, sans boutique.', 'Publier une annonce', Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
         if (!Config.configured)
           _notConfigured()
         else
@@ -129,57 +146,6 @@ class _NetworkState extends State<NetworkScreen> {
       ]);
 }
 
-class SellScreen extends StatefulWidget {
-  const SellScreen({super.key});
-  @override
-  State<SellScreen> createState() => _SellState();
-}
-
-class _SellState extends State<SellScreen> {
-  final shop = TextEditingController(), shopCity = TextEditingController();
-  final title = TextEditingController(), price = TextEditingController(), city = TextEditingController();
-  String? listingImg;
-
-  Future<void> run(Future<void> Function() f, String ok) async {
-    try {
-      await f();
-      if (mounted) toast(context, ok);
-    } catch (e) {
-      if (mounted) toast(context, '$e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _title('Vendre', 'Ouvrez une boutique ou publiez un article au Bazar.'),
-        const Text('Boutique professionnelle', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
-        const SizedBox(height: 12),
-        Field(shop, 'Nom de la boutique'),
-        Field(shopCity, 'Ville'),
-        FilledButton(
-          onPressed: () => run(() => Repo.createShop(shop.text.trim(), shopCity.text.trim()), 'Demande envoyée. Votre boutique sera activée après vérification.'),
-          child: const Text('Demander l\'ouverture'),
-        ),
-        const SizedBox(height: 32),
-        const Text('Annonce Bazar', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
-        const SizedBox(height: 12),
-        Field(title, "Titre de l'article"),
-        Field(price, 'Prix en HTG', type: TextInputType.number),
-        Field(city, 'Ville'),
-        ImageUploadField(onUrl: (u) => listingImg = u),
-        FilledButton(
-          onPressed: () {
-            final p = double.tryParse(price.text.replaceAll(',', '.'));
-            if (title.text.trim().isEmpty || p == null || p <= 0) return toast(context, 'Titre et prix valides requis.');
-            run(() => Repo.createListingDraft(title.text.trim(), (p * 100).round(), city.text.trim(), listingImg), 'Brouillon enregistré.');
-          },
-          child: const Text('Enregistrer le brouillon'),
-        ),
-        const SizedBox(height: 12),
-        const Text("Activation : 2 USD par période de 14 jours. Paiement indisponible pour l'instant (prestataire en attente de configuration).", style: TextStyle(color: C.muted)),
-      ]);
-}
-
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
   @override
@@ -231,7 +197,7 @@ class CartScreen extends StatelessWidget {
               const SizedBox(height: 4),
               const Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
               const SizedBox(height: 16),
-              FilledButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen())), child: const Text('Passer commande')),
+              PrimaryButton(label: 'Passer commande', icon: Icons.lock_outline, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()))),
               const SizedBox(height: 8),
               const Text('Paiement indisponible — en attente de configuration du prestataire.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
             ],

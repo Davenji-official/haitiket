@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'fx.dart';
+import 'screens4.dart';
 import 'shell.dart';
 import 'widgets.dart';
 
@@ -23,7 +25,7 @@ class SearchPill extends StatelessWidget {
             decoration: const InputDecoration(hintText: "Que recherchez-vous aujourd'hui ?", border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true),
           ),
         ),
-        FilledButton(onPressed: () => onSubmit(c.text), child: const Text('Rechercher')),
+        PrimaryButton(label: 'Rechercher', onPressed: () => onSubmit(c.text)),
       ]),
     );
   }
@@ -49,7 +51,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(padding: const EdgeInsets.fromLTRB(18, 28, 18, 40), children: [
+    final kids = <Widget>[
       RichText(
         text: const TextSpan(style: TextStyle(fontSize: 44, height: 1.05, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1), children: [
           TextSpan(text: "Tout ce qu'Haïti vend, en un seul "),
@@ -82,7 +84,7 @@ class HomeScreen extends StatelessWidget {
               child: Stack(children: [
                 Positioned(right: -40, top: -60, child: Container(width: 330, height: 330, decoration: const BoxDecoration(color: C.sun, shape: BoxShape.circle))),
                 Positioned(left: -60, bottom: -110, child: Container(width: 380, height: 380, decoration: const BoxDecoration(color: C.coral, shape: BoxShape.circle))),
-                const Positioned(right: 50, top: 28, child: Text('🧺', style: TextStyle(fontSize: 76))),
+                const Positioned(right: 50, top: 28, child: Floating(child: Text('🧺', style: TextStyle(fontSize: 76)))),
                 Positioned(
                   left: 24,
                   top: 24,
@@ -135,11 +137,12 @@ class HomeScreen extends StatelessWidget {
           if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Vérifiez votre connexion puis réessayez.');
           final items = s.data ?? [];
           if (items.isEmpty) {
-            return EmptyState(title: 'Aucun produit publié pour le moment', text: 'Les produits des boutiques vérifiées apparaîtront ici dès leur publication.', action: 'Ouvrir ma boutique', onAction: () => go(Sec.sell));
+            return EmptyState(title: 'Aucun produit publié pour le moment', text: 'Les produits des boutiques vérifiées apparaîtront ici dès leur publication.', action: 'Ouvrir ma boutique', onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen())));
           }
           return ProductGrid(items);
         },
       ),
-    ]);
+    ];
+    return ListView(padding: const EdgeInsets.fromLTRB(18, 28, 18, 40), children: [for (var i = 0; i < kids.length; i++) FadeSlideIn(index: i, child: kids[i])]);
   }
 }

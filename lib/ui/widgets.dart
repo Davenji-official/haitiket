@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../ui/product_detail.dart';
+import 'fx.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 
@@ -35,7 +36,7 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final shop = (p['shops'] as Map?)?['name'] ?? '';
     final img = p['image_url'] as String?;
-    return GestureDetector(
+    return Pressable(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailScreen(p))),
       child: Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: C.line)),
@@ -97,7 +98,7 @@ class ProductGrid extends StatelessWidget {
         childAspectRatio: .74,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        children: [for (final p in items) ProductCard(p)],
+        children: [for (var i = 0; i < items.length; i++) FadeSlideIn(index: i, child: ProductCard(items[i]))],
       );
 }
 

@@ -7,10 +7,10 @@ class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 3,
+        length: 4,
         child: Column(children: [
-          const TabBar(labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Boutiques'), Tab(text: 'Livreurs'), Tab(text: 'Annonces')]),
-          const Expanded(child: TabBarView(children: [_AdminList('shop'), _AdminList('courier'), _AdminList('listing')])),
+          const TabBar(labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Boutiques'), Tab(text: 'Livreurs'), Tab(text: 'Annonces'), Tab(text: 'Support')]),
+          const Expanded(child: TabBarView(children: [_AdminList('shop'), _AdminList('courier'), _AdminList('listing'), _AdminList('ticket')])),
         ]),
       );
 }
@@ -52,9 +52,32 @@ class _AdminListState extends State<_AdminList> {
     }
   }
 
+  Future<void> reply(String id) async {
+    final c = TextEditingController();
+    final r = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Réponse au client'),
+        content: TextField(controller: c, maxLines: 4, decoration: const InputDecoration(hintText: 'Votre réponse')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text.trim()), child: const Text('Envoyer')),
+        ],
+      ),
+    );
+    if (r == null || r.isEmpty) return;
+    try {
+      await Repo.adminReplyTicket(id, r);
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
   String title(Map<String, dynamic> r) => switch (widget.kind) {
         'shop' => '${r['name']} · ${r['city'] ?? ''}',
         'courier' => '${r['full_name']} · ${r['transport']} · ${r['zone']}',
+        'ticket' => '${r['subject']} — ${r['message']}',
         _ => '${r['title']} · ${money(r['price_minor'] as num, r['currency'] as String)}',
       };
 
@@ -71,6 +94,8 @@ class _AdminListState extends State<_AdminList> {
           TextButton(onPressed: () => act(id, 'approved'), child: const Text('Approuver')),
           TextButton(onPressed: () => act(id, 'rejected', needReason: true), child: const Text('Rejeter')),
         ];
+      case 'ticket':
+        return [TextButton(onPressed: () => reply(id), child: const Text('Répondre'))];
       default:
         return [
           TextButton(onPressed: () => act(id, 'published'), child: const Text('Publier')),
