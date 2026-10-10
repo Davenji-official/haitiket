@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
@@ -42,7 +43,7 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,image_url,stock,shops(name)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,shops(name)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
     final rows = await f.order('created_at', ascending: false).limit(limit);
@@ -64,7 +65,7 @@ class Repo {
   static Future<List<Map<String, dynamic>>> favorites() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('favorites').select('products(id,name,price_minor,currency,image_url,stock,shops(name))').eq('user_id', u.id);
+    final rows = await _c.from('favorites').select('products(id,name,price_minor,currency,description,image_url,stock,shops(name))').eq('user_id', u.id);
     return [for (final r in rows) if (r['products'] != null) Map<String, dynamic>.from(r['products'] as Map)];
   }
 
@@ -85,10 +86,10 @@ class Repo {
     await _c.from('shops').insert({'owner_id': u.id, 'name': name, 'city': city, 'status': 'pending'});
   }
 
-  static Future<void> createListingDraft(String title, int priceMinor, String city) async {
+  static Future<void> createListingDraft(String title, int priceMinor, String city, [String? imageUrl]) async {
     final u = currentUser();
     if (u == null) throw 'Connectez-vous pour publier une annonce.';
-    await _c.from('listings').insert({'seller_id': u.id, 'title': title, 'price_minor': priceMinor, 'currency': 'HTG', 'city': city, 'status': 'draft'});
+    await _c.from('listings').insert({'seller_id': u.id, 'title': title, 'price_minor': priceMinor, 'currency': 'HTG', 'city': city, 'image_url': imageUrl, 'status': 'draft'});
   }
 
   static Future<void> applyCourier(String name, String phone, String transport, String zone) async {
@@ -112,8 +113,8 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish) async {
-    await _c.from('products').insert({'shop_id': shopId, 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
+  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish, {String? description}) async {
+    await _c.from('products').insert({'shop_id': shopId, 'description': (description ?? '').trim().isEmpty ? null : description!.trim(), 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
@@ -143,6 +144,33 @@ class Repo {
 
   static Future<void> cancelOrder(String id) async {
     await _c.rpc('cancel_order', params: {'p_order': id});
+  }
+
+  static Future<String> uploadImage(Uint8List bytes, String ext, String mime) async {
+    final u = currentUser();
+    if (u == null) throw 'Connectez-vous pour envoyer une photo.';
+    final path = '${u.id}/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    await _c.storage.from('media').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+    return _c.storage.from('media').getPublicUrl(path);
+  }
+
+  static Future<bool> adminUnlock(String code) async {
+    final r = await _c.rpc('admin_unlock', params: {'p_code': code});
+    return r == true;
+  }
+
+  static Future<List<Map<String, dynamic>>> adminList(String kind) async {
+    final cfg = {
+      'shop': ['shops', 'id,name,city,status'],
+      'courier': ['courier_applications', 'id,full_name,phone,transport,zone,status'],
+      'listing': ['listings', 'id,title,price_minor,currency,city,status,image_url'],
+    }[kind]!;
+    final rows = await _c.from(cfg[0]).select(cfg[1]).order('created_at', ascending: false).limit(100);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminSet(String kind, String id, String status, String reason) async {
+    await _c.rpc('admin_set_status', params: {'p_kind': kind, 'p_id': id, 'p_status': status, 'p_reason': reason});
   }
 
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
