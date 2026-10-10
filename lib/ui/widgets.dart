@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../ui/product_detail.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 
@@ -33,7 +35,9 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final shop = (p['shops'] as Map?)?['name'] ?? '';
     final img = p['image_url'] as String?;
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailScreen(p))),
+      child: Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: C.line)),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -78,7 +82,7 @@ class ProductCard extends StatelessWidget {
           ]),
         ),
       ]),
-    );
+    ));
   }
 }
 
@@ -107,5 +111,54 @@ class Field extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(controller: c, obscureText: obscure, keyboardType: type, decoration: InputDecoration(labelText: label)),
+      );
+}
+
+
+class ImageUploadField extends StatefulWidget {
+  final void Function(String? url) onUrl;
+  const ImageUploadField({super.key, required this.onUrl});
+  @override
+  State<ImageUploadField> createState() => _ImageUploadState();
+}
+
+class _ImageUploadState extends State<ImageUploadField> {
+  String? url;
+  bool busy = false;
+
+  Future<void> pick() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+      if (x == null) return;
+      final ext = x.name.contains('.') ? x.name.split('.').last.toLowerCase() : 'jpg';
+      const mimes = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'};
+      final mime = mimes[ext];
+      if (mime == null) throw 'Format non pris en charge (JPEG, PNG ou WebP).';
+      setState(() => busy = true);
+      final bytes = await x.readAsBytes();
+      if (bytes.length > 3 * 1024 * 1024) throw 'Photo trop lourde (3 Mo maximum).';
+      final u = await Repo.uploadImage(bytes, ext, mime);
+      setState(() => url = u);
+      widget.onUrl(u);
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(children: [
+          Container(
+            width: 72,
+            height: 72,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
+            child: url == null ? const Icon(Icons.image_outlined, color: C.green) : Image.network(url!, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(onPressed: busy ? null : pick, icon: const Icon(Icons.photo_library_outlined), label: Text(busy ? 'Envoi…' : (url == null ? 'Ajouter une photo' : 'Changer la photo'))),
+        ]),
       );
 }

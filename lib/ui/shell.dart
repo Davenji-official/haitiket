@@ -3,8 +3,10 @@ import '../data/repo.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 import 'screens.dart';
+import 'screens2.dart';
+import 'admin_screen.dart';
 
-enum Sec { home, marketplace, bazar, network, sell, favorites, cart, account }
+enum Sec { home, marketplace, bazar, network, sell, favorites, cart, account, orders, dashboard, admin }
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -15,6 +17,19 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   Sec sec = Sec.home;
   bool menu = false;
+  bool admin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    checkAdmin();
+  }
+
+  Future<void> checkAdmin() async {
+    final a = await Repo.isAdmin();
+    if (mounted) setState(() => admin = a);
+  }
+
   void go(Sec s) => setState(() {
         sec = s;
         menu = false;
@@ -36,8 +51,17 @@ class _ShellState extends State<Shell> {
         return const FavoritesScreen();
       case Sec.cart:
         return const CartScreen();
+      case Sec.admin:
+        return const AdminScreen();
+      case Sec.orders:
+        return const OrdersScreen();
+      case Sec.dashboard:
+        return const DashboardScreen();
       case Sec.account:
-        return AccountScreen(onChanged: () => setState(() {}));
+        return AccountScreen(onChanged: () {
+          setState(() {});
+          checkAdmin();
+        });
     }
   }
 
@@ -94,6 +118,9 @@ class _ShellState extends State<Shell> {
                 item('Bazar', Sec.bazar),
                 item('HAITIKET Network', Sec.network),
                 item('Vendre', Sec.sell),
+                item('Espace vendeur', Sec.dashboard),
+                item('Mes commandes', Sec.orders),
+                if (admin) item('Administration', Sec.admin),
                 item(logged ? 'Mon compte' : 'Se connecter', Sec.account),
                 const SizedBox(height: 8),
               ]),

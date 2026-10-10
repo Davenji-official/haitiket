@@ -4,6 +4,7 @@ import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'home_screen.dart';
+import 'screens2.dart';
 import 'widgets.dart';
 
 Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -135,6 +136,7 @@ class SellScreen extends StatefulWidget {
 class _SellState extends State<SellScreen> {
   final shop = TextEditingController(), shopCity = TextEditingController();
   final title = TextEditingController(), price = TextEditingController(), city = TextEditingController();
+  String? listingImg;
 
   Future<void> run(Future<void> Function() f, String ok) async {
     try {
@@ -162,11 +164,12 @@ class _SellState extends State<SellScreen> {
         Field(title, "Titre de l'article"),
         Field(price, 'Prix en HTG', type: TextInputType.number),
         Field(city, 'Ville'),
+        ImageUploadField(onUrl: (u) => listingImg = u),
         FilledButton(
           onPressed: () {
             final p = double.tryParse(price.text.replaceAll(',', '.'));
             if (title.text.trim().isEmpty || p == null || p <= 0) return toast(context, 'Titre et prix valides requis.');
-            run(() => Repo.createListingDraft(title.text.trim(), (p * 100).round(), city.text.trim()), 'Brouillon enregistré.');
+            run(() => Repo.createListingDraft(title.text.trim(), (p * 100).round(), city.text.trim(), listingImg), 'Brouillon enregistré.');
           },
           child: const Text('Enregistrer le brouillon'),
         ),
@@ -226,7 +229,7 @@ class CartScreen extends StatelessWidget {
               const SizedBox(height: 4),
               const Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
               const SizedBox(height: 16),
-              const FilledButton(onPressed: null, child: Text('Payer')),
+              FilledButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen())), child: const Text('Passer commande')),
               const SizedBox(height: 8),
               const Text('Paiement indisponible — en attente de configuration du prestataire.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
             ],
