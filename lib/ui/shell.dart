@@ -5,8 +5,9 @@ import 'home_screen.dart';
 import 'screens.dart';
 import 'screens2.dart';
 import 'admin_screen.dart';
+import 'screens3.dart';
 
-enum Sec { home, marketplace, bazar, network, sell, favorites, cart, account, orders, dashboard, admin }
+enum Sec { home, marketplace, bazar, network, sell, favorites, cart, account, orders, dashboard, admin, messages, courier }
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -77,6 +78,10 @@ class _ShellState extends State<Shell> {
         return const FavoritesScreen();
       case Sec.cart:
         return const CartScreen();
+      case Sec.messages:
+        return const ConversationsScreen();
+      case Sec.courier:
+        return const CourierScreen();
       case Sec.admin:
         return const AdminScreen();
       case Sec.orders:
@@ -143,6 +148,8 @@ class _ShellState extends State<Shell> {
                 item('Vendre', Sec.sell),
                 item('Espace vendeur', Sec.dashboard),
                 item('Mes commandes', Sec.orders),
+                item('Messages', Sec.messages),
+                item('Espace livreur', Sec.courier),
                 item(logged ? 'Mon compte' : 'Se connecter', Sec.account),
                 const SizedBox(height: 8),
               ]),

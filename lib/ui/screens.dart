@@ -5,6 +5,7 @@ import '../data/repo.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 import 'screens2.dart';
+import 'screens3.dart';
 import 'widgets.dart';
 
 Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -68,6 +69,7 @@ class BazarScreen extends StatelessWidget {
                     color: Colors.white,
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
+                      onTap: () => openChat(context, 'listing', l['id'] as String),
                       title: Text('${l['title']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text('${l['city'] ?? ''} · ${l['condition'] ?? ''}'),
                       trailing: Text(money(l['price_minor'] as num, (l['currency'] ?? 'HTG') as String), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),

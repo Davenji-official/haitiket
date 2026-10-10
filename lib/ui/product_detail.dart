@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'screens3.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final Map<String, dynamic> p;
@@ -41,6 +42,8 @@ class ProductDetailScreen extends StatelessWidget {
           },
           child: const Text('Ajouter au panier'),
         ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(onPressed: () => openChat(context, 'product', p['id'] as String), icon: const Icon(Icons.chat_bubble_outline), label: const Text('Contacter le vendeur')),
       ]),
     );
   }

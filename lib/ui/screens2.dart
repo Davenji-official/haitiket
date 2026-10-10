@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'screens3.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -119,6 +120,7 @@ class _OrdersState extends State<OrdersScreen> {
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}'),
                         const SizedBox(height: 6),
                         Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
+                        TextButton(onPressed: () => openChat(context, 'order', o['id'] as String), child: const Text('Écrire au vendeur')),
                         if (o['status'] == 'PENDING_PAYMENT')
                           TextButton(
                             onPressed: () async {
@@ -264,6 +266,7 @@ class _ShopPanelState extends State<ShopPanel> {
                 for (final o in items)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
+                    trailing: IconButton(icon: const Icon(Icons.chat_bubble_outline), onPressed: () => openChat(context, 'order', o['id'] as String)),
                     title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}').join(', ')}'),
                     subtitle: Text('${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
                   ),
