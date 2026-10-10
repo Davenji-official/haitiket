@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'theme.dart';
-import 'ui/shell.dart';
+import 'ui/splash.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +19,6 @@ class HaitiketApp extends StatelessWidget {
         title: 'HAITIKET',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
-        home: const Shell(),
+        home: const SplashGate(),
       );
 }

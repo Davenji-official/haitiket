@@ -18,6 +18,8 @@ ThemeData buildTheme() => ThemeData(
       scaffoldBackgroundColor: C.bg,
       colorScheme: ColorScheme.fromSeed(seedColor: C.green, surface: C.bg),
       fontFamily: 'Roboto',
+      pageTransitionsTheme: PageTransitionsTheme(builders: {for (final p in TargetPlatform.values) p: const ZoomPageTransitionsBuilder()}),
+      splashFactory: InkRipple.splashFactory,
       appBarTheme: const AppBarTheme(backgroundColor: C.bg, elevation: 0),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
