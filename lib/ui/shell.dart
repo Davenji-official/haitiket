@@ -17,17 +17,43 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   Sec sec = Sec.home;
   bool menu = false;
-  bool admin = false;
+  int logoTaps = 0;
+  DateTime lastTap = DateTime(2000);
 
-  @override
-  void initState() {
-    super.initState();
-    checkAdmin();
-  }
-
-  Future<void> checkAdmin() async {
-    final a = await Repo.isAdmin();
-    if (mounted) setState(() => admin = a);
+  Future<void> logoTap() async {
+    final now = DateTime.now();
+    logoTaps = now.difference(lastTap).inSeconds > 4 ? 1 : logoTaps + 1;
+    lastTap = now;
+    if (logoTaps < 10) {
+      go(Sec.home);
+      return;
+    }
+    logoTaps = 0;
+    if (currentUser() == null) return go(Sec.home);
+    final c = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Code secret'),
+        content: TextField(controller: c, obscureText: true, autofocus: true, decoration: const InputDecoration(hintText: 'Entrez le code')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text), child: const Text('Entrer')),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty) return;
+    try {
+      final ok = await Repo.adminUnlock(code);
+      if (!mounted) return;
+      if (ok) {
+        go(Sec.admin);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Repo.err(e))));
+    }
   }
 
   void go(Sec s) => setState(() {
@@ -58,10 +84,7 @@ class _ShellState extends State<Shell> {
       case Sec.dashboard:
         return const DashboardScreen();
       case Sec.account:
-        return AccountScreen(onChanged: () {
-          setState(() {});
-          checkAdmin();
-        });
+        return AccountScreen(onChanged: () => setState(() {}));
     }
   }
 
@@ -86,7 +109,7 @@ class _ShellState extends State<Shell> {
               IconButton(onPressed: () => setState(() => menu = !menu), icon: Icon(menu ? Icons.close : Icons.menu, color: C.ink, size: 28)),
               const SizedBox(width: 4),
               InkWell(
-                onTap: () => go(Sec.home),
+                onTap: logoTap,
                 child: Row(children: [
                   Container(
                     width: 44,
@@ -120,7 +143,6 @@ class _ShellState extends State<Shell> {
                 item('Vendre', Sec.sell),
                 item('Espace vendeur', Sec.dashboard),
                 item('Mes commandes', Sec.orders),
-                if (admin) item('Administration', Sec.admin),
                 item(logged ? 'Mon compte' : 'Se connecter', Sec.account),
                 const SizedBox(height: 8),
               ]),
