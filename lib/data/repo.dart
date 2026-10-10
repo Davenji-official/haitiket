@@ -164,6 +164,7 @@ class Repo {
       'shop': ['shops', 'id,name,city,status'],
       'courier': ['courier_applications', 'id,full_name,phone,transport,zone,status'],
       'listing': ['listings', 'id,title,price_minor,currency,city,status,image_url'],
+      'ticket': ['support_tickets', 'id,subject,message,status,admin_reply'],
     }[kind]!;
     final rows = await _c.from(cfg[0]).select(cfg[1]).order('created_at', ascending: false).limit(100);
     return List<Map<String, dynamic>>.from(rows);
@@ -231,6 +232,37 @@ class Repo {
     if (u == null) return [];
     final rows = await _c.from('delivery_jobs').select('id,pickup_area,dropoff_address,pay_minor,currency,status').eq('courier_id', u.id).order('assigned_at', ascending: false).limit(50);
     return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<Map<String, dynamic>?> getProfile() async {
+    final u = currentUser();
+    if (u == null) return null;
+    final rows = await _c.from('profiles').select('display_name,phone,avatar_url').eq('id', u.id);
+    final l = List<Map<String, dynamic>>.from(rows);
+    return l.isEmpty ? null : l.first;
+  }
+
+  static Future<void> saveProfile(String name, String phone, String? avatar) async {
+    final u = currentUser();
+    if (u == null) throw 'Connexion requise';
+    await _c.from('profiles').upsert({'id': u.id, 'display_name': name, 'phone': phone, 'avatar_url': avatar});
+  }
+
+  static Future<void> createTicket(String subject, String message) async {
+    final u = currentUser();
+    if (u == null) throw 'Connexion requise';
+    await _c.from('support_tickets').insert({'user_id': u.id, 'subject': subject, 'message': message});
+  }
+
+  static Future<List<Map<String, dynamic>>> myTickets() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('support_tickets').select('id,subject,status,admin_reply,created_at').eq('user_id', u.id).order('created_at', ascending: false).limit(30);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminReplyTicket(String id, String reply) async {
+    await _c.rpc('admin_reply_ticket', params: {'p_id': id, 'p_reply': reply});
   }
 
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
