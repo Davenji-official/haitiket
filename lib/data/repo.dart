@@ -173,6 +173,66 @@ class Repo {
     await _c.rpc('admin_set_status', params: {'p_kind': kind, 'p_id': id, 'p_status': status, 'p_reason': reason});
   }
 
+  static Future<String> startConversation(String kind, String ref) async {
+    final r = await _c.rpc('start_conversation', params: {'p_kind': kind, 'p_ref': ref});
+    return r as String;
+  }
+
+  static Future<List<Map<String, dynamic>>> myConversations() async {
+    final rows = await _c.from('conversations').select('id,subject,created_at,messages(body,created_at)').order('created_at', ascending: false).limit(50);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<String> conversationSubject(String id) async {
+    final r = await _c.from('conversations').select('subject').eq('id', id).single();
+    return r['subject'] as String;
+  }
+
+  static Stream<List<Map<String, dynamic>>> messageStream(String cid) =>
+      _c.from('messages').stream(primaryKey: ['id']).eq('conversation_id', cid).order('created_at', ascending: true);
+
+  static Future<void> sendMessage(String cid, String body) async {
+    final u = currentUser();
+    if (u == null) throw 'Connexion requise';
+    await _c.from('messages').insert({'conversation_id': cid, 'sender_id': u.id, 'body': body});
+  }
+
+  static Future<Map<String, dynamic>?> myCourierApplication() async {
+    final u = currentUser();
+    if (u == null) return null;
+    final rows = await _c.from('courier_applications').select('status,transport,zone').eq('user_id', u.id).order('created_at', ascending: false).limit(1);
+    final l = List<Map<String, dynamic>>.from(rows);
+    return l.isEmpty ? null : l.first;
+  }
+
+  static Future<bool> courierAvailable() async {
+    final u = currentUser();
+    if (u == null) return false;
+    final rows = await _c.from('courier_status').select('available').eq('user_id', u.id);
+    final l = List<Map<String, dynamic>>.from(rows);
+    return l.isNotEmpty && l.first['available'] == true;
+  }
+
+  static Future<void> setCourierAvailable(bool v) async {
+    await _c.rpc('set_courier_available', params: {'p_available': v});
+  }
+
+  static Future<List<Map<String, dynamic>>> openJobs() async {
+    final r = await _c.rpc('list_open_jobs');
+    return List<Map<String, dynamic>>.from(r as List);
+  }
+
+  static Future<void> acceptJob(String id) async {
+    await _c.rpc('accept_job', params: {'p_job': id});
+  }
+
+  static Future<List<Map<String, dynamic>>> myJobs() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('delivery_jobs').select('id,pickup_area,dropoff_address,pay_minor,currency,status').eq('courier_id', u.id).order('assigned_at', ascending: false).limit(50);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
   static Future<void> signOut() => _c.auth.signOut();
