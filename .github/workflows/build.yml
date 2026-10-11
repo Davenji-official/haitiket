@@ -24,8 +24,16 @@ jobs:
           echo "Projet trouvé : $P"
           cd "$(dirname "$P")"
           cp -r lib /tmp/lib_bk && cp pubspec.yaml /tmp/pubspec_bk.yaml
+          [ -d assets ] && cp -r assets /tmp/assets_bk || true
           flutter create . --platforms=web --project-name haitiket --org com.haitiket
           rm -rf lib test && cp -r /tmp/lib_bk lib && cp /tmp/pubspec_bk.yaml pubspec.yaml
+          mkdir -p assets && [ -d /tmp/assets_bk ] && cp -r /tmp/assets_bk/. assets/ || true
+          for f in logo.png logo_t.png; do
+            if [ ! -f "assets/$f" ]; then
+              echo "ATTENTION : assets/$f absent du dépôt, logo provisoire utilisé"
+              echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "assets/$f"
+            fi
+          done
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
       - name: Dépendances et analyse
         working-directory: ${{ env.APP }}
@@ -64,8 +72,16 @@ jobs:
           P=$(find . -name pubspec.yaml -not -path "./.git/*" | head -1)
           cd "$(dirname "$P")"
           cp -r lib /tmp/lib_bk && cp pubspec.yaml /tmp/pubspec_bk.yaml
+          [ -d assets ] && cp -r assets /tmp/assets_bk || true
           flutter create . --platforms=android --project-name haitiket --org com.haitiket
           rm -rf lib test && cp -r /tmp/lib_bk lib && cp /tmp/pubspec_bk.yaml pubspec.yaml
+          mkdir -p assets && [ -d /tmp/assets_bk ] && cp -r /tmp/assets_bk/. assets/ || true
+          for f in logo.png logo_t.png; do
+            if [ ! -f "assets/$f" ]; then
+              echo "ATTENTION : assets/$f absent du dépôt, logo provisoire utilisé"
+              echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "assets/$f"
+            fi
+          done
           M=android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
           sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application|' $M
