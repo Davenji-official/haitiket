@@ -37,3 +37,9 @@ ThemeData buildTheme() => ThemeData(
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: C.line)),
       ),
     );
+
+/// '#RRGGBB' -> Color (null si invalide).
+Color? hexColor(String? h) {
+  if (h == null || !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(h)) return null;
+  return Color(int.parse('FF${h.substring(1)}', radix: 16));
+}
