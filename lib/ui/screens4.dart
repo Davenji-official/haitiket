@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'package:flutter/services.dart';
+import '../i18n.dart';
 import 'fx.dart';
 import 'widgets.dart';
 
@@ -150,8 +152,67 @@ class _ProfileState extends State<ProfileScreen> {
           const Text("Votre téléphone n'est jamais public.", style: TextStyle(color: C.muted)),
           const SizedBox(height: 16),
           PrimaryButton(label: busy ? 'Enregistrement…' : 'Enregistrer', icon: Icons.check, onPressed: busy ? null : save),
+          const SizedBox(height: 28),
+          const ReferralCard(),
         ],
       ]);
+}
+
+class ReferralCard extends StatefulWidget {
+  const ReferralCard({super.key});
+  @override
+  State<ReferralCard> createState() => _ReferralState();
+}
+
+class _ReferralState extends State<ReferralCard> {
+  late Future<Map<String, dynamic>> f = Repo.myReferral();
+  final code = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+        future: f,
+        builder: (_, s) {
+          if (s.connectionState != ConnectionState.done) return const SizedBox();
+          if (s.hasError) return const SizedBox();
+          final d = s.data!;
+          final pending = (d['pending'] as num).toInt(), valid = (d['validated'] as num).toInt();
+          return Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(24)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Parrainage', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Text('${d['code']}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 3, color: C.ink)),
+                IconButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: '${d['code']}'));
+                    toast(context, 'Code copié.');
+                  },
+                  icon: const Icon(Icons.copy, color: C.green),
+                ),
+              ]),
+              Text('${d['referred']} filleul(s)${pending > 0 ? ' · récompense en attente : ${money(pending, 'HTG')}' : ''}${valid > 0 ? ' · validée : ${money(valid, 'HTG')}' : ''}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text("La récompense est validée seulement après la première commande réellement livrée de votre filleul.", style: TextStyle(color: C.muted)),
+              const SizedBox(height: 14),
+              Field(code, "J'ai un code de parrainage"),
+              OutlinedButton(
+                onPressed: () async {
+                  try {
+                    await Repo.applyReferral(code.text);
+                    code.clear();
+                    if (mounted) toast(context, 'Code appliqué.');
+                  } catch (e) {
+                    if (mounted) toast(context, Repo.err(e));
+                  }
+                },
+                child: const Text('Appliquer le code'),
+              ),
+            ]),
+          );
+        },
+      );
 }
 
 class SettingsScreen extends StatelessWidget {
@@ -159,8 +220,18 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.onChanged});
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Paramètres'),
-        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.language, color: C.green), title: Text('Langue', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('Français (actif) · Kreyòl ayisyen : bientôt disponible'), trailing: Icon(Icons.check_circle, color: C.green)),
+        _h(tr('Paramètres')),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.language, color: C.green),
+          title: Text(tr('Langue'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text("La navigation et l'accueil sont traduits ; les autres écrans le seront progressivement."),
+        ),
+        Wrap(spacing: 10, children: [
+          ChoiceChip(label: const Text('Français'), selected: appLang.value == 'fr', onSelected: (_) async { await setLang('fr'); onChanged(); }),
+          ChoiceChip(label: const Text('Kreyòl ayisyen'), selected: appLang.value == 'ht', onSelected: (_) async { await setLang('ht'); onChanged(); }),
+        ]),
+        const SizedBox(height: 8),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.shopping_bag_outlined, color: C.green),
@@ -171,7 +242,7 @@ class SettingsScreen extends StatelessWidget {
           },
         ),
         const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.lock_outline, color: C.green), title: Text('Confidentialité', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('Adresse et téléphone : visibles uniquement par les parties d\'une commande.')),
-        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.info_outline, color: C.green), title: Text('Version', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('HAITIKET 0.6')),
+        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.info_outline, color: C.green), title: Text('Version', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('HAITIKET 0.7')),
       ]);
 }
 

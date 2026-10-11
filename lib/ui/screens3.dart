@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'screens5.dart';
 import 'widgets.dart';
 
 Future<void> openChat(BuildContext context, String kind, String ref) async {
@@ -155,6 +156,18 @@ class _CourierState extends State<CourierScreen> {
 
   void reload() => setState(() => f = load());
 
+  Future<void> confirm(Map<String, dynamic> j, bool pickup) async {
+    final pin = await askText(context, pickup ? 'Code donné par le vendeur' : 'Code donné par le client', type: TextInputType.number);
+    if (pin == null || pin.isEmpty) return;
+    try {
+      final ok = pickup ? await Repo.confirmPickup(j['id'] as String, pin) : await Repo.confirmDelivery(j['id'] as String, pin);
+      if (mounted) toast(context, ok ? (pickup ? 'Collecte confirmée.' : 'Remise confirmée.') : 'Code incorrect.');
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
   Future<void> run(Future<void> Function() a) async {
     try {
       await a();
@@ -218,6 +231,11 @@ class _CourierState extends State<CourierScreen> {
                       child: ListTile(
                         title: Text('${j['pickup_area']} → ${j['dropoff_address']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text('${money(j['pay_minor'] as num, j['currency'] as String)} · ${j['status']}'),
+                        trailing: j['status'] == 'assigned'
+                            ? FilledButton(onPressed: () => confirm(j, true), child: const Text('Collecte'))
+                            : j['status'] == 'picked_up'
+                                ? FilledButton(onPressed: () => confirm(j, false), child: const Text('Remise'))
+                                : null,
                       ),
                     ),
               ]);

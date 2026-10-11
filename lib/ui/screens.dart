@@ -8,6 +8,9 @@ import 'screens2.dart';
 import 'screens3.dart';
 import 'screens4.dart';
 import 'fx.dart';
+import 'screens5.dart';
+import '../i18n.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'widgets.dart';
 
 Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -38,30 +41,131 @@ class MarketplaceScreen extends StatefulWidget {
 }
 
 class _MarketplaceState extends State<MarketplaceScreen> {
+  String? cat;
+  String sort = 'recent';
+  bool nearby = false;
+  Position? me;
+  final minC = TextEditingController(), maxC = TextEditingController();
+  late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
+  Future<List<Map<String, dynamic>>>? f;
+  String lastQ = '\u0000';
+
+  int? minor(TextEditingController c) {
+    final v = double.tryParse(c.text.replaceAll(',', '.'));
+    return v == null ? null : (v * 100).round();
+  }
+
+  Future<List<Map<String, dynamic>>> load(String q) async {
+    final items = await Repo.products(q: q, categoryId: cat, minMinor: minor(minC), maxMinor: minor(maxC), sort: sort, limit: 60);
+    if (me != null) {
+      for (final p in items) {
+        final sh = p['shops'] as Map?;
+        final la = sh?['lat'], ln = sh?['lng'];
+        if (la != null && ln != null) p['_dist'] = distKm(me!.latitude, me!.longitude, (la as num).toDouble(), (ln as num).toDouble());
+      }
+      if (nearby) items.sort((a, b) => ((a['_dist'] as double?) ?? 1e9).compareTo((b['_dist'] as double?) ?? 1e9));
+    }
+    return items;
+  }
+
+  void refresh() => setState(() => f = load(Repo.search.value));
+
+  Widget chip(String label, bool sel, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(label: Text(label), selected: sel, onSelected: (_) => onTap()),
+      );
+
+  Future<void> toggleNearby(bool v) async {
+    if (v && me == null) {
+      final p = await myPosition(context);
+      if (p == null) return;
+      me = p;
+    }
+    nearby = v;
+    refresh();
+  }
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<String>(
         valueListenable: Repo.search,
-        builder: (_, q, __) => ListView(padding: const EdgeInsets.all(18), children: [
-          _title('Marketplace', 'Produits des boutiques professionnelles vérifiées.'),
-          _promo(context, 'Vous êtes commerçant ?', 'Boutique professionnelle : 20 USD / mois. Vitrine, stock, commandes et livraison HAITIKET.', 'Ouvrir ma boutique', Icons.storefront, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen()))),
-          SearchPill(onSubmit: (v) => Repo.search.value = v),
-          if (q.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('Résultats pour « $q »', style: const TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
-          const SizedBox(height: 20),
-          if (!Config.configured)
-            _notConfigured()
-          else
-            FutureBuilder<List<Map<String, dynamic>>>(
-              key: ValueKey(q),
-              future: Repo.products(q: q),
-              builder: (_, s) {
-                if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-                if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
-                final items = s.data ?? [];
-                if (items.isEmpty) return EmptyState(title: q.isEmpty ? 'Aucun produit publié' : 'Aucun résultat', text: q.isEmpty ? 'Les produits apparaîtront ici dès que les boutiques en publieront.' : 'Essayez un autre mot-clé.');
-                return ProductGrid(items);
-              },
+        builder: (_, q, __) {
+          if (q != lastQ) {
+            lastQ = q;
+            f = load(q);
+          }
+          return ListView(padding: const EdgeInsets.all(18), children: [
+            Row(children: [
+              Expanded(child: Text(tr('Marketplace'), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
+              Pressable(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen())),
+                child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.map_outlined, color: C.ink)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            const Text('Produits des boutiques professionnelles vérifiées.', style: TextStyle(fontSize: 17, color: C.muted, height: 1.4)),
+            const SizedBox(height: 16),
+            _promo(context, tr('Vous êtes commerçant ?'), 'Boutique professionnelle : 20 USD / mois. Vitrine, stock, commandes et livraison HAITIKET.', tr('Ouvrir ma boutique'), Icons.storefront, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen()))),
+            SearchPill(onSubmit: (v) => Repo.search.value = v),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 46,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: cats,
+                builder: (_, s) => ListView(scrollDirection: Axis.horizontal, children: [
+                  chip(tr('Toutes'), cat == null, () {
+                    cat = null;
+                    refresh();
+                  }),
+                  for (final c in s.data ?? [])
+                    chip('${c['name']}', cat == c['id'], () {
+                      cat = c['id'] as String;
+                      refresh();
+                    }),
+                ]),
+              ),
             ),
-        ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: TextField(controller: minC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Prix min (HTG)', isDense: true))),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(controller: maxC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Prix max (HTG)', isDense: true))),
+              IconButton(onPressed: refresh, icon: const Icon(Icons.check_circle, color: C.green, size: 32)),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              DropdownButton<String>(
+                value: sort,
+                underline: const SizedBox(),
+                items: [
+                  DropdownMenuItem(value: 'recent', child: Text(tr('Plus récents'))),
+                  DropdownMenuItem(value: 'price_asc', child: Text(tr('Prix croissant'))),
+                  DropdownMenuItem(value: 'price_desc', child: Text(tr('Prix décroissant'))),
+                ],
+                onChanged: (v) {
+                  sort = v ?? 'recent';
+                  refresh();
+                },
+              ),
+              const Spacer(),
+              FilterChip(avatar: const Icon(Icons.near_me, size: 18), label: Text(tr('Près de moi')), selected: nearby, onSelected: toggleNearby),
+            ]),
+            if (q.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Résultats pour « $q »', style: const TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
+            const SizedBox(height: 14),
+            if (!Config.configured)
+              _notConfigured()
+            else
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: f,
+                builder: (_, s) {
+                  if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+                  if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+                  final items = s.data ?? [];
+                  if (items.isEmpty) return EmptyState(title: q.isEmpty ? 'Aucun produit trouvé' : 'Aucun résultat', text: 'Modifiez vos filtres ou votre recherche. Seuls les produits réellement en stock sont affichés.');
+                  return ProductGrid(items);
+                },
+              ),
+          ]);
+        },
       );
 }
 
@@ -70,7 +174,7 @@ class BazarScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
         _title('Bazar', 'Achetez et vendez entre particuliers, près de chez vous.'),
-        _promo(context, 'Vous êtes particulier ?', 'Publiez votre article : 2 USD pour 14 jours, sans boutique.', 'Publier une annonce', Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
+        _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique.', tr('Publier une annonce'), Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
         if (!Config.configured)
           _notConfigured()
         else
@@ -175,7 +279,7 @@ class CartScreen extends StatelessWidget {
           final l = lines.values.toList();
           final total = l.fold<int>(0, (a, x) => a + x.priceMinor * x.qty);
           return ListView(padding: const EdgeInsets.all(18), children: [
-            _title('Panier'),
+            _title(tr('Panier')),
             if (l.isEmpty)
               const EmptyState(title: 'Votre panier est vide', text: 'Ajoutez des produits depuis la Marketplace.')
             else ...[
@@ -197,7 +301,7 @@ class CartScreen extends StatelessWidget {
               const SizedBox(height: 4),
               const Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
               const SizedBox(height: 16),
-              PrimaryButton(label: 'Passer commande', icon: Icons.lock_outline, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()))),
+              PrimaryButton(label: tr('Passer commande'), icon: Icons.lock_outline, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()))),
               const SizedBox(height: 8),
               const Text('Paiement indisponible — en attente de configuration du prestataire.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
             ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../ui/product_detail.dart';
 import 'fx.dart';
+import 'screens5.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 
@@ -68,7 +69,7 @@ class ProductCard extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${p['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 16)),
-            Text('$shop', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
+            Text('$shop${p['_dist'] == null ? '' : ' · ${fmtKm(p['_dist'] as double)}'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
             const SizedBox(height: 6),
             Row(children: [
               Expanded(child: Text(money(p['price_minor'] as num, (p['currency'] ?? 'HTG') as String), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green))),

@@ -3,6 +3,7 @@ import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'screens3.dart';
+import 'screens5.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -33,6 +34,7 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutState extends State<CheckoutScreen> {
   String mode = 'pickup';
   final address = TextEditingController();
+  final coupon = TextEditingController();
   bool busy = false;
 
   Future<void> submit() async {
@@ -40,7 +42,7 @@ class _CheckoutState extends State<CheckoutScreen> {
     if (lines.isEmpty) return;
     setState(() => busy = true);
     try {
-      final orders = await Repo.createOrders(lines, mode, address.text);
+      final orders = await Repo.createOrders(lines, mode, address.text, coupon.text);
       CartStore.lines.value = {};
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -70,6 +72,7 @@ class _CheckoutState extends State<CheckoutScreen> {
             ]),
           ),
           if (mode == 'delivery') Field(address, 'Adresse de livraison (commune, quartier, repères)'),
+          Field(coupon, 'Code promo (facultatif)'),
           const SizedBox(height: 8),
           Text('Articles : ${money(total, lines.isEmpty ? 'HTG' : lines.first.currency)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const Text('Frais de livraison, commission et total final : calculés par le serveur.', style: TextStyle(color: C.muted)),
@@ -120,6 +123,8 @@ class _OrdersState extends State<OrdersScreen> {
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}'),
                         const SizedBox(height: 6),
                         Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
+                        if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
+                        if (o['status'] == 'DELIVERED' || o['status'] == 'COMPLETED') TextButton(onPressed: () => reviewDialog(context, o['id'] as String), child: const Text('Laisser un avis')),
                         TextButton(onPressed: () => openChat(context, 'order', o['id'] as String), child: const Text('Écrire au vendeur')),
                         if (o['status'] == 'PENDING_PAYMENT')
                           TextButton(
@@ -177,7 +182,9 @@ class ShopPanel extends StatefulWidget {
 class _ShopPanelState extends State<ShopPanel> {
   final name = TextEditingController(), price = TextEditingController(), stock = TextEditingController(), desc = TextEditingController();
   String? prodImg;
+  String? catId;
   int imgKey = 0;
+  late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
   late Future<List<Map<String, dynamic>>> products = Repo.shopProducts(widget.shop['id'] as String);
   late Future<List<Map<String, dynamic>>> orders = Repo.shopOrders(widget.shop['id'] as String);
 
@@ -191,7 +198,7 @@ class _ShopPanelState extends State<ShopPanel> {
     final st = int.tryParse(stock.text);
     if (name.text.trim().isEmpty || p == null || p < 0 || st == null || st < 0) return toast(context, 'Nom, prix et stock valides requis.');
     try {
-      await Repo.addProduct(widget.shop['id'] as String, name.text.trim(), (p * 100).round(), st, prodImg, true, description: desc.text);
+      await Repo.addProduct(widget.shop['id'] as String, name.text.trim(), (p * 100).round(), st, prodImg, true, description: desc.text, categoryId: catId);
       name.clear();
       price.clear();
       stock.clear();
@@ -200,6 +207,26 @@ class _ShopPanelState extends State<ShopPanel> {
       imgKey++;
       reload();
       if (mounted) toast(context, 'Produit publié.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Future<void> orderAction(Map<String, dynamic> o, String v) async {
+    final id = o['id'] as String;
+    try {
+      if (v == 'chat') return openChat(context, 'order', id);
+      if (v == 'pin') return showPin(context, id, 'Code de collecte');
+      if (v == 'handover') {
+        final pin = await askText(context, 'Code donné par le client', type: TextInputType.number);
+        if (pin == null || pin.isEmpty) return;
+        final ok = await Repo.confirmHandover(id, pin);
+        if (mounted) toast(context, ok ? 'Remise confirmée.' : 'Code incorrect.');
+        reload();
+        return;
+      }
+      await Repo.sellerSetOrderStatus(id, v);
+      reload();
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
@@ -225,11 +252,40 @@ class _ShopPanelState extends State<ShopPanel> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
           Text(active ? 'Boutique active' : 'En attente de vérification — vous pourrez publier après activation.', style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700)),
+          if (active)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final pos = await myPosition(context);
+                  if (pos == null) return;
+                  try {
+                    await Repo.setShopLocation(widget.shop['id'] as String, pos.latitude, pos.longitude);
+                    if (mounted) toast(context, 'Position de la boutique enregistrée (arrondie à ~100 m).');
+                  } catch (e) {
+                    if (mounted) toast(context, Repo.err(e));
+                  }
+                },
+                icon: const Icon(Icons.my_location),
+                label: const Text('Partager la position de ma boutique'),
+              ),
+            ),
           if (active) ...[
             const SizedBox(height: 16),
             Field(name, 'Nom du produit'),
             Field(price, 'Prix en HTG', type: TextInputType.number),
             Field(stock, 'Stock disponible', type: TextInputType.number),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: cats,
+              builder: (_, cs) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Catégorie'),
+                  items: [for (final c in cs.data ?? []) DropdownMenuItem(value: c['id'] as String, child: Text('${c['name']}'))],
+                  onChanged: (v) => catId = v,
+                ),
+              ),
+            ),
             Field(desc, 'Description (facultatif)'),
             ImageUploadField(key: ValueKey(imgKey), onUrl: (u) => prodImg = u),
             FilledButton(onPressed: add, child: const Text('Publier le produit')),
@@ -266,7 +322,21 @@ class _ShopPanelState extends State<ShopPanel> {
                 for (final o in items)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    trailing: IconButton(icon: const Icon(Icons.chat_bubble_outline), onPressed: () => openChat(context, 'order', o['id'] as String)),
+                trailing: PopupMenuButton<String>(
+                      onSelected: (v) => orderAction(o, v),
+                      itemBuilder: (_) {
+                        final st = o['status'];
+                        final dm = o['delivery_mode'];
+                        return [
+                          const PopupMenuItem(value: 'chat', child: Text('Écrire au client')),
+                          if (st == 'PAID') const PopupMenuItem(value: 'CONFIRMED', child: Text('Confirmer la commande')),
+                          if (st == 'CONFIRMED') const PopupMenuItem(value: 'PREPARING', child: Text('Passer en préparation')),
+                          if (st == 'PREPARING') const PopupMenuItem(value: 'READY_FOR_PICKUP', child: Text('Marquer prête')),
+                          if (dm == 'delivery' && (st == 'CONFIRMED' || st == 'PREPARING' || st == 'READY_FOR_PICKUP')) const PopupMenuItem(value: 'pin', child: Text('Code de collecte (livreur)')),
+                          if (dm == 'pickup' && st == 'READY_FOR_PICKUP') const PopupMenuItem(value: 'handover', child: Text('Valider la remise (code client)')),
+                        ];
+                      },
+                    ),
                     title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}').join(', ')}'),
                     subtitle: Text('${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
                   ),

@@ -8,17 +8,19 @@ import 'screens.dart';
 import 'screens2.dart';
 import 'screens3.dart';
 import 'screens4.dart';
+import 'screens5.dart';
+import '../i18n.dart';
 
-enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support }
+enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support, notifications }
 
 const _bottom = [Sec.home, Sec.marketplace, Sec.bazar, Sec.network, Sec.messages];
-const _bottomItems = [
-  NavItem(Icons.home_outlined, Icons.home_rounded, 'Accueil'),
-  NavItem(Icons.storefront_outlined, Icons.storefront_rounded, 'Marketplace'),
-  NavItem(Icons.local_offer_outlined, Icons.local_offer_rounded, 'Bazar'),
-  NavItem(Icons.local_shipping_outlined, Icons.local_shipping_rounded, 'Network'),
-  NavItem(Icons.chat_bubble_outline, Icons.chat_bubble_rounded, 'Messages'),
-];
+List<NavItem> _bottomItems() => [
+      NavItem(Icons.home_outlined, Icons.home_rounded, tr('Accueil')),
+      NavItem(Icons.storefront_outlined, Icons.storefront_rounded, tr('Marketplace')),
+      const NavItem(Icons.local_offer_outlined, Icons.local_offer_rounded, 'Bazar'),
+      NavItem(Icons.local_shipping_outlined, Icons.local_shipping_rounded, tr('Network')),
+      NavItem(Icons.chat_bubble_outline, Icons.chat_bubble_rounded, tr('Messages')),
+    ];
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -29,6 +31,8 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   Sec sec = Sec.home;
+  Stream<List<Map<String, dynamic>>> notifs = const Stream.empty();
+  String? streamUser;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
 
@@ -101,6 +105,8 @@ class _ShellState extends State<Shell> {
         return SettingsScreen(onChanged: () => setState(() {}));
       case Sec.support:
         return const SupportScreen();
+      case Sec.notifications:
+        return const NotificationsScreen();
       case Sec.account:
         return AccountScreen(onChanged: () => setState(() {}));
     }
@@ -131,25 +137,25 @@ class _ShellState extends State<Shell> {
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: C.ink)),
-                Text(u?.email ?? 'Non connecté', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
+                Text(u?.email ?? tr('Non connecté'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
               ])),
             ]),
           ),
-          drawerItem(Icons.person_outline, 'Mon profil', Sec.profile),
-          drawerItem(Icons.receipt_long_outlined, 'Mes commandes', Sec.orders),
-          drawerItem(Icons.favorite_border, 'Mes favoris', Sec.favorites),
-          drawerItem(Icons.store_mall_directory_outlined, 'Espace vendeur', Sec.dashboard),
-          drawerItem(Icons.two_wheeler_outlined, 'Espace livreur', Sec.courier),
+          drawerItem(Icons.person_outline, tr('Mon profil'), Sec.profile),
+          drawerItem(Icons.receipt_long_outlined, tr('Mes commandes'), Sec.orders),
+          drawerItem(Icons.favorite_border, tr('Mes favoris'), Sec.favorites),
+          drawerItem(Icons.store_mall_directory_outlined, tr('Espace vendeur'), Sec.dashboard),
+          drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
           const Divider(height: 28),
-          drawerItem(Icons.support_agent_outlined, 'Support', Sec.support),
-          drawerItem(Icons.settings_outlined, 'Paramètres', Sec.settings),
+          drawerItem(Icons.support_agent_outlined, tr('Support'), Sec.support),
+          drawerItem(Icons.settings_outlined, tr('Paramètres'), Sec.settings),
           const Divider(height: 28),
           if (u == null)
-            drawerItem(Icons.login, 'Se connecter', Sec.account)
+            drawerItem(Icons.login, tr('Se connecter'), Sec.account)
           else
             ListTile(
               leading: const Icon(Icons.logout, color: C.terracotta),
-              title: const Text('Se déconnecter', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
+              title: Text(tr('Se déconnecter'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
               onTap: () async {
                 Navigator.pop(context);
                 await Repo.signOut();
@@ -176,6 +182,16 @@ class _ShellState extends State<Shell> {
             ]),
           ),
           const Spacer(),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: notifs,
+            builder: (_, snap) {
+              final unread = (snap.data ?? []).where((n) => n['read_at'] == null).length;
+              return IconButton(
+                onPressed: () => go(Sec.notifications),
+                icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.notifications_none, color: C.green, size: 28)),
+              );
+            },
+          ),
           IconButton(onPressed: () => go(Sec.favorites), icon: const Icon(Icons.favorite_border, color: C.green, size: 28)),
           ValueListenableBuilder(
             valueListenable: CartStore.lines,
@@ -197,10 +213,17 @@ class _ShellState extends State<Shell> {
   @override
   Widget build(BuildContext context) {
     final bi = _bottom.indexOf(sec);
-    return Scaffold(
+    final uid = currentUser()?.id;
+    if (uid != streamUser) {
+      streamUser = uid;
+      notifs = Repo.notificationStream();
+    }
+    return ValueListenableBuilder<String>(
+      valueListenable: appLang,
+      builder: (_, __, ___) => Scaffold(
       key: scaffoldKey,
       drawer: drawer(),
-      bottomNavigationBar: BottomBar(index: bi, items: _bottomItems, onTap: (i) => go(_bottom[i])),
+      bottomNavigationBar: BottomBar(index: bi, items: _bottomItems(), onTap: (i) => go(_bottom[i])),
       body: SafeArea(
         bottom: false,
         child: Center(
@@ -213,13 +236,13 @@ class _ShellState extends State<Shell> {
                   duration: const Duration(milliseconds: 380),
                   switchInCurve: Curves.easeOutCubic,
                   transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(anim), child: child)),
-                  child: KeyedSubtree(key: ValueKey(sec), child: body()),
+                  child: KeyedSubtree(key: ValueKey('${sec.name}-${appLang.value}'), child: body()),
                 ),
               ),
             ]),
           ),
         ),
       ),
-    );
+    ));
   }
 }

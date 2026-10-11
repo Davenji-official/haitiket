@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'fx.dart';
+import '../i18n.dart';
 import 'screens4.dart';
 import 'shell.dart';
 import 'widgets.dart';
@@ -22,10 +23,10 @@ class SearchPill extends StatelessWidget {
           child: TextField(
             controller: c,
             onSubmitted: onSubmit,
-            decoration: const InputDecoration(hintText: "Que recherchez-vous aujourd'hui ?", border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true),
+            decoration: InputDecoration(hintText: tr("Que recherchez-vous aujourd'hui ?"), border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true),
           ),
         ),
-        PrimaryButton(label: 'Rechercher', onPressed: () => onSubmit(c.text)),
+        PrimaryButton(label: tr('Rechercher'), onPressed: () => onSubmit(c.text)),
       ]),
     );
   }
@@ -53,13 +54,13 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final kids = <Widget>[
       RichText(
-        text: const TextSpan(style: TextStyle(fontSize: 44, height: 1.05, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1), children: [
-          TextSpan(text: "Tout ce qu'Haïti vend, en un seul "),
-          TextSpan(text: 'endroit.', style: TextStyle(color: C.terracotta)),
+        text: TextSpan(style: TextStyle(fontSize: 44, height: 1.05, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1), children: [
+          TextSpan(text: tr("Tout ce qu'Haïti vend, en un seul ")),
+          TextSpan(text: tr('endroit.'), style: TextStyle(color: C.terracotta)),
         ]),
       ),
       const SizedBox(height: 20),
-      const Text("Découvrez des produits uniques, soutenez les commerces d'ici et faites-vous livrer simplement, partout en Haïti.", style: TextStyle(fontSize: 19, color: C.muted, height: 1.45)),
+      Text(tr("Découvrez des produits uniques, soutenez les commerces d'ici et faites-vous livrer simplement, partout en Haïti."), style: const TextStyle(fontSize: 19, color: C.muted, height: 1.45)),
       const SizedBox(height: 28),
       SearchPill(onSubmit: (q) {
         Repo.search.value = q;
@@ -67,9 +68,9 @@ class HomeScreen extends StatelessWidget {
       }),
       const SizedBox(height: 22),
       Wrap(spacing: 28, runSpacing: 12, children: [
-        chip(Icons.local_shipping_outlined, 'Livraison suivie'),
-        chip(Icons.storefront_outlined, 'Vendeurs vérifiés'),
-        chip(Icons.location_on_outlined, 'Près de chez vous'),
+        chip(Icons.local_shipping_outlined, tr('Livraison suivie')),
+        chip(Icons.storefront_outlined, tr('Vendeurs vérifiés')),
+        chip(Icons.location_on_outlined, tr('Près de chez vous')),
       ]),
       const SizedBox(height: 40),
       FutureBuilder<int>(
@@ -88,14 +89,14 @@ class HomeScreen extends StatelessWidget {
                 Positioned(
                   left: 24,
                   top: 24,
-                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .8), borderRadius: BorderRadius.circular(24)), child: const Text('Fait en Haïti', style: TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 16))),
+                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .8), borderRadius: BorderRadius.circular(24)), child: Text(tr('Fait en Haïti'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 16))),
                 ),
                 Positioned(
                   left: 24,
                   bottom: 24,
                   right: 24,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Achetez local.\nVivez mieux.', style: TextStyle(fontSize: 42, height: 1.1, fontWeight: FontWeight.w800, color: C.ink)),
+                    Text(tr('Achetez local.\nVivez mieux.'), style: const TextStyle(fontSize: 42, height: 1.1, fontWeight: FontWeight.w800, color: C.ink)),
                     const SizedBox(height: 16),
                     Row(children: [
                       SizedBox(
@@ -117,14 +118,14 @@ class HomeScreen extends StatelessWidget {
         },
       ),
       const SizedBox(height: 56),
-      const Text('À DÉCOUVRIR', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w800, letterSpacing: 3, fontSize: 16)),
+      Text(tr('À DÉCOUVRIR'), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w800, letterSpacing: 3, fontSize: 16)),
       const SizedBox(height: 10),
-      const Text('Les trouvailles du moment', style: TextStyle(fontSize: 38, height: 1.1, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)),
+      Text(tr('Les trouvailles du moment'), style: const TextStyle(fontSize: 38, height: 1.1, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)),
       const SizedBox(height: 14),
       InkWell(
         onTap: () => go(Sec.marketplace),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('Voir tout', style: TextStyle(color: C.green, fontWeight: FontWeight.w800, fontSize: 18)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('Voir tout'), style: const TextStyle(color: C.green, fontWeight: FontWeight.w800, fontSize: 18)),
           SizedBox(width: 10),
           Icon(Icons.arrow_forward, color: C.green),
         ]),
