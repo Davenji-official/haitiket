@@ -68,6 +68,7 @@ jobs:
           rm -rf lib test && cp -r /tmp/lib_bk lib && cp /tmp/pubspec_bk.yaml pubspec.yaml
           M=android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
+          sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="HAITIKET"|' $M
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
       - name: Build APK
