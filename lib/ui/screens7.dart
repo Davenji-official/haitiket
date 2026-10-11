@@ -115,24 +115,24 @@ class _SpecsFormState extends State<SpecsForm> {
   Widget field(SpecField f) {
     switch (f.type) {
       case 'choice':
-        final cur = widget.values[f.key] as String?;
+        final curChoice = widget.values[f.key] as String?;
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           title(f.label),
           Wrap(spacing: 8, children: [
             for (final o in f.options)
-              ChoiceChip(label: Text(o), selected: cur == o, onSelected: (_) => setState(() => widget.values[f.key] = o)),
+              ChoiceChip(label: Text(o), selected: curChoice == o, onSelected: (_) => setState(() => widget.values[f.key] = o)),
           ]),
         ]);
       case 'multi':
       case 'sizes':
-        final cur = listOf(f.key);
+        final curList = listOf(f.key);
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           title(f.label),
           Wrap(spacing: 8, runSpacing: 4, children: [
             for (final o in f.options)
               FilterChip(
                 label: Text(o),
-                selected: cur.contains(o),
+                selected: curList.contains(o),
                 onSelected: (v) => setState(() {
                   final l = listOf(f.key);
                   v ? l.add(o) : l.remove(o);
@@ -142,14 +142,14 @@ class _SpecsFormState extends State<SpecsForm> {
           ]),
         ]);
       case 'colors':
-        final cur = List<Map<String, dynamic>>.from(((widget.values['colors'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
+        final curColors = List<Map<String, dynamic>>.from(((widget.values['colors'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           title(f.label),
           Wrap(spacing: 12, runSpacing: 12, children: [
             for (final e in colorPalette.entries)
               Pressable(
                 onTap: () => setState(() {
-                  final l = List<Map<String, dynamic>>.from(cur);
+                  final l = List<Map<String, dynamic>>.from(curColors);
                   final i = l.indexWhere((x) => x['name'] == e.key);
                   if (i >= 0) {
                     l.removeAt(i);
@@ -162,10 +162,10 @@ class _SpecsFormState extends State<SpecsForm> {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOutBack,
-                    width: cur.any((x) => x['name'] == e.key) ? 46 : 38,
-                    height: cur.any((x) => x['name'] == e.key) ? 46 : 38,
-                    decoration: BoxDecoration(color: hexColor(e.value), shape: BoxShape.circle, border: Border.all(color: cur.any((x) => x['name'] == e.key) ? C.terracotta : C.line, width: cur.any((x) => x['name'] == e.key) ? 4 : 2)),
-                    child: cur.any((x) => x['name'] == e.key) ? Icon(Icons.check, size: 20, color: e.key == 'Blanc' || e.key == 'Jaune' || e.key == 'Beige' ? Colors.black : Colors.white) : null,
+                    width: curColors.any((x) => x['name'] == e.key) ? 46 : 38,
+                    height: curColors.any((x) => x['name'] == e.key) ? 46 : 38,
+                    decoration: BoxDecoration(color: hexColor(e.value), shape: BoxShape.circle, border: Border.all(color: curColors.any((x) => x['name'] == e.key) ? C.terracotta : C.line, width: curColors.any((x) => x['name'] == e.key) ? 4 : 2)),
+                    child: curColors.any((x) => x['name'] == e.key) ? Icon(Icons.check, size: 20, color: e.key == 'Blanc' || e.key == 'Jaune' || e.key == 'Beige' ? Colors.black : Colors.white) : null,
                   ),
                   const SizedBox(height: 2),
                   Text(e.key, style: const TextStyle(fontSize: 11, color: C.muted)),
@@ -269,7 +269,7 @@ class _NewProductState extends State<NewProductScreen> {
                 child: DropdownButtonFormField<String>(
                   initialValue: unit,
                   decoration: const InputDecoration(labelText: 'Vendu par'),
-                  items: const [for (final u in ['unité', 'kg', 'L', 'lot', 'douzaine', 'paire']) DropdownMenuItem(value: u, child: Text(u))],
+                  items: [for (final u in ['unité', 'kg', 'L', 'lot', 'douzaine', 'paire']) DropdownMenuItem(value: u, child: Text(u))],
                   onChanged: (v) => setState(() => unit = v ?? 'unité'),
                 ),
               ),
