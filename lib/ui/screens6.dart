@@ -35,7 +35,7 @@ class PlanCard extends StatelessWidget {
       child: FutureBuilder<int?>(
         future: Repo.quoteFee('shop_plan'),
         builder: (_, s) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(valid ? 'Abonnement actif jusqu\'au ${until!.substring(0, 10)}' : 'Abonnement boutique non payé', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+          Text(valid ? 'Abonnement actif jusqu\'au ${until.substring(0, 10)}' : 'Abonnement boutique non payé', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
           Text('Tarif mensuel : ${feeText(s.data, '20')}', style: const TextStyle(color: C.muted)),
           const SizedBox(height: 8),
           PrimaryButton(label: valid ? 'Prolonger de 30 jours' : "Payer l'abonnement", icon: Icons.payments_outlined, onPressed: s.data == null ? null : () => payAndOpen(context, 'shop_plan', shop['id'] as String)),

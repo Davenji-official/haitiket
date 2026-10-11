@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'fx.dart';
 import 'screens3.dart';
 import 'screens5.dart';
 import 'screens6.dart';
