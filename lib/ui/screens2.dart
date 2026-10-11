@@ -6,6 +6,7 @@ import 'fx.dart';
 import 'screens3.dart';
 import 'screens5.dart';
 import 'screens6.dart';
+import 'screens7.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -328,23 +329,17 @@ class _ShopPanelState extends State<ShopPanel> {
             ),
           if (active) ...[
             const SizedBox(height: 16),
-            Field(name, 'Nom du produit'),
-            Field(price, 'Prix en HTG', type: TextInputType.number),
-            Field(stock, 'Stock disponible', type: TextInputType.number),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: cats,
-              builder: (_, cs) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Catégorie'),
-                  items: [for (final c in cs.data ?? []) DropdownMenuItem(value: c['id'] as String, child: Text('${c['name']}'))],
-                  onChanged: (v) => catId = v,
-                ),
-              ),
+            PrimaryButton(
+              label: personal ? 'Nouvelle annonce' : 'Nouveau produit',
+              icon: Icons.add_box_outlined,
+              onPressed: () async {
+                final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => NewProductScreen(shopId: widget.shop['id'] as String, bazar: personal)));
+                if (id != null) {
+                  reload();
+                  if (personal && mounted) toast(context, 'Annonce enregistrée : payez pour la publier.');
+                }
+              },
             ),
-            Field(desc, 'Description (facultatif)'),
-            ImageUploadField(key: ValueKey(imgKey), onUrl: (u) => prodImg = u),
-            FilledButton(onPressed: add, child: const Text('Publier le produit')),
             const SizedBox(height: 16),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: products,

@@ -1,8 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import '../data/repo.dart';
 import '../i18n.dart';
 import '../theme.dart';
@@ -306,89 +304,5 @@ class _ShopState extends State<ShopScreen> {
             ]),
           );
         },
-      );
-}
-
-class MapScreen extends StatefulWidget {
-  final String? kind;
-  const MapScreen({super.key, this.kind});
-  @override
-  State<MapScreen> createState() => _MapState();
-}
-
-class _MapState extends State<MapScreen> {
-  final controller = MapController();
-  late final Future<List<Map<String, dynamic>>> f = Repo.shopsGeo(kind: widget.kind);
-  Position? me;
-
-  Future<void> locate() async {
-    final p = await myPosition(context);
-    if (p == null) return;
-    setState(() => me = p);
-    controller.move(LatLng(p.latitude, p.longitude), 14);
-  }
-
-  String shopLine(Map<String, dynamic> s, double lat, double lng) {
-    final city = (s['city'] ?? '').toString();
-    if (me == null) return city;
-    final d = fmtKm(distKm(me!.latitude, me!.longitude, lat, lng));
-    return '$city · à $d à vol d\u2019oiseau';
-  }
-
-  void openShop(Map<String, dynamic> s) {
-    final lat = (s['lat'] as num).toDouble(), lng = (s['lng'] as num).toDouble();
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (c) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${s['name']}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: C.ink)),
-          Text(shopLine(s, lat, lng), style: const TextStyle(color: C.muted)),
-          const SizedBox(height: 14),
-          PrimaryButton(
-            label: 'Voir la boutique',
-            icon: Icons.storefront,
-            onPressed: () {
-              Navigator.pop(c);
-              Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopScreen(s['id'] as String)));
-            },
-          ),
-        ]),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(tr('Carte'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-        floatingActionButton: FloatingActionButton.extended(onPressed: locate, backgroundColor: C.ink, foregroundColor: Colors.white, icon: const Icon(Icons.my_location), label: Text(tr('Près de moi'))),
-        body: FutureBuilder<List<Map<String, dynamic>>>(
-          future: f,
-          builder: (_, s) {
-            final shops = s.data ?? [];
-            return Stack(children: [
-              FlutterMap(
-                mapController: controller,
-                options: const MapOptions(initialCenter: LatLng(18.5392, -72.335), initialZoom: 11),
-                children: [
-                  TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.haitiket.haitiket'),
-                  MarkerLayer(markers: [
-                    for (final sh in shops)
-                      Marker(
-                        point: LatLng((sh['lat'] as num).toDouble(), (sh['lng'] as num).toDouble()),
-                        width: 48,
-                        height: 48,
-                        child: Pressable(onTap: () => openShop(sh), child: const Icon(Icons.location_on, color: C.terracotta, size: 46)),
-                      ),
-                    if (me != null) Marker(point: LatLng(me!.latitude, me!.longitude), width: 40, height: 40, child: const Icon(Icons.my_location, color: Colors.blue, size: 34)),
-                  ]),
-                  const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
-                ],
-              ),
-              if (s.connectionState == ConnectionState.done && shops.isEmpty)
-                Positioned(top: 12, left: 12, right: 12, child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)), child: const Text("Aucune boutique n'a encore partagé sa position.", style: TextStyle(color: C.ink, fontWeight: FontWeight.w700)))),
-            ]);
-          },
-        ),
       );
 }

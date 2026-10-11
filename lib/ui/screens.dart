@@ -8,7 +8,8 @@ import 'screens2.dart';
 import 'screens4.dart';
 import 'fx.dart';
 import 'screens5.dart';
-import 'screens6.dart';
+import 'screens7.dart';
+import 'map_screen.dart';
 import '../i18n.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'widgets.dart';
@@ -222,7 +223,7 @@ class _BazarState extends State<BazarScreen> {
           const SizedBox(height: 6),
           const Text('Achetez et vendez entre particuliers : paiement et livraison HAITIKET comme en boutique.', style: TextStyle(fontSize: 17, color: C.muted, height: 1.4)),
           const SizedBox(height: 16),
-          _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique professionnelle.', tr('Publier une annonce'), Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
+          _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique professionnelle.', tr('Publier une annonce'), Icons.local_offer, () => startBazarListing(context)),
           Align(alignment: Alignment.centerRight, child: FilterChip(avatar: const Icon(Icons.near_me, size: 18), label: Text(tr('Près de moi')), selected: nearby, onSelected: toggleNearby)),
           const SizedBox(height: 12),
           if (!Config.configured)

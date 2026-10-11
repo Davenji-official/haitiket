@@ -1,12 +1,84 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import 'fx.dart';
 import 'screens3.dart';
 import 'screens5.dart';
+import 'specs.dart';
 import 'widgets.dart';
+
+class _Gallery extends StatefulWidget {
+  final String productId;
+  final String? cover;
+  final Widget overlay;
+  const _Gallery({required this.productId, required this.cover, required this.overlay});
+  @override
+  State<_Gallery> createState() => _GalleryState();
+}
+
+class _GalleryState extends State<_Gallery> {
+  late final Future<List<Map<String, dynamic>>> f = Repo.productMedia(widget.productId);
+  final pc = PageController();
+  int idx = 0;
+
+  @override
+  void dispose() {
+    pc.dispose();
+    super.dispose();
+  }
+
+  Widget placeholder() => Container(color: C.mint, child: const Icon(Icons.shopping_basket_outlined, size: 72, color: C.green));
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: f,
+            builder: (_, s) {
+              var items = s.data ?? [];
+              if (items.isEmpty && widget.cover != null && widget.cover!.isNotEmpty) items = [{'url': widget.cover, 'kind': 'image'}];
+              return Stack(fit: StackFit.expand, children: [
+                if (items.isEmpty)
+                  placeholder()
+                else
+                  PageView.builder(
+                    controller: pc,
+                    itemCount: items.length,
+                    onPageChanged: (i) => setState(() => idx = i),
+                    itemBuilder: (_, i) {
+                      final it = items[i];
+                      if (it['kind'] == 'video') {
+                        return GestureDetector(
+                          onTap: () => launchUrl(Uri.parse(it['url'] as String), mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication),
+                          child: Container(color: C.ink, child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.play_circle_fill, size: 84, color: Colors.white), SizedBox(height: 8), Text('Voir la vidéo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))])),
+                        );
+                      }
+                      return Image.network(it['url'] as String, fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder());
+                    },
+                  ),
+                Positioned(right: 6, top: 6, child: widget.overlay),
+                if (items.length > 1)
+                  Positioned(
+                    bottom: 12,
+                    left: 0,
+                    right: 0,
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      for (var i = 0; i < items.length; i++)
+                        AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 3), width: i == idx ? 22 : 8, height: 8, decoration: BoxDecoration(color: i == idx ? Colors.white : Colors.white54, borderRadius: BorderRadius.circular(6))),
+                    ]),
+                  ),
+              ]);
+            },
+          ),
+        ),
+      );
+}
 
 class ProductDetailScreen extends StatelessWidget {
   final Map<String, dynamic> p;
@@ -25,36 +97,60 @@ class ProductDetailScreen extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: C.green), const SizedBox(width: 6), Text(t, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))]),
       );
 
+  Widget heading(String t) => Padding(padding: const EdgeInsets.only(top: 18, bottom: 8), child: Text(t, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)));
+
+  List<Widget> specs() {
+    final attrs = Map<String, dynamic>.from((p['attributes'] as Map?) ?? const {});
+    if (attrs.isEmpty) return [];
+    final cat = (p['categories'] as Map?)?['name'] as String?;
+    final out = <Widget>[];
+    final colors = ((attrs.remove('colors') as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final sizes = List<String>.from((attrs.remove('sizes') as List?) ?? const []);
+    final pub = List<String>.from((attrs.remove('public') as List?) ?? const []);
+    if (pub.isNotEmpty) out.addAll([heading('Pour'), Wrap(spacing: 8, children: [for (final x in pub) Chip(label: Text(x))])]);
+    if (sizes.isNotEmpty) out.addAll([heading('Tailles disponibles'), Wrap(spacing: 8, runSpacing: 4, children: [for (final x in sizes) Chip(label: Text(x, style: const TextStyle(fontWeight: FontWeight.w800)))])]);
+    if (colors.isNotEmpty) {
+      out.addAll([
+        heading('Couleurs disponibles'),
+        Wrap(spacing: 14, runSpacing: 10, children: [
+          for (final c in colors)
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 38, height: 38, decoration: BoxDecoration(color: hexColor(c['hex'] as String?) ?? C.line, shape: BoxShape.circle, border: Border.all(color: C.line, width: 2)), child: hexColor(c['hex'] as String?) == null ? const Icon(Icons.palette_outlined, size: 18, color: C.muted) : null),
+              const SizedBox(height: 2),
+              Text('${c['name']}', style: const TextStyle(fontSize: 12, color: C.muted)),
+            ]),
+        ]),
+      ]);
+    }
+    if (attrs.isNotEmpty) {
+      out.add(heading('Caractéristiques'));
+      for (final e in attrs.entries) {
+        final v = e.value is List ? (e.value as List).join(', ') : '${e.value}';
+        out.add(Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 140, child: Text(specLabel(cat, e.key), style: const TextStyle(color: C.muted))), Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink)))])));
+      }
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final img = p['image_url'] as String?;
     final shop = (p['shops'] as Map?)?['name'] ?? '';
     final shopId = (p['shop_id'] ?? (p['shops'] as Map?)?['id']) as String?;
     final desc = (p['description'] as String?) ?? '';
     final stock = (p['stock'] as num?)?.toInt() ?? 0;
     final bazar = p['source'] == 'bazar';
+    final unit = (p['unit_label'] as String?) ?? 'unité';
     return Scaffold(
       appBar: AppBar(title: Text('$shop', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
       body: ListView(padding: const EdgeInsets.all(18), children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: Stack(fit: StackFit.expand, children: [
-              img == null || img.isEmpty
-                  ? Container(color: C.mint, child: const Icon(Icons.shopping_basket_outlined, size: 72, color: C.green))
-                  : Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: C.mint)),
-              Positioned(right: 6, top: 6, child: HeartButton(p['id'] as String, onImage: true)),
-            ]),
-          ),
-        ),
+        _Gallery(productId: p['id'] as String, cover: p['image_url'] as String?, overlay: HeartButton(p['id'] as String, onImage: true)),
         const SizedBox(height: 18),
         Row(children: [
           Expanded(child: Text('${p['name']}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: C.ink))),
           if (bazar) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(12)), child: const Text('Bazar', style: TextStyle(fontWeight: FontWeight.w800))),
         ]),
         const SizedBox(height: 6),
-        Text(money(p['price_minor'] as num, (p['currency'] ?? 'HTG') as String), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
+        Text('${money(p['price_minor'] as num, (p['currency'] ?? 'HTG') as String)}${unit == 'unité' ? '' : ' / $unit'}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
         const SizedBox(height: 10),
         FutureBuilder<Map<String, dynamic>>(
           future: loadStats(shopId),
@@ -87,6 +183,7 @@ class ProductDetailScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text(desc, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.45)),
         ],
+        ...specs(),
         const SizedBox(height: 24),
         Builder(
           builder: (bc) => PrimaryButton(
@@ -102,6 +199,7 @@ class ProductDetailScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(onPressed: () => openChat(context, 'product', p['id'] as String), icon: const Icon(Icons.chat_bubble_outline), label: const Text('Contacter le vendeur')),
+        const SizedBox(height: 30),
       ]),
     );
   }
