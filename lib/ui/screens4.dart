@@ -53,47 +53,6 @@ class _ShopRequestState extends State<ShopRequestScreen> {
       );
 }
 
-/// Annonce Bazar : 2 USD pour 14 jours.
-class ListingFormScreen extends StatefulWidget {
-  const ListingFormScreen({super.key});
-  @override
-  State<ListingFormScreen> createState() => _ListingFormState();
-}
-
-class _ListingFormState extends State<ListingFormScreen> {
-  final title = TextEditingController(), price = TextEditingController(), city = TextEditingController();
-  String? img;
-  bool busy = false;
-
-  Future<void> submit() async {
-    final p = double.tryParse(price.text.replaceAll(',', '.'));
-    if (title.text.trim().isEmpty || p == null || p <= 0) return toast(context, 'Titre et prix valides requis.');
-    setState(() => busy = true);
-    try {
-      await Repo.createListingDraft(title.text.trim(), (p * 100).round(), city.text.trim(), img);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      toast(context, 'Brouillon enregistré.');
-    } catch (e) {
-      if (mounted) toast(context, Repo.err(e));
-    }
-    if (mounted) setState(() => busy = false);
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Publier au Bazar', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          _info("2 USD pour 14 jours, renouvelable. Sans renouvellement, l'annonce est bloquée puis supprimée du catalogue après 30 jours. Le paiement est indisponible pour le moment : votre annonce reste en brouillon."),
-          Field(title, "Titre de l'article"),
-          Field(price, 'Prix en HTG', type: TextInputType.number),
-          Field(city, 'Ville'),
-          ImageUploadField(onUrl: (u) => img = u),
-          PrimaryButton(label: busy ? 'Enregistrement…' : 'Enregistrer le brouillon', icon: Icons.local_offer, onPressed: busy ? null : submit),
-        ]),
-      );
-}
-
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
   @override

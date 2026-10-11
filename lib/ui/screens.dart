@@ -9,6 +9,7 @@ import 'screens3.dart';
 import 'screens4.dart';
 import 'fx.dart';
 import 'screens5.dart';
+import 'screens6.dart';
 import '../i18n.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'widgets.dart';
@@ -56,7 +57,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   }
 
   Future<List<Map<String, dynamic>>> load(String q) async {
-    final items = await Repo.products(q: q, categoryId: cat, minMinor: minor(minC), maxMinor: minor(maxC), sort: sort, limit: 60);
+    final items = await Repo.products(source: 'marketplace', q: q, categoryId: cat, minMinor: minor(minC), maxMinor: minor(maxC), sort: sort, limit: 60);
     if (me != null) {
       for (final p in items) {
         final sh = p['shops'] as Map?;
@@ -97,7 +98,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
             Row(children: [
               Expanded(child: Text(tr('Marketplace'), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
               Pressable(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen())),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen(kind: 'pro'))),
                 child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.map_outlined, color: C.ink)),
               ),
             ]),
@@ -169,37 +170,77 @@ class _MarketplaceState extends State<MarketplaceScreen> {
       );
 }
 
-class BazarScreen extends StatelessWidget {
+class BazarScreen extends StatefulWidget {
   const BazarScreen({super.key});
   @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _title('Bazar', 'Achetez et vendez entre particuliers, près de chez vous.'),
-        _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique.', tr('Publier une annonce'), Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
-        if (!Config.configured)
-          _notConfigured()
-        else
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: Repo.listings(),
-            builder: (_, s) {
-              if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              final items = s.data ?? [];
-              if (items.isEmpty) return const EmptyState(title: "Aucune annonce pour l'instant", text: 'Publiez le premier article depuis « Vendre ».');
-              return Column(children: [
-                for (final l in items)
-                  Card(
-                    color: Colors.white,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      onTap: () => openChat(context, 'listing', l['id'] as String),
-                      title: Text('${l['title']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${l['city'] ?? ''} · ${l['condition'] ?? ''}'),
-                      trailing: Text(money(l['price_minor'] as num, (l['currency'] ?? 'HTG') as String), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
-                    ),
-                  ),
-              ]);
-            },
-          ),
-      ]);
+  State<BazarScreen> createState() => _BazarState();
+}
+
+class _BazarState extends State<BazarScreen> {
+  bool nearby = false;
+  Position? me;
+  late Future<List<Map<String, dynamic>>> f = load();
+
+  Future<List<Map<String, dynamic>>> load() async {
+    final items = await Repo.products(source: 'bazar', limit: 60);
+    if (me != null) {
+      for (final p in items) {
+        final sh = p['shops'] as Map?;
+        final la = sh?['lat'], ln = sh?['lng'];
+        if (la != null && ln != null) p['_dist'] = distKm(me!.latitude, me!.longitude, (la as num).toDouble(), (ln as num).toDouble());
+      }
+      if (nearby) items.sort((a, b) => ((a['_dist'] as double?) ?? 1e9).compareTo((b['_dist'] as double?) ?? 1e9));
+    }
+    return items;
+  }
+
+  Future<void> toggleNearby(bool v) async {
+    if (v && me == null) {
+      final p = await myPosition(context);
+      if (p == null) return;
+      me = p;
+    }
+    setState(() {
+      nearby = v;
+      f = load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: () async {
+          setState(() => f = load());
+          await f;
+        },
+        child: ListView(padding: const EdgeInsets.all(18), children: [
+          Row(children: [
+            const Expanded(child: Text('Bazar', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
+            Pressable(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen(kind: 'personal'))),
+              child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.map_outlined, color: C.ink)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          const Text('Achetez et vendez entre particuliers : paiement et livraison HAITIKET comme en boutique.', style: TextStyle(fontSize: 17, color: C.muted, height: 1.4)),
+          const SizedBox(height: 16),
+          _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique professionnelle.', tr('Publier une annonce'), Icons.local_offer, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ListingFormScreen()))),
+          Align(alignment: Alignment.centerRight, child: FilterChip(avatar: const Icon(Icons.near_me, size: 18), label: Text(tr('Près de moi')), selected: nearby, onSelected: toggleNearby)),
+          const SizedBox(height: 12),
+          if (!Config.configured)
+            _notConfigured()
+          else
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: f,
+              builder: (_, s) {
+                if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+                if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+                final items = s.data ?? [];
+                if (items.isEmpty) return const EmptyState(title: "Aucune annonce pour l'instant", text: 'Publiez le premier article du Bazar.');
+                return ProductGrid(items);
+              },
+            ),
+        ]),
+      );
 }
 
 class NetworkScreen extends StatefulWidget {

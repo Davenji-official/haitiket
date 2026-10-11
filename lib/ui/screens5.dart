@@ -172,67 +172,153 @@ class _NotificationsState extends State<NotificationsScreen> {
       ]);
 }
 
-class ShopScreen extends StatelessWidget {
+class ShopScreen extends StatefulWidget {
   final String shopId;
   const ShopScreen(this.shopId, {super.key});
+  @override
+  State<ShopScreen> createState() => _ShopState();
+}
+
+class _ShopState extends State<ShopScreen> {
+  late final Future<Map<String, dynamic>> f = load();
+  bool? following;
+  int followDelta = 0;
 
   Future<Map<String, dynamic>> load() async {
-    final info = await Repo.shopInfo(shopId);
-    final rating = await Repo.shopRating(shopId);
-    final products = await Repo.products(shopId: shopId, limit: 40);
-    final reviews = await Repo.shopReviews(shopId);
-    return {'info': info, 'rating': rating, 'products': products, 'reviews': reviews};
+    final id = widget.shopId;
+    final info = await Repo.shopInfo(id);
+    final rating = await Repo.shopRating(id);
+    final stats = await Repo.shopStats(id);
+    final products = await Repo.products(shopId: id, limit: 40);
+    final reviews = await Repo.shopReviews(id);
+    final fol = await Repo.isFollowing(id);
+    return {'info': info, 'rating': rating, 'stats': stats, 'products': products, 'reviews': reviews, 'following': fol};
   }
 
+  Future<void> toggle(bool current) async {
+    if (currentUser() == null) return toast(context, 'Connectez-vous pour suivre une boutique.');
+    try {
+      final now = await Repo.toggleFollow(widget.shopId);
+      setState(() {
+        followDelta += now == current ? 0 : (now ? 1 : -1);
+        following = now;
+      });
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Widget stat(IconData i, String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: c), const SizedBox(width: 6), Text(t, style: TextStyle(fontWeight: FontWeight.w800, color: c))]),
+      );
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-        body: FutureBuilder<Map<String, dynamic>>(
-          future: load(),
-          builder: (_, s) {
-            if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-            if (s.hasError) return const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.'));
-            final d = s.data!;
-            final info = d['info'] as Map<String, dynamic>;
-            final rating = d['rating'] as Map<String, dynamic>;
-            final products = List<Map<String, dynamic>>.from(d['products'] as List);
-            final reviews = List<Map<String, dynamic>>.from(d['reviews'] as List);
-            return ListView(padding: const EdgeInsets.all(18), children: [
-              Text('${info['name']}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: C.ink)),
-              Text('${info['city'] ?? ''}', style: const TextStyle(color: C.muted, fontSize: 17)),
-              const SizedBox(height: 8),
-              Stars(rating['avg_rating'] as num?, (rating['n'] as num).toInt()),
-              const SizedBox(height: 20),
-              const Text('Produits', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
-              const SizedBox(height: 10),
-              if (products.isEmpty) const Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else ProductGrid(products),
-              const SizedBox(height: 24),
-              const Text('Avis des clients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
-              const SizedBox(height: 10),
-              if (reviews.isEmpty) const Text("Aucun avis. Les avis proviennent uniquement d'achats réellement livrés.", style: TextStyle(color: C.muted)),
-              for (final r in reviews)
-                Card(
-                  color: Colors.white,
-                  child: ListTile(
-                    title: Row(children: [for (var i = 0; i < (r['rating'] as int); i++) const Icon(Icons.star_rounded, color: C.yellow, size: 18)]),
-                    subtitle: r['comment'] == null ? null : Text('${r['comment']}'),
-                  ),
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+        future: f,
+        builder: (_, s) {
+          if (s.connectionState != ConnectionState.done) return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
+          if (s.hasError) return Scaffold(appBar: AppBar(), body: const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.')));
+          final d = s.data!;
+          final info = d['info'] as Map<String, dynamic>;
+          final rating = d['rating'] as Map<String, dynamic>;
+          final stats = d['stats'] as Map<String, dynamic>;
+          final products = List<Map<String, dynamic>>.from(d['products'] as List);
+          final reviews = List<Map<String, dynamic>>.from(d['reviews'] as List);
+          final primary = hexColor(info['color_primary'] as String?) ?? C.ink;
+          final accent = hexColor(info['color_accent'] as String?) ?? C.terracotta;
+          final fol = following ?? (d['following'] as bool);
+          final banner = info['banner_url'] as String?;
+          final logo = info['logo_url'] as String?;
+          final slogan = info['slogan'] as String?;
+          final personal = info['kind'] == 'personal';
+          return Scaffold(
+            appBar: AppBar(backgroundColor: primary, foregroundColor: Colors.white, title: Text('${info['name']}', style: const TextStyle(fontWeight: FontWeight.w800))),
+            body: ListView(children: [
+              Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  height: 150,
+                  width: double.infinity,
+                  decoration: BoxDecoration(gradient: LinearGradient(colors: [primary, accent])),
+                  child: banner == null ? null : Image.network(banner, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
                 ),
-            ]);
-          },
-        ),
+                Positioned(
+                  left: 18,
+                  bottom: -38,
+                  child: CircleAvatar(radius: 42, backgroundColor: Colors.white, child: CircleAvatar(radius: 38, backgroundColor: accent, backgroundImage: logo == null ? null : NetworkImage(logo), child: logo == null ? const Icon(Icons.storefront, color: Colors.white, size: 36) : null)),
+                ),
+              ]),
+              const SizedBox(height: 50),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${info['name']}', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: primary)),
+                  if (slogan != null) Text(slogan, style: TextStyle(fontSize: 17, fontStyle: FontStyle.italic, color: accent, fontWeight: FontWeight.w700)),
+                  Text('${personal ? 'Vendeur particulier (Bazar)' : 'Boutique professionnelle'} · ${info['city'] ?? ''}', style: const TextStyle(color: C.muted)),
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    stat(Icons.people_outline, '${((stats['followers'] as num).toInt() + followDelta)} abonné(s)', primary),
+                    stat(Icons.inventory_2_outlined, '${stats['products']} produit(s)', primary),
+                    stat(Icons.shopping_bag_outlined, '${stats['sold']} vendu(s)', primary),
+                    Stars(rating['avg_rating'] as num?, (rating['n'] as num).toInt()),
+                  ]),
+                  const SizedBox(height: 16),
+                  Pressable(
+                    onTap: () => toggle(fol),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 350),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      decoration: BoxDecoration(color: fol ? Colors.white : accent, border: Border.all(color: accent, width: 2), borderRadius: BorderRadius.circular(26)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                          child: Icon(fol ? Icons.notifications_active : Icons.notifications_none, key: ValueKey(fol), color: fol ? accent : Colors.white),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(fol ? 'Abonné' : 'Suivre la boutique', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: fol ? accent : Colors.white)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('Abonnez-vous pour être averti de chaque nouveau produit.', style: TextStyle(color: C.muted)),
+                  const SizedBox(height: 22),
+                  const Text('Produits', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                  const SizedBox(height: 10),
+                  if (products.isEmpty) const Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else ProductGrid(products),
+                  const SizedBox(height: 24),
+                  const Text('Avis des clients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                  const SizedBox(height: 10),
+                  if (reviews.isEmpty) const Text("Aucun avis. Les avis proviennent uniquement d'achats réellement livrés.", style: TextStyle(color: C.muted)),
+                  for (final r in reviews)
+                    Card(
+                      color: Colors.white,
+                      child: ListTile(
+                        title: Row(children: [for (var i = 0; i < (r['rating'] as int); i++) const Icon(Icons.star_rounded, color: C.yellow, size: 18)]),
+                        subtitle: r['comment'] == null ? null : Text('${r['comment']}'),
+                      ),
+                    ),
+                  const SizedBox(height: 30),
+                ]),
+              ),
+            ]),
+          );
+        },
       );
 }
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final String? kind;
+  const MapScreen({super.key, this.kind});
   @override
   State<MapScreen> createState() => _MapState();
 }
 
 class _MapState extends State<MapScreen> {
   final controller = MapController();
-  late final Future<List<Map<String, dynamic>>> f = Repo.shopsGeo();
+  late final Future<List<Map<String, dynamic>>> f = Repo.shopsGeo(kind: widget.kind);
   Position? me;
 
   Future<void> locate() async {

@@ -4,6 +4,7 @@ import '../data/repo.dart';
 import '../theme.dart';
 import 'screens3.dart';
 import 'screens5.dart';
+import 'screens6.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -92,9 +93,37 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersState();
 }
 
-class _OrdersState extends State<OrdersScreen> {
+class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
   late Future<List<Map<String, dynamic>>> f = Repo.myOrders();
   void reload() => setState(() => f = Repo.myOrders());
+
+  Future<void> checkPending() async {
+    try {
+      final l = await Repo.myOrders();
+      for (final o in l) {
+        if (o['status'] == 'PENDING_PAYMENT') await Repo.checkPayment('order', o['id'] as String);
+      }
+    } catch (_) {}
+    if (mounted) reload();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (currentUser() != null) checkPending();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && currentUser() != null) checkPending();
+  }
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
@@ -123,6 +152,17 @@ class _OrdersState extends State<OrdersScreen> {
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}'),
                         const SizedBox(height: 6),
                         Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
+                        if (o['status'] == 'PENDING_PAYMENT') ...[
+                          const SizedBox(height: 6),
+                          PrimaryButton(label: 'Payer avec MonCash', icon: Icons.payments_outlined, onPressed: () => payAndOpen(context, 'order', o['id'] as String)),
+                          TextButton(
+                            onPressed: () async {
+                              await Repo.checkPayment('order', o['id'] as String);
+                              reload();
+                            },
+                            child: const Text("J'ai payé : vérifier mon paiement"),
+                          ),
+                        ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
                         if (o['status'] == 'DELIVERED' || o['status'] == 'COMPLETED') TextButton(onPressed: () => reviewDialog(context, o['id'] as String), child: const Text('Laisser un avis')),
                         TextButton(onPressed: () => openChat(context, 'order', o['id'] as String), child: const Text('Écrire au vendeur')),
@@ -185,6 +225,19 @@ class _ShopPanelState extends State<ShopPanel> {
   String? catId;
   int imgKey = 0;
   late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
+  bool get personal => widget.shop['kind'] == 'personal';
+
+  bool paidOk(Map<String, dynamic> p) {
+    final pu = p['paid_until'] as String?;
+    return pu != null && DateTime.parse(pu).isAfter(DateTime.now());
+  }
+
+  String sub(Map<String, dynamic> p) {
+    final base = '${money(p['price_minor'] as num, p['currency'] as String)} · stock ${p['stock']} · ${p['status'] == 'published' ? 'publié' : 'masqué'}';
+    if (p['source'] != 'bazar') return base;
+    return paidOk(p) ? '$base · payé jusqu\'au ${(p['paid_until'] as String).substring(0, 10)}' : '$base · non payé';
+  }
+
   late Future<List<Map<String, dynamic>>> products = Repo.shopProducts(widget.shop['id'] as String);
   late Future<List<Map<String, dynamic>>> orders = Repo.shopOrders(widget.shop['id'] as String);
 
@@ -198,7 +251,7 @@ class _ShopPanelState extends State<ShopPanel> {
     final st = int.tryParse(stock.text);
     if (name.text.trim().isEmpty || p == null || p < 0 || st == null || st < 0) return toast(context, 'Nom, prix et stock valides requis.');
     try {
-      await Repo.addProduct(widget.shop['id'] as String, name.text.trim(), (p * 100).round(), st, prodImg, true, description: desc.text, categoryId: catId);
+      await Repo.addProduct(widget.shop['id'] as String, name.text.trim(), (p * 100).round(), st, prodImg, !personal, description: desc.text, categoryId: catId, source: personal ? 'bazar' : 'marketplace');
       name.clear();
       price.clear();
       stock.clear();
@@ -206,7 +259,7 @@ class _ShopPanelState extends State<ShopPanel> {
       prodImg = null;
       imgKey++;
       reload();
-      if (mounted) toast(context, 'Produit publié.');
+      if (mounted) toast(context, personal ? 'Annonce enregistrée : payez pour la publier.' : 'Produit publié.');
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
@@ -252,6 +305,8 @@ class _ShopPanelState extends State<ShopPanel> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
           Text(active ? 'Boutique active' : 'En attente de vérification — vous pourrez publier après activation.', style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700)),
+          if (!personal) PlanCard(shop: widget.shop),
+          if (!personal && active) BrandingEditor(shop: widget.shop),
           if (active)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -300,11 +355,12 @@ class _ShopPanelState extends State<ShopPanel> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${money(p['price_minor'] as num, p['currency'] as String)} · stock ${p['stock']} · ${p['status'] == 'published' ? 'publié' : 'masqué'}'),
+                      subtitle: Text(sub(p)),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                         IconButton(onPressed: (p['stock'] as int) > 0 ? () => patch(p['id'] as String, {'stock': (p['stock'] as int) - 1}) : null, icon: const Icon(Icons.remove_circle_outline)),
                         IconButton(onPressed: () => patch(p['id'] as String, {'stock': (p['stock'] as int) + 1}), icon: const Icon(Icons.add_circle_outline)),
-                        Switch(value: p['status'] == 'published', onChanged: (v) => patch(p['id'] as String, {'status': v ? 'published' : 'paused'})),
+                        if (p['source'] == 'bazar' && !paidOk(p)) TextButton(onPressed: () => payAndOpen(context, 'bazar_listing', p['id'] as String), child: const Text('Payer'))
+                        else Switch(value: p['status'] == 'published', onChanged: (v) => patch(p['id'] as String, {'status': v ? 'published' : 'paused'})),
                       ]),
                     ),
                 ]);

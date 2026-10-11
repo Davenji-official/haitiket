@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme.dart';
@@ -186,4 +187,53 @@ class BottomBar extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// Petite bulle qui « vole » vers l'icône du panier.
+class CartFly {
+  static final targetKey = GlobalKey();
+
+  static void fly(BuildContext from, {IconData icon = Icons.add_shopping_cart}) {
+    final ro = from.findRenderObject();
+    final tctx = targetKey.currentContext;
+    if (ro is! RenderBox || tctx == null) return;
+    final tbox = tctx.findRenderObject();
+    if (tbox is! RenderBox) return;
+    final start = ro.localToGlobal(ro.size.center(Offset.zero));
+    final end = tbox.localToGlobal(tbox.size.center(Offset.zero));
+    final overlay = Overlay.of(from);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOutCubic,
+        onEnd: () => entry.remove(),
+        builder: (_, t, __) {
+          final x = start.dx + (end.dx - start.dx) * t;
+          final y = start.dy + (end.dy - start.dy) * t - math.sin(math.pi * t) * 90;
+          return Positioned(
+            left: x - 18,
+            top: y - 18,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 1 - t * .35,
+                child: Transform.scale(
+                  scale: 1 - .5 * t,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(color: C.terracotta, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x55000000), blurRadius: 10)]),
+                    child: Icon(icon, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    overlay.insert(entry);
+  }
 }

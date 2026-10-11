@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -32,9 +33,33 @@ class SearchPill extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final void Function(Sec) go;
   const HomeScreen({super.key, required this.go});
+  @override
+  State<HomeScreen> createState() => _HomeState();
+}
+
+class _HomeState extends State<HomeScreen> {
+  Timer? timer;
+  late Future<List<Map<String, dynamic>>> disc = Repo.discover();
+
+  void go(Sec s) => widget.go(s);
+
+  @override
+  void initState() {
+    super.initState();
+    // Nouvelle sélection variée (Marketplace et Bazar) toutes les 15 minutes.
+    timer = Timer.periodic(const Duration(minutes: 15), (_) {
+      if (mounted) setState(() => disc = Repo.discover());
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
 
   Widget chip(IconData i, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(i, color: C.terracotta, size: 22),
@@ -132,7 +157,7 @@ class HomeScreen extends StatelessWidget {
       ),
       const SizedBox(height: 20),
       FutureBuilder<List<Map<String, dynamic>>>(
-        future: Repo.products(limit: 8),
+        future: disc,
         builder: (_, s) {
           if (s.connectionState != ConnectionState.done) return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
           if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Vérifiez votre connexion puis réessayez.');
@@ -144,6 +169,12 @@ class HomeScreen extends StatelessWidget {
         },
       ),
     ];
-    return ListView(padding: const EdgeInsets.fromLTRB(18, 28, 18, 40), children: [for (var i = 0; i < kids.length; i++) FadeSlideIn(index: i, child: kids[i])]);
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() => disc = Repo.discover());
+        await disc;
+      },
+      child: ListView(padding: const EdgeInsets.fromLTRB(18, 28, 18, 40), children: [for (var i = 0; i < kids.length; i++) FadeSlideIn(index: i, child: kids[i])]),
+    );
   }
 }

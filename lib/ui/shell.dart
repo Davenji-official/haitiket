@@ -9,9 +9,10 @@ import 'screens2.dart';
 import 'screens3.dart';
 import 'screens4.dart';
 import 'screens5.dart';
+import 'screens6.dart';
 import '../i18n.dart';
 
-enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support, notifications }
+enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support, notifications, wallet }
 
 const _bottom = [Sec.home, Sec.marketplace, Sec.bazar, Sec.network, Sec.messages];
 List<NavItem> _bottomItems() => [
@@ -35,6 +36,13 @@ class _ShellState extends State<Shell> {
   String? streamUser;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
+
+  @override
+  void initState() {
+    super.initState();
+    // Retour de la page de paiement (web) : on ouvre directement « Mes commandes ».
+    if (Uri.base.queryParameters['pay'] != null) sec = Sec.orders;
+  }
 
   void go(Sec s) => setState(() => sec = s);
 
@@ -107,6 +115,8 @@ class _ShellState extends State<Shell> {
         return const SupportScreen();
       case Sec.notifications:
         return const NotificationsScreen();
+      case Sec.wallet:
+        return const WalletScreen();
       case Sec.account:
         return AccountScreen(onChanged: () => setState(() {}));
     }
@@ -146,6 +156,7 @@ class _ShellState extends State<Shell> {
           drawerItem(Icons.favorite_border, tr('Mes favoris'), Sec.favorites),
           drawerItem(Icons.store_mall_directory_outlined, tr('Espace vendeur'), Sec.dashboard),
           drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
+          drawerItem(Icons.account_balance_wallet_outlined, 'Portefeuille', Sec.wallet),
           const Divider(height: 28),
           drawerItem(Icons.support_agent_outlined, tr('Support'), Sec.support),
           drawerItem(Icons.settings_outlined, tr('Paramètres'), Sec.settings),
@@ -196,6 +207,7 @@ class _ShellState extends State<Shell> {
           ValueListenableBuilder(
             valueListenable: CartStore.lines,
             builder: (_, __, ___) => IconButton(
+              key: CartFly.targetKey,
               onPressed: () => go(Sec.cart),
               icon: TweenAnimationBuilder<double>(
                 key: ValueKey(CartStore.count),
@@ -217,6 +229,7 @@ class _ShellState extends State<Shell> {
     if (uid != streamUser) {
       streamUser = uid;
       notifs = Repo.notificationStream();
+      Repo.loadFavorites();
     }
     return ValueListenableBuilder<String>(
       valueListenable: appLang,

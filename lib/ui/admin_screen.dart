@@ -7,10 +7,10 @@ class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 5,
+        length: 6,
         child: Column(children: [
-          const TabBar(labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Boutiques'), Tab(text: 'Livreurs'), Tab(text: 'Annonces'), Tab(text: 'Support'), Tab(text: 'Coupons')]),
-          const Expanded(child: TabBarView(children: [_AdminList('shop'), _AdminList('courier'), _AdminList('listing'), _AdminList('ticket'), _CouponTab()])),
+          const TabBar(isScrollable: true, tabAlignment: TabAlignment.start, labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Boutiques'), Tab(text: 'Livreurs'), Tab(text: 'Annonces'), Tab(text: 'Support'), Tab(text: 'Coupons'), Tab(text: 'Paiements')]),
+          const Expanded(child: TabBarView(children: [_AdminList('shop'), _AdminList('courier'), _AdminList('listing'), _AdminList('ticket'), _CouponTab(), _AdminList('payment')])),
         ]),
       );
 }
@@ -78,7 +78,8 @@ class _AdminListState extends State<_AdminList> {
         'shop' => '${r['name']} · ${r['city'] ?? ''}',
         'courier' => '${r['full_name']} · ${r['transport']} · ${r['zone']}',
         'ticket' => '${r['subject']} — ${r['message']}',
-        _ => '${r['title']} · ${money(r['price_minor'] as num, r['currency'] as String)}',
+        'payment' => '${r['purpose']} · ${money(r['amount_minor'] as num, 'HTG')}',
+        _ => '${r['name']} · ${money(r['price_minor'] as num, r['currency'] as String)}',
       };
 
   List<Widget> actions(Map<String, dynamic> r) {
@@ -96,9 +97,11 @@ class _AdminListState extends State<_AdminList> {
         ];
       case 'ticket':
         return [TextButton(onPressed: () => reply(id), child: const Text('Répondre'))];
+      case 'payment':
+        return [];
       default:
         return [
-          TextButton(onPressed: () => act(id, 'published'), child: const Text('Publier')),
+          TextButton(onPressed: () => act(id, 'paused'), child: const Text('Rétablir')),
           TextButton(onPressed: () => act(id, 'blocked', needReason: true), child: const Text('Bloquer')),
         ];
     }
