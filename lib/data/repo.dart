@@ -43,7 +43,7 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId, String? source}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,shop_id,shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
     if (categoryId != null) f = f.eq('category_id', categoryId);
@@ -71,7 +71,7 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> shopsGeo({String? kind}) async {
     if (!Config.configured) return [];
-    var f = _c.from('shops').select('id,name,city,lat,lng,kind').eq('status', 'active').not('lat', 'is', null);
+    var f = _c.from('shops').select('id,name,city,lat,lng,kind,logo_url,slogan,color_primary,color_accent').eq('status', 'active').not('lat', 'is', null);
     if (kind != null) f = f.eq('kind', kind);
     final rows = await f;
     return List<Map<String, dynamic>>.from(rows);
@@ -238,8 +238,35 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish, {String? description, String? categoryId, String source = 'marketplace'}) async {
-    await _c.from('products').insert({'shop_id': shopId, 'source': source, 'category_id': categoryId, 'description': (description ?? '').trim().isEmpty ? null : description!.trim(), 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
+  static Future<String> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish,
+      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité'}) async {
+    final r = await _c.from('products').insert({
+      'shop_id': shopId,
+      'source': source,
+      'category_id': categoryId,
+      'description': (description ?? '').trim().isEmpty ? null : description!.trim(),
+      'name': name,
+      'price_minor': priceMinor,
+      'currency': 'HTG',
+      'stock': stock,
+      'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(),
+      'attributes': attributes ?? <String, dynamic>{},
+      'unit_label': unitLabel,
+      'status': publish ? 'published' : 'draft',
+    }).select('id').single();
+    return r['id'] as String;
+  }
+
+  static Future<void> addProductMedia(String productId, List<Map<String, String>> media) async {
+    if (media.isEmpty) return;
+    await _c.from('product_media').insert([
+      for (var i = 0; i < media.length; i++) {'product_id': productId, 'url': media[i]['url'], 'kind': media[i]['kind'], 'position': i},
+    ]);
+  }
+
+  static Future<List<Map<String, dynamic>>> productMedia(String productId) async {
+    final rows = await _c.from('product_media').select('url,kind,position').eq('product_id', productId).order('position');
+    return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
