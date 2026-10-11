@@ -35,12 +35,14 @@ jobs:
             fi
           done
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
-      - name: Dépendances et analyse
+      - name: Dépendances
         working-directory: ${{ env.APP }}
         run: |
           flutter pub get
           dart run flutter_launcher_icons || echo "Icônes ignorées"
-          flutter analyze --no-fatal-infos --no-fatal-warnings || true
+      - name: Analyse du code (seules les erreurs bloquent)
+        working-directory: ${{ env.APP }}
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | grep -E "error •|issues found|No issues" ; exit ${PIPESTATUS[0]}
       - name: Build Web
         working-directory: ${{ env.APP }}
         run: |
@@ -87,11 +89,17 @@ jobs:
           sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="HAITIKET"|' $M
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
-      - name: Build APK
+      - name: Dépendances
         working-directory: ${{ env.APP }}
         run: |
           flutter pub get
           dart run flutter_launcher_icons || echo "Icônes ignorées"
+      - name: Analyse du code (seules les erreurs bloquent)
+        working-directory: ${{ env.APP }}
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | grep -E "error •|issues found|No issues" ; exit ${PIPESTATUS[0]}
+      - name: Build APK
+        working-directory: ${{ env.APP }}
+        run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
