@@ -41,13 +41,108 @@ class CartStore {
 class Repo {
   static final search = ValueNotifier<String>('');
 
-  static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24}) async {
+  static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,shops(name)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,shop_id,shops(id,name,lat,lng)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
-    final rows = await f.order('created_at', ascending: false).limit(limit);
+    if (categoryId != null) f = f.eq('category_id', categoryId);
+    if (minMinor != null) f = f.gte('price_minor', minMinor);
+    if (maxMinor != null) f = f.lte('price_minor', maxMinor);
+    if (shopId != null) f = f.eq('shop_id', shopId);
+    final rows = switch (sort) {
+      'price_asc' => await f.order('price_minor', ascending: true).limit(limit),
+      'price_desc' => await f.order('price_minor', ascending: false).limit(limit),
+      _ => await f.order('created_at', ascending: false).limit(limit),
+    };
     return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<Map<String, dynamic>> shopInfo(String id) async {
+    return Map<String, dynamic>.from(await _c.from('shops').select('id,name,city,lat,lng').eq('id', id).single());
+  }
+
+  static Future<List<Map<String, dynamic>>> categories() async {
+    if (!Config.configured) return [];
+    final rows = await _c.from('categories').select('id,name').eq('active', true).order('name');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> shopsGeo() async {
+    if (!Config.configured) return [];
+    final rows = await _c.from('shops').select('id,name,city,lat,lng').eq('status', 'active').not('lat', 'is', null);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<Map<String, dynamic>> shopRating(String shopId) async {
+    final r = await _c.rpc('shop_rating', params: {'p_shop': shopId});
+    final l = List<Map<String, dynamic>>.from(r as List);
+    return l.isEmpty ? {'avg_rating': null, 'n': 0} : l.first;
+  }
+
+  static Future<List<Map<String, dynamic>>> shopReviews(String shopId) async {
+    final rows = await _c.from('reviews').select('rating,comment,created_at').eq('shop_id', shopId).order('created_at', ascending: false).limit(20);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> setShopLocation(String shopId, double lat, double lng) async {
+    await _c.rpc('set_shop_location', params: {'p_shop': shopId, 'p_lat': lat, 'p_lng': lng});
+  }
+
+  static Future<String?> getOrderPin(String orderId) async {
+    final r = await _c.rpc('get_order_pin', params: {'p_order': orderId});
+    return r as String?;
+  }
+
+  static Future<bool> confirmHandover(String orderId, String pin) async => (await _c.rpc('confirm_handover', params: {'p_order': orderId, 'p_pin': pin})) == true;
+  static Future<bool> confirmPickup(String jobId, String pin) async => (await _c.rpc('confirm_pickup', params: {'p_job': jobId, 'p_pin': pin})) == true;
+  static Future<bool> confirmDelivery(String jobId, String pin) async => (await _c.rpc('confirm_delivery', params: {'p_job': jobId, 'p_pin': pin})) == true;
+
+  static Future<void> sellerSetOrderStatus(String orderId, String to) async {
+    await _c.rpc('seller_set_order_status', params: {'p_order': orderId, 'p_to': to});
+  }
+
+  static Future<void> createReview(String orderId, int rating, String comment) async {
+    await _c.rpc('create_review', params: {'p_order': orderId, 'p_rating': rating, 'p_comment': comment});
+  }
+
+  static Future<List<Map<String, dynamic>>> myNotifications() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('notifications').select('id,kind,title,body,created_at,read_at').eq('user_id', u.id).order('created_at', ascending: false).limit(60);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Stream<List<Map<String, dynamic>>> notificationStream() {
+    final u = currentUser();
+    if (u == null) return const Stream.empty();
+    return _c.from('notifications').stream(primaryKey: ['id']).eq('user_id', u.id);
+  }
+
+  static Future<void> markNotificationsRead() async {
+    await _c.rpc('mark_notifications_read');
+  }
+
+  static Future<Map<String, dynamic>> myReferral() async {
+    final r = await _c.rpc('my_referral');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<void> applyReferral(String code) async {
+    await _c.rpc('apply_referral', params: {'p_code': code});
+  }
+
+  static Future<List<Map<String, dynamic>>> adminCoupons() async {
+    final rows = await _c.from('coupons').select('id,code,kind,value,used_count,max_uses,active,expires_at').order('created_at', ascending: false).limit(100);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminCreateCoupon(String code, String kind, int value, int minMinor, int? maxUses, int days) async {
+    await _c.rpc('admin_create_coupon', params: {'p_code': code, 'p_kind': kind, 'p_value': value, 'p_min': minMinor, 'p_max_uses': maxUses, 'p_days': days});
+  }
+
+  static Future<void> adminSetCouponActive(String id, bool active) async {
+    await _c.rpc('admin_set_coupon_active', params: {'p_id': id, 'p_active': active});
   }
 
   static Future<List<Map<String, dynamic>>> listings() async {
@@ -65,7 +160,7 @@ class Repo {
   static Future<List<Map<String, dynamic>>> favorites() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('favorites').select('products(id,name,price_minor,currency,description,image_url,stock,shops(name))').eq('user_id', u.id);
+    final rows = await _c.from('favorites').select('products(id,name,price_minor,currency,description,image_url,stock,shop_id,shops(id,name,lat,lng))').eq('user_id', u.id);
     return [for (final r in rows) if (r['products'] != null) Map<String, dynamic>.from(r['products'] as Map)];
   }
 
@@ -113,8 +208,8 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish, {String? description}) async {
-    await _c.from('products').insert({'shop_id': shopId, 'description': (description ?? '').trim().isEmpty ? null : description!.trim(), 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
+  static Future<void> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish, {String? description, String? categoryId}) async {
+    await _c.from('products').insert({'shop_id': shopId, 'category_id': categoryId, 'description': (description ?? '').trim().isEmpty ? null : description!.trim(), 'name': name, 'price_minor': priceMinor, 'currency': 'HTG', 'stock': stock, 'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(), 'status': publish ? 'published' : 'draft'});
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
@@ -133,11 +228,12 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address) async {
+  static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address, [String? coupon]) async {
     final res = await _c.rpc('create_orders', params: {
       'p_items': [for (final l in lines) {'product_id': l.id, 'qty': l.qty}],
       'p_mode': mode,
       'p_address': address,
+      'p_coupon': (coupon ?? '').trim().isEmpty ? null : coupon!.trim(),
     });
     return List<Map<String, dynamic>>.from(res as List);
   }
@@ -228,10 +324,9 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> myJobs() async {
-    final u = currentUser();
-    if (u == null) return [];
-    final rows = await _c.from('delivery_jobs').select('id,pickup_area,dropoff_address,pay_minor,currency,status').eq('courier_id', u.id).order('assigned_at', ascending: false).limit(50);
-    return List<Map<String, dynamic>>.from(rows);
+    if (currentUser() == null) return [];
+    final r = await _c.rpc('my_jobs');
+    return List<Map<String, dynamic>>.from(r as List);
   }
 
   static Future<Map<String, dynamic>?> getProfile() async {
