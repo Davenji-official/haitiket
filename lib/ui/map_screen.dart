@@ -245,6 +245,54 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  /// Construit les lignes de l'itinéraire sans utiliser le paramètre
+  /// `isDotted`, qui n'existe pas dans flutter_map 7.0.2.
+  List<Polyline> routePolylines() {
+    if (!routeDotted) {
+      return [
+        Polyline(
+          points: route,
+          strokeWidth: 6,
+          color: C.terracotta,
+          borderStrokeWidth: 2,
+          borderColor: Colors.white,
+        ),
+      ];
+    }
+
+    // En mode approximatif, alterne petits segments et espaces pour
+    // représenter une ligne pointillée, y compris lorsque route contient
+    // seulement le point de départ et le point d'arrivée.
+    final dotted = <Polyline>[];
+    for (var segment = 0; segment < route.length - 1; segment++) {
+      final start = route[segment];
+      final end = route[segment + 1];
+      const divisions = 20;
+
+      for (var i = 0; i < divisions; i += 2) {
+        final t1 = i / divisions;
+        final t2 = (i + 1) / divisions;
+        final p1 = LatLng(
+          start.latitude + (end.latitude - start.latitude) * t1,
+          start.longitude + (end.longitude - start.longitude) * t1,
+        );
+        final p2 = LatLng(
+          start.latitude + (end.latitude - start.latitude) * t2,
+          start.longitude + (end.longitude - start.longitude) * t2,
+        );
+
+        dotted.add(
+          Polyline(
+            points: [p1, p2],
+            strokeWidth: 5,
+            color: C.terracotta,
+          ),
+        );
+      }
+    }
+    return dotted;
+  }
+
   List<Marker> markers() {
     final list = visible;
     final deg = 70 * 360 / (256 * math.pow(2, zoom.round()).toDouble());
@@ -388,7 +436,8 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
           ),
           children: [
             TileLayer(urlTemplate: _tileUrl, userAgentPackageName: 'com.haitiket.haitiket', panBuffer: 2, keepBuffer: 4),
-            if (route.isNotEmpty) PolylineLayer(polylines: [Polyline(points: route, strokeWidth: 6, color: C.terracotta, borderStrokeWidth: 2, borderColor: Colors.white, isDotted: routeDotted)]),
+            if (route.isNotEmpty)
+              PolylineLayer(polylines: routePolylines()),
             MarkerLayer(markers: markers()),
             const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
           ],
