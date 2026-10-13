@@ -319,6 +319,9 @@ class Repo {
       'listing': ['products', 'id,name,price_minor,currency,status,paid_until'],
       'ticket': ['support_tickets', 'id,subject,message,status,admin_reply'],
       'payment': ['payment_attempts', 'id,purpose,amount_minor,status'],
+      'dispute': ['order_disputes', 'id,order_id,reason,status'],
+      'refund': ['refund_requests', 'id,order_id,amount_minor,status,reason'],
+      'report': ['reports', 'id,kind,target_id,reason,status'],
     }[kind]!;
     var q = _c.from(cfg[0]).select(cfg[1]);
     if (kind == 'listing') q = q.eq('source', 'bazar');
@@ -487,6 +490,76 @@ class Repo {
       if (out.length >= take) break;
     }
     return out;
+  }
+
+  // ===== Lot 10 : réglages, tableau de bord, adresses, litiges, signalements, comptes =====
+  static Future<Map<String, dynamic>> adminDashboard() async => Map<String, dynamic>.from(await _c.rpc('admin_dashboard') as Map);
+
+  static Future<Map<String, String>> adminSettings() async {
+    final rows = await _c.from('platform_settings').select('key,value');
+    return {for (final r in rows) r['key'] as String: r['value'] as String};
+  }
+
+  static Future<void> adminSetSetting(String key, String value) async {
+    await _c.rpc('admin_set_setting', params: {'p_key': key, 'p_value': value});
+  }
+
+  static Future<List<Map<String, dynamic>>> adminSearchUsers(String q) async {
+    final r = await _c.rpc('admin_search_users', params: {'p_q': q});
+    return List<Map<String, dynamic>>.from(r as List);
+  }
+
+  static Future<void> adminSetUserSuspended(String id, bool suspended, String reason) async {
+    await _c.rpc('admin_set_user_suspended', params: {'p_user': id, 'p_suspended': suspended, 'p_reason': reason});
+  }
+
+  static Future<void> adminResolveDispute(String id, String outcome, String note) async {
+    await _c.rpc('admin_resolve_dispute', params: {'p_id': id, 'p_outcome': outcome, 'p_note': note});
+  }
+
+  static Future<void> adminMarkRefund(String id, bool executed, String note) async {
+    await _c.rpc('admin_mark_refund', params: {'p_id': id, 'p_executed': executed, 'p_note': note});
+  }
+
+  static Future<void> adminQueueRefund(String attemptId) async {
+    await _c.rpc('admin_queue_refund', params: {'p_attempt': attemptId});
+  }
+
+  static Future<void> adminResolveReport(String id, String status, String note) async {
+    await _c.rpc('admin_resolve_report', params: {'p_id': id, 'p_status': status, 'p_note': note});
+  }
+
+  static Future<void> openDispute(String orderId, String reason) async {
+    await _c.rpc('open_dispute', params: {'p_order': orderId, 'p_reason': reason});
+  }
+
+  static Future<void> requestCancellation(String orderId) async {
+    await _c.rpc('request_cancellation', params: {'p_order': orderId});
+  }
+
+  static Future<void> submitReport(String kind, String target, String reason) async {
+    await _c.rpc('submit_report', params: {'p_kind': kind, 'p_target': target, 'p_reason': reason});
+  }
+
+  static Future<List<Map<String, dynamic>>> myAddresses() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('addresses').select().eq('user_id', u.id).eq('active', true).order('is_default', ascending: false).order('created_at');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> saveAddress(Map<String, dynamic> a) async {
+    final u = currentUser();
+    if (u == null) throw 'Connexion requise';
+    await _c.from('addresses').insert({...a, 'user_id': u.id});
+  }
+
+  static Future<void> deleteAddress(String id) async {
+    await _c.from('addresses').update({'active': false, 'is_default': false}).eq('id', id);
+  }
+
+  static Future<void> setDefaultAddress(String id) async {
+    await _c.rpc('set_default_address', params: {'p_id': id});
   }
 
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
