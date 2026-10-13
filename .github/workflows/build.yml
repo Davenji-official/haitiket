@@ -23,6 +23,7 @@ jobs:
           P=$(find . -name pubspec.yaml -not -path "./.git/*" | head -1)
           echo "Projet trouvé : $P"
           cd "$(dirname "$P")"
+          if [ -d lib/assets ] && [ ! -d assets ]; then cp -r lib/assets assets; fi
           cp -r lib /tmp/lib_bk && cp pubspec.yaml /tmp/pubspec_bk.yaml
           [ -d assets ] && cp -r assets /tmp/assets_bk || true
           flutter create . --platforms=web --project-name haitiket --org com.haitiket
@@ -73,6 +74,7 @@ jobs:
         run: |
           P=$(find . -name pubspec.yaml -not -path "./.git/*" | head -1)
           cd "$(dirname "$P")"
+          if [ -d lib/assets ] && [ ! -d assets ]; then cp -r lib/assets assets; fi
           cp -r lib /tmp/lib_bk && cp pubspec.yaml /tmp/pubspec_bk.yaml
           [ -d assets ] && cp -r assets /tmp/assets_bk || true
           flutter create . --platforms=android --project-name haitiket --org com.haitiket
