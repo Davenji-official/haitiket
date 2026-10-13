@@ -8,6 +8,7 @@ import '../theme.dart';
 import 'fx.dart';
 import 'screens3.dart';
 import 'screens5.dart';
+import 'screens8.dart';
 import 'specs.dart';
 import 'widgets.dart';
 
@@ -141,7 +142,7 @@ class ProductDetailScreen extends StatelessWidget {
     final bazar = p['source'] == 'bazar';
     final unit = (p['unit_label'] as String?) ?? 'unité';
     return Scaffold(
-      appBar: AppBar(title: Text('$shop', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+      appBar: AppBar(title: Text('$shop', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)), actions: [IconButton(tooltip: 'Signaler', icon: const Icon(Icons.flag_outlined), onPressed: () => reportDialog(context, 'product', p['id'] as String))]),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         _Gallery(productId: p['id'] as String, cover: p['image_url'] as String?, overlay: HeartButton(p['id'] as String, onImage: true)),
         const SizedBox(height: 18),

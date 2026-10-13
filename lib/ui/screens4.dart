@@ -5,6 +5,7 @@ import '../theme.dart';
 import 'package:flutter/services.dart';
 import '../i18n.dart';
 import 'fx.dart';
+import 'screens8.dart';
 import 'widgets.dart';
 
 Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
@@ -106,6 +107,13 @@ class _ProfileState extends State<ProfileScreen> {
           Center(child: CircleAvatar(radius: 48, backgroundColor: C.mint, backgroundImage: avatar == null ? null : NetworkImage(avatar!), child: avatar == null ? const Icon(Icons.person, size: 48, color: C.green) : null)),
           const SizedBox(height: 14),
           ImageUploadField(onUrl: (u) => setState(() => avatar = u)),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.location_on_outlined, color: C.green),
+            title: const Text('Mes adresses de livraison', style: TextStyle(fontWeight: FontWeight.w700)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen())),
+          ),
           Field(name, "Nom d'affichage"),
           Field(phone, 'Téléphone', type: TextInputType.phone),
           const Text("Votre téléphone n'est jamais public.", style: TextStyle(color: C.muted)),

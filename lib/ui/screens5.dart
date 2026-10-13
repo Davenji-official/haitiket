@@ -5,6 +5,7 @@ import '../data/repo.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import 'fx.dart';
+import 'screens8.dart';
 import 'widgets.dart';
 
 double distKm(double lat1, double lng1, double lat2, double lng2) {
@@ -232,7 +233,7 @@ class _ShopState extends State<ShopScreen> {
           final slogan = info['slogan'] as String?;
           final personal = info['kind'] == 'personal';
           return Scaffold(
-            appBar: AppBar(backgroundColor: primary, foregroundColor: Colors.white, title: Text('${info['name']}', style: const TextStyle(fontWeight: FontWeight.w800))),
+            appBar: AppBar(backgroundColor: primary, foregroundColor: Colors.white, title: Text('${info['name']}', style: const TextStyle(fontWeight: FontWeight.w800)), actions: [IconButton(tooltip: 'Signaler', icon: const Icon(Icons.flag_outlined), onPressed: () => reportDialog(context, 'shop', widget.shopId))]),
             body: ListView(children: [
               Stack(clipBehavior: Clip.none, children: [
                 Container(

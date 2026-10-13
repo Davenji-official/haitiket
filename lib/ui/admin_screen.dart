@@ -1,16 +1,39 @@
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'admin2.dart';
+import 'screens5.dart';
 import 'widgets.dart';
 
 class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 6,
+        length: 12,
         child: Column(children: [
-          const TabBar(isScrollable: true, tabAlignment: TabAlignment.start, labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Boutiques'), Tab(text: 'Livreurs'), Tab(text: 'Annonces'), Tab(text: 'Support'), Tab(text: 'Coupons'), Tab(text: 'Paiements')]),
-          const Expanded(child: TabBarView(children: [_AdminList('shop'), _AdminList('courier'), _AdminList('listing'), _AdminList('ticket'), _CouponTab(), _AdminList('payment')])),
+          const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelColor: C.ink,
+            indicatorColor: C.terracotta,
+            tabs: [Tab(text: 'Tableau'), Tab(text: 'Litiges'), Tab(text: 'Remboursements'), Tab(text: 'Paiements'), Tab(text: 'Signalements'), Tab(text: 'Boutiques'), Tab(text: 'Annonces'), Tab(text: 'Livreurs'), Tab(text: 'Support'), Tab(text: 'Coupons'), Tab(text: 'Comptes'), Tab(text: 'Réglages')],
+          ),
+          const Expanded(
+            child: TabBarView(children: [
+              AdminDashboardTab(),
+              _AdminList('dispute'),
+              _AdminList('refund'),
+              _AdminList('payment'),
+              _AdminList('report'),
+              _AdminList('shop'),
+              _AdminList('listing'),
+              _AdminList('courier'),
+              _AdminList('ticket'),
+              _CouponTab(),
+              AdminUsersTab(),
+              AdminSettingsTab(),
+            ]),
+          ),
         ]),
       );
 }
@@ -74,7 +97,50 @@ class _AdminListState extends State<_AdminList> {
     }
   }
 
+  Future<void> custom(String what, Map<String, dynamic> r) async {
+    final note = await askText(context, 'Note ou motif', hint: 'Obligatoire');
+    if (note == null || note.isEmpty) return;
+    final id = r['id'] as String;
+    try {
+      switch (what) {
+        case 'dispute_refund':
+          await Repo.adminResolveDispute(id, 'refund', note);
+        case 'dispute_no':
+          await Repo.adminResolveDispute(id, 'no_refund', note);
+        case 'refund_done':
+          await Repo.adminMarkRefund(id, true, note);
+        case 'refund_fail':
+          await Repo.adminMarkRefund(id, false, note);
+        case 'report_ok':
+          await Repo.adminResolveReport(id, 'actioned', note);
+        case 'report_no':
+          await Repo.adminResolveReport(id, 'dismissed', note);
+        case 'block_product':
+          await Repo.adminSet('product', r['target_id'] as String, 'blocked', note);
+          await Repo.adminResolveReport(id, 'actioned', note);
+      }
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Future<void> queueRefund(String id) async {
+    try {
+      await Repo.adminQueueRefund(id);
+      reload();
+      if (mounted) toast(context, 'Remboursement ajouté à la file.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  String short(Object? id) => '${id ?? ''}'.length >= 8 ? '${id}'.substring(0, 8) : '${id ?? ''}';
+
   String title(Map<String, dynamic> r) => switch (widget.kind) {
+        'dispute' => 'Commande ${short(r['order_id'])} — ${r['reason']}',
+        'refund' => 'Commande ${short(r['order_id'])} · ${money(r['amount_minor'] as num, 'HTG')} — ${r['reason'] ?? ''}',
+        'report' => '${r['kind']} ${short(r['target_id'])} — ${r['reason']}',
         'shop' => '${r['name']} · ${r['city'] ?? ''}',
         'courier' => '${r['full_name']} · ${r['transport']} · ${r['zone']}',
         'ticket' => '${r['subject']} — ${r['message']}',
@@ -98,7 +164,23 @@ class _AdminListState extends State<_AdminList> {
       case 'ticket':
         return [TextButton(onPressed: () => reply(id), child: const Text('Répondre'))];
       case 'payment':
-        return [];
+        return r['status'] == 'refund_required' ? [TextButton(onPressed: () => queueRefund(id), child: const Text('Mettre en remboursement'))] : [];
+      case 'dispute':
+        return r['status'] != 'open' ? [] : [
+          TextButton(onPressed: () => custom('dispute_refund', r), child: const Text('Rembourser le client')),
+          TextButton(onPressed: () => custom('dispute_no', r), child: const Text('Refuser le remboursement')),
+        ];
+      case 'refund':
+        return r['status'] != 'to_execute' ? [] : [
+          TextButton(onPressed: () => custom('refund_done', r), child: const Text('Remboursement effectué')),
+          TextButton(onPressed: () => custom('refund_fail', r), child: const Text('Échec')),
+        ];
+      case 'report':
+        return r['status'] != 'open' ? [] : [
+          if (r['kind'] == 'product') TextButton(onPressed: () => custom('block_product', r), child: const Text('Bloquer le produit')),
+          TextButton(onPressed: () => custom('report_ok', r), child: const Text('Traité')),
+          TextButton(onPressed: () => custom('report_no', r), child: const Text('Rejeter')),
+        ];
       default:
         return [
           TextButton(onPressed: () => act(id, 'paused'), child: const Text('Rétablir')),

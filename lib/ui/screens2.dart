@@ -7,6 +7,7 @@ import 'screens3.dart';
 import 'screens5.dart';
 import 'screens6.dart';
 import 'screens7.dart';
+import 'screens8.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -38,6 +39,7 @@ class _CheckoutState extends State<CheckoutScreen> {
   String mode = 'pickup';
   final address = TextEditingController();
   final coupon = TextEditingController();
+  late Future<List<Map<String, dynamic>>> addrs = Repo.myAddresses();
   bool busy = false;
 
   Future<void> submit() async {
@@ -74,7 +76,36 @@ class _CheckoutState extends State<CheckoutScreen> {
               RadioListTile<String>(value: 'delivery', title: Text('Livraison HAITIKET')),
             ]),
           ),
-          if (mode == 'delivery') Field(address, 'Adresse de livraison (commune, quartier, repères)'),
+          if (mode == 'delivery') ...[
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: addrs,
+              builder: (_, s) {
+                final l = s.data ?? [];
+                if (l.isEmpty) return const SizedBox();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: 'Choisir une adresse enregistrée'),
+                    items: [for (final a in l) DropdownMenuItem(value: a['id'] as String, child: Text('${a['label']} · ${a['commune']}'))],
+                    onChanged: (v) {
+                      final a = l.firstWhere((x) => x['id'] == v);
+                      address.text = formatAddress(a);
+                      setState(() {});
+                    },
+                  ),
+                );
+              },
+            ),
+            Field(address, 'Adresse de livraison (commune, quartier, repères)'),
+            TextButton.icon(
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen()));
+                setState(() => addrs = Repo.myAddresses());
+              },
+              icon: const Icon(Icons.edit_location_alt_outlined),
+              label: const Text('Gérer mes adresses'),
+            ),
+          ],
           Field(coupon, 'Code promo (facultatif)'),
           const SizedBox(height: 8),
           Text('Articles : ${money(total, lines.isEmpty ? 'HTG' : lines.first.currency)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
@@ -167,6 +198,27 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
                         if (o['status'] == 'DELIVERED' || o['status'] == 'COMPLETED') TextButton(onPressed: () => reviewDialog(context, o['id'] as String), child: const Text('Laisser un avis')),
+                        if (o['status'] == 'PAID')
+                          TextButton(
+                            onPressed: () async {
+                              try {
+                                await Repo.requestCancellation(o['id'] as String);
+                                reload();
+                                if (context.mounted) toast(context, 'Commande annulée. Le remboursement est en cours de traitement.');
+                              } catch (e) {
+                                if (context.mounted) toast(context, Repo.err(e));
+                              }
+                            },
+                            child: const Text('Annuler (remboursement)'),
+                          ),
+                        if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED'].contains(o['status']))
+                          TextButton(
+                            onPressed: () async {
+                              await disputeDialog(context, o['id'] as String);
+                              reload();
+                            },
+                            child: const Text('Signaler un problème'),
+                          ),
                         TextButton(onPressed: () => openChat(context, 'order', o['id'] as String), child: const Text('Écrire au vendeur')),
                         if (o['status'] == 'PENDING_PAYMENT')
                           TextButton(
@@ -272,6 +324,11 @@ class _ShopPanelState extends State<ShopPanel> {
     try {
       if (v == 'chat') return openChat(context, 'order', id);
       if (v == 'pin') return showPin(context, id, 'Code de collecte');
+      if (v == 'dispute') {
+        await disputeDialog(context, id);
+        reload();
+        return;
+      }
       if (v == 'handover') {
         final pin = await askText(context, 'Code donné par le client', type: TextInputType.number);
         if (pin == null || pin.isEmpty) return;
@@ -386,6 +443,7 @@ class _ShopPanelState extends State<ShopPanel> {
                           if (st == 'PREPARING') const PopupMenuItem(value: 'READY_FOR_PICKUP', child: Text('Marquer prête')),
                           if (dm == 'delivery' && (st == 'CONFIRMED' || st == 'PREPARING' || st == 'READY_FOR_PICKUP')) const PopupMenuItem(value: 'pin', child: Text('Code de collecte (livreur)')),
                           if (dm == 'pickup' && st == 'READY_FOR_PICKUP') const PopupMenuItem(value: 'handover', child: Text('Valider la remise (code client)')),
+                          if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED'].contains(st)) const PopupMenuItem(value: 'dispute', child: Text('Ouvrir un litige')),
                         ];
                       },
                     ),
