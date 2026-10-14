@@ -177,12 +177,55 @@ class Field extends StatelessWidget {
   final String label;
   final bool obscure;
   final TextInputType? type;
-  const Field(this.c, this.label, {super.key, this.obscure = false, this.type});
+
+  const Field(
+    this.c,
+    this.label, {
+    super.key,
+    this.obscure = false,
+    this.type,
+  });
+
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextField(controller: c, obscureText: obscure, keyboardType: type, decoration: InputDecoration(labelText: label)),
-      );
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: c,
+        obscureText: obscure,
+        keyboardType: type,
+        style: const TextStyle(
+          color: C.ink,
+          fontSize: 16,
+        ),
+        cursorColor: C.green,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(
+            color: C.muted,
+          ),
+          floatingLabelStyle: const TextStyle(
+            color: C.green,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: C.line,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: C.green,
+              width: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 
