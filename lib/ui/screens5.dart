@@ -218,7 +218,7 @@ class _ShopState extends State<ShopScreen> {
         future: f,
         builder: (_, s) {
           if (s.connectionState != ConnectionState.done) return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
-          if (s.hasError) return Scaffold(appBar: AppBar(), body: const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.')));
+          if (s.hasError) return Scaffold(appBar: AppBar(), body: Padding(padding: const EdgeInsets.all(18), child: ErrorState(s.error)));
           final d = s.data!;
           final info = d['info'] as Map<String, dynamic>;
           final rating = d['rating'] as Map<String, dynamic>;

@@ -29,7 +29,7 @@ class ConversationsScreen extends StatelessWidget {
             future: Repo.myConversations(),
             builder: (_, s) {
               if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+              if (s.hasError) return ErrorState(s.error);
               final items = s.data ?? [];
               if (items.isEmpty) return const EmptyState(title: 'Aucune conversation', text: 'Contactez un vendeur depuis une fiche produit, une annonce ou une commande.');
               return Column(children: [
@@ -187,7 +187,7 @@ class _CourierState extends State<CourierScreen> {
             future: f,
             builder: (_, s) {
               if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+              if (s.hasError) return ErrorState(s.error);
               final d = s.data!;
               final app = d['app'] as Map<String, dynamic>?;
               if (app == null) return const EmptyState(title: 'Aucune candidature', text: "Déposez votre candidature dans « HAITIKET Network » pour devenir livreur.");

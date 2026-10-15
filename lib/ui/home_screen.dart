@@ -160,7 +160,7 @@ class _HomeState extends State<HomeScreen> {
         future: disc,
         builder: (_, s) {
           if (s.connectionState != ConnectionState.done) return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
-          if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Vérifiez votre connexion puis réessayez.');
+          if (s.hasError) return ErrorState(s.error);
           final items = s.data ?? [];
           if (items.isEmpty) {
             return EmptyState(title: 'Aucun produit publié pour le moment', text: 'Les produits des boutiques vérifiées apparaîtront ici dès leur publication.', action: 'Ouvrir ma boutique', onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen())));

@@ -30,6 +30,13 @@ class EmptyState extends StatelessWidget {
       );
 }
 
+class ErrorState extends StatelessWidget {
+  final Object? error;
+  const ErrorState(this.error, {super.key});
+  @override
+  Widget build(BuildContext context) => EmptyState(title: 'Chargement impossible', text: friendlyError(error));
+}
+
 void toast(BuildContext c, String m) => ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(m)));
 
 /// Cœur animé : rebond élastique + éclat de petits cœurs à l'ajout aux favoris.

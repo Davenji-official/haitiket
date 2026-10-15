@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../i18n.dart';
 import 'fx.dart';
 import 'screens8.dart';
+import 'screens5.dart';
+import 'auth_screens.dart';
 import 'widgets.dart';
 
 Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
@@ -61,9 +63,10 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileState extends State<ProfileScreen> {
-  final name = TextEditingController(), phone = TextEditingController();
+  final name = TextEditingController(), phone = TextEditingController(), city = TextEditingController();
   String? avatar;
   bool loading = true, busy = false;
+  late final Future<Map<String, dynamic>> roles = currentUser() == null ? Future.value({}) : Repo.myRoles();
 
   @override
   void initState() {
@@ -80,6 +83,7 @@ class _ProfileState extends State<ProfileScreen> {
       final p = await Repo.getProfile();
       name.text = (p?['display_name'] ?? '') as String;
       phone.text = (p?['phone'] ?? '') as String;
+      city.text = (p?['city'] ?? '') as String;
       avatar = p?['avatar_url'] as String?;
     } catch (_) {}
     if (mounted) setState(() => loading = false);
@@ -88,13 +92,60 @@ class _ProfileState extends State<ProfileScreen> {
   Future<void> save() async {
     setState(() => busy = true);
     try {
-      await Repo.saveProfile(name.text.trim(), phone.text.trim(), avatar);
+      await Repo.saveProfile(name.text.trim(), phone.text.trim(), city.text.trim(), avatar);
       if (mounted) toast(context, 'Profil enregistré.');
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
     if (mounted) setState(() => busy = false);
   }
+
+  Future<void> changePassword() async {
+    final a = await askText(context, 'Nouveau mot de passe', hint: '8 caractères minimum', obscure: true);
+    if (a == null || a.isEmpty) return;
+    if (a.length < 8) return toast(context, '8 caractères minimum.');
+    if (!mounted) return;
+    final b = await askText(context, 'Confirmer le mot de passe', obscure: true);
+    if (b != a) return toast(context, 'Les deux mots de passe ne correspondent pas.');
+    try {
+      await Repo.updatePassword(a);
+      if (mounted) toast(context, 'Mot de passe modifié.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Supprimer mon compte ?'),
+        content: const Text("Vos données personnelles seront effacées (profil, adresses, favoris, messages liés). Vos boutiques seront fermées. Les commandes passées sont conservées sans données personnelles. Cette action est définitive.\n\nImpossible tant qu'une commande ou une livraison est en cours."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(d, true), child: const Text('Continuer')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final word = await askText(context, 'Tapez SUPPRIMER pour confirmer');
+    if (word != 'SUPPRIMER') {
+      if (mounted && word != null) toast(context, 'Confirmation incorrecte : compte conservé.');
+      return;
+    }
+    try {
+      await Repo.deleteAccount();
+      if (mounted) toast(context, 'Votre compte a été supprimé.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Widget badge(IconData i, String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: c), const SizedBox(width: 6), Text(t, style: TextStyle(fontWeight: FontWeight.w800, color: c))]),
+      );
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
@@ -105,6 +156,21 @@ class _ProfileState extends State<ProfileScreen> {
           const Center(child: CircularProgressIndicator())
         else ...[
           Center(child: CircleAvatar(radius: 48, backgroundColor: C.mint, backgroundImage: avatar == null ? null : NetworkImage(avatar!), child: avatar == null ? const Icon(Icons.person, size: 48, color: C.green) : null)),
+          const SizedBox(height: 10),
+          Center(child: Text(currentUser()!.email ?? '', style: const TextStyle(color: C.muted, fontSize: 16))),
+          const SizedBox(height: 10),
+          FutureBuilder<Map<String, dynamic>>(
+            future: roles,
+            builder: (_, s) {
+              final r = s.data ?? {};
+              return Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+                badge(Icons.shopping_bag_outlined, 'Acheteur', C.green),
+                if (((r['pro'] ?? 0) as int) > 0) badge(Icons.storefront, 'Boutique pro', C.terracotta),
+                if (r['personal'] == true) badge(Icons.local_offer_outlined, 'Vendeur Bazar', C.yellow.withValues(alpha: 1)),
+                if (r['courier'] == 'approved') badge(Icons.two_wheeler, 'Livreur', C.ink) else if (r['courier'] != null) badge(Icons.hourglass_top, 'Livreur : ${r['courier']}', C.muted),
+              ]);
+            },
+          ),
           const SizedBox(height: 14),
           ImageUploadField(onUrl: (u) => setState(() => avatar = u)),
           ListTile(
@@ -114,13 +180,21 @@ class _ProfileState extends State<ProfileScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen())),
           ),
-          Field(name, "Nom d'affichage"),
+          Field(name, 'Nom complet'),
           Field(phone, 'Téléphone', type: TextInputType.phone),
-          const Text("Votre téléphone n'est jamais public.", style: TextStyle(color: C.muted)),
+          Field(city, 'Commune ou ville'),
+          const Text("Votre téléphone n'est jamais public : il n'est partagé qu'avec les personnes d'une commande.", style: TextStyle(color: C.muted)),
           const SizedBox(height: 16),
           PrimaryButton(label: busy ? 'Enregistrement…' : 'Enregistrer', icon: Icons.check, onPressed: busy ? null : save),
           const SizedBox(height: 28),
           const ReferralCard(),
+          const SizedBox(height: 28),
+          const Text('Sécurité et données', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.lock_reset, color: C.green), title: const Text('Changer mon mot de passe', style: TextStyle(fontWeight: FontWeight.w700)), onTap: changePassword),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.description_outlined, color: C.green), title: const Text('Conditions et confidentialité', style: TextStyle(fontWeight: FontWeight.w700)), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen()))),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.logout, color: C.terracotta), title: const Text('Se déconnecter', style: TextStyle(fontWeight: FontWeight.w700)), onTap: () => Repo.signOut()),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('Supprimer mon compte', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red)), onTap: deleteAccount),
+          const SizedBox(height: 30),
         ],
       ]);
 }

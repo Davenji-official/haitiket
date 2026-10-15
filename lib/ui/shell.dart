@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config.dart';
 import '../data/repo.dart';
+import 'auth_screens.dart';
 import '../theme.dart';
 import 'admin_screen.dart';
 import 'fx.dart';
@@ -34,6 +38,7 @@ class _ShellState extends State<Shell> {
   Sec sec = Sec.home;
   Stream<List<Map<String, dynamic>>> notifs = const Stream.empty();
   String? streamUser;
+  StreamSubscription<AuthState>? authSub;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
 
@@ -42,6 +47,21 @@ class _ShellState extends State<Shell> {
     super.initState();
     // Retour de la page de paiement (web) : on ouvre directement « Mes commandes ».
     if (Uri.base.queryParameters['pay'] != null) sec = Sec.orders;
+    if (Config.configured) {
+      authSub = Supabase.instance.client.auth.onAuthStateChange.listen((st) {
+        if (!mounted) return;
+        setState(() {});
+        if (st.event == AuthChangeEvent.passwordRecovery) {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    authSub?.cancel();
+    super.dispose();
   }
 
   void go(Sec s) => setState(() => sec = s);

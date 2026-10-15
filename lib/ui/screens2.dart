@@ -169,7 +169,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
             future: f,
             builder: (_, s) {
               if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+              if (s.hasError) return ErrorState(s.error);
               final items = s.data ?? [];
               if (items.isEmpty) return const EmptyState(title: 'Aucune commande', text: 'Vos commandes apparaîtront ici.');
               return Column(children: [

@@ -142,7 +142,7 @@ class WalletScreen extends StatelessWidget {
             future: Repo.myWallet(),
             builder: (_, s) {
               if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+              if (s.hasError) return ErrorState(s.error);
               final d = s.data!;
               String m(String k) => money((d[k] as num), 'HTG');
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -9,6 +9,7 @@ import 'screens4.dart';
 import 'fx.dart';
 import 'screens5.dart';
 import 'screens7.dart';
+import 'auth_screens.dart';
 import 'map_screen.dart';
 import '../i18n.dart';
 import 'package:geolocator/geolocator.dart' show Position;
@@ -159,7 +160,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
                 future: f,
                 builder: (_, s) {
                   if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-                  if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+                  if (s.hasError) return ErrorState(s.error);
                   final items = s.data ?? [];
                   if (items.isEmpty) return EmptyState(title: q.isEmpty ? 'Aucun produit trouvé' : 'Aucun résultat', text: 'Modifiez vos filtres ou votre recherche. Seuls les produits réellement en stock sont affichés.');
                   return ProductGrid(items);
@@ -233,7 +234,7 @@ class _BazarState extends State<BazarScreen> {
               future: f,
               builder: (_, s) {
                 if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-                if (s.hasError) return const EmptyState(title: 'Chargement impossible', text: 'Réessayez dans un instant.');
+                if (s.hasError) return ErrorState(s.error);
                 final items = s.data ?? [];
                 if (items.isEmpty) return const EmptyState(title: "Aucune annonce pour l'instant", text: 'Publiez le premier article du Bazar.');
                 return ProductGrid(items);
@@ -351,60 +352,31 @@ class CartScreen extends StatelessWidget {
       );
 }
 
-class AccountScreen extends StatefulWidget {
+class AccountScreen extends StatelessWidget {
   final VoidCallback onChanged;
   const AccountScreen({super.key, required this.onChanged});
-  @override
-  State<AccountScreen> createState() => _AccountState();
-}
-
-class _AccountState extends State<AccountScreen> {
-  final email = TextEditingController(), pass = TextEditingController();
-  bool busy = false;
-
-  Future<void> auth(bool signup) async {
-    setState(() => busy = true);
-    try {
-      if (signup) {
-        await Repo.signUp(email.text.trim(), pass.text);
-        if (mounted) toast(context, 'Compte créé. Vérifiez votre e-mail si une confirmation est demandée.');
-      } else {
-        await Repo.signIn(email.text.trim(), pass.text);
-      }
-      widget.onChanged();
-    } on AuthException catch (e) {
-      if (mounted) toast(context, e.message);
-    } catch (e) {
-      if (mounted) toast(context, '$e');
-    }
-    if (mounted) setState(() => busy = false);
-  }
 
   @override
   Widget build(BuildContext context) {
     final u = currentUser();
     return ListView(padding: const EdgeInsets.all(18), children: [
-      _title(u == null ? 'Se connecter' : 'Mon compte'),
+      _title(u == null ? 'Bienvenue' : 'Mon compte', u == null ? 'Connectez-vous ou créez votre compte HAITIKET.' : null),
       if (!Config.configured)
         _notConfigured()
       else if (u != null) ...[
         Text(u.email ?? '', style: const TextStyle(fontSize: 18, color: C.ink)),
+        const SizedBox(height: 8),
+        const Text('Retrouvez votre profil, vos adresses et la suppression de compte dans « Mon profil » (menu).', style: TextStyle(color: C.muted)),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () async {
             await Repo.signOut();
-            widget.onChanged();
-            if (mounted) setState(() {});
+            onChanged();
           },
           child: const Text('Se déconnecter'),
         ),
-      ] else ...[
-        Field(email, 'E-mail', type: TextInputType.emailAddress),
-        Field(pass, 'Mot de passe', obscure: true),
-        FilledButton(onPressed: busy ? null : () => auth(false), child: const Text('Se connecter')),
-        const SizedBox(height: 10),
-        OutlinedButton(onPressed: busy ? null : () => auth(true), child: const Text('Créer un compte')),
-      ],
+      ] else
+        AuthPanel(onChanged: onChanged),
     ]);
   }
 }
