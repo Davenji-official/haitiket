@@ -1,11 +1,11 @@
 class Config {
 // URL du projet Supabase
 static const String supabaseUrl =
-'https://vuzspdewbvavjwowgurp.supabase.co';
+'https://ntroqvxeotifsmdzrwyo.supabase.co';
 
 // Clé publique Supabase
 static const String supabaseAnonKey =
-'sb_publishable_BiqqacKy77iDbT1iCFRcEA_hCvDc4Xd';
+'sb_publishable_f4aIkGRm6kXmXjIMfOHrzA_6YwLUSz8';
 
 // Vérification de la configuration
 static bool get configured =>
