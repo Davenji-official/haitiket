@@ -71,6 +71,32 @@ class CartStore {
   }
 }
 
+/// Traduit une erreur technique en message compréhensible (et indique quand la base n'est pas à jour).
+String friendlyError(Object? e) {
+  if (e is PostgrestException) {
+    final m = e.message;
+    if (e.code == 'PGRST205' || e.code == '42P01' || m.contains('Could not find the table')) {
+      return "La base de données n'est pas à jour : une table est manquante. Exécutez dans Supabase (SQL Editor) les fichiers SQL de migration manquants, dans l'ordre. Détail : $m";
+    }
+    if (e.code == 'PGRST202' || m.contains('Could not find the function')) {
+      return "La base de données n'est pas à jour : une fonction est manquante. Exécutez les fichiers SQL de migration manquants. Détail : $m";
+    }
+    if (e.code == '42703' || e.code == 'PGRST200' || e.code == 'PGRST204' || (m.contains('column') && m.contains('does not exist'))) {
+      return "La base de données n'est pas à jour : une colonne ou une relation est manquante. Exécutez les fichiers SQL de migration manquants. Détail : $m";
+    }
+    if (e.code == '42501' || m.toLowerCase().contains('permission denied') || m.toLowerCase().contains('row-level security')) {
+      return 'Accès refusé par les règles de sécurité de la base.';
+    }
+    return m;
+  }
+  if (e is AuthException) return e.message;
+  final s = '$e';
+  if (s.contains('SocketException') || s.contains('ClientException') || s.contains('Failed host lookup') || s.contains('XMLHttpRequest')) {
+    return 'Connexion impossible : vérifiez votre connexion Internet.';
+  }
+  return s.length > 220 ? s.substring(0, 220) : s;
+}
+
 class Repo {
   static final search = ValueNotifier<String>('');
 
@@ -250,13 +276,12 @@ class Repo {
   static final favIds = ValueNotifier<Set<String>>(<String>{});
 
   static String err(Object e) {
-    if (e is PostgrestException) return e.message;
     if (e is FunctionException) {
       final d = e.details;
       if (d is Map && d['error'] != null) return d['error'].toString();
       return 'Service de paiement indisponible pour le moment.';
     }
-    return '$e';
+    return friendlyError(e);
   }
 
   static Future<List<Map<String, dynamic>>> myShops() async {
@@ -428,15 +453,15 @@ class Repo {
   static Future<Map<String, dynamic>?> getProfile() async {
     final u = currentUser();
     if (u == null) return null;
-    final rows = await _c.from('profiles').select('display_name,phone,avatar_url').eq('id', u.id);
+    final rows = await _c.from('profiles').select('display_name,phone,city,avatar_url').eq('id', u.id);
     final l = List<Map<String, dynamic>>.from(rows);
     return l.isEmpty ? null : l.first;
   }
 
-  static Future<void> saveProfile(String name, String phone, String? avatar) async {
+  static Future<void> saveProfile(String name, String phone, String city, String? avatar) async {
     final u = currentUser();
     if (u == null) throw 'Connexion requise';
-    await _c.from('profiles').upsert({'id': u.id, 'display_name': name, 'phone': phone, 'avatar_url': avatar});
+    await _c.from('profiles').upsert({'id': u.id, 'display_name': name, 'phone': phone, 'city': city.isEmpty ? null : city, 'avatar_url': avatar});
   }
 
   static Future<void> createTicket(String subject, String message) async {
@@ -634,6 +659,38 @@ class Repo {
     } catch (_) {
       return [];
     }
+  }
+
+  // ===== Comptes =====
+  /// Retourne true si une confirmation par e-mail est requise avant la première connexion.
+  static Future<bool> signUpFull({required String email, required String password, required String fullName, required String phone, required String city, required String referral}) async {
+    final res = await _c.auth.signUp(email: email, password: password, data: {
+      'full_name': fullName,
+      'phone': phone,
+      'city': city,
+      'referral_code': referral,
+      'accepted_terms': 'true',
+      'terms_version': '2026-10',
+    });
+    return res.session == null;
+  }
+
+  static Future<void> resetPassword(String email) => _c.auth.resetPasswordForEmail(email);
+  static Future<void> updatePassword(String password) async {
+    await _c.auth.updateUser(UserAttributes(password: password));
+  }
+
+  static Future<Map<String, dynamic>> myRoles() async {
+    final shops = await myShops();
+    final app = await myCourierApplication();
+    return {'pro': shops.where((s) => s['kind'] == 'pro').length, 'personal': shops.any((s) => s['kind'] == 'personal'), 'courier': app?['status']};
+  }
+
+  static Future<void> deleteAccount() async {
+    final res = await _c.functions.invoke('delete-account', body: {'confirm': 'SUPPRIMER'});
+    final d = res.data;
+    if (d is Map && d['error'] != null) throw d['error'].toString();
+    await _c.auth.signOut();
   }
 
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
