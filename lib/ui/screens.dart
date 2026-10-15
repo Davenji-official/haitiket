@@ -318,7 +318,7 @@ class CartScreen extends StatelessWidget {
         valueListenable: CartStore.lines,
         builder: (_, lines, __) {
           final l = lines.values.toList();
-          final total = l.fold<int>(0, (a, x) => a + x.priceMinor * x.qty);
+          final total = CartStore.totalMinor;
           return ListView(padding: const EdgeInsets.all(18), children: [
             _title(tr('Panier')),
             if (l.isEmpty)
@@ -328,12 +328,12 @@ class CartScreen extends StatelessWidget {
                 Card(
                   color: Colors.white,
                   child: ListTile(
-                    title: Text(x.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text(money(x.priceMinor, x.currency)),
+                    title: Text(x.variantLabel == null ? x.name : '${x.name} (${x.variantLabel})', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('${money(CartStore.unitFor(x), x.currency)} / unité${CartStore.unitFor(x) < x.basePrice ? ' · tarif quantité' : ''}'),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(onPressed: () => CartStore.change(x.id, -1), icon: const Icon(Icons.remove_circle_outline)),
+                      IconButton(onPressed: () => CartStore.change(x.key, -1), icon: const Icon(Icons.remove_circle_outline)),
                       Text('${x.qty}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                      IconButton(onPressed: () => CartStore.change(x.id, 1), icon: const Icon(Icons.add_circle_outline)),
+                      IconButton(onPressed: () => CartStore.change(x.key, 1), icon: const Icon(Icons.add_circle_outline)),
                     ]),
                   ),
                 ),

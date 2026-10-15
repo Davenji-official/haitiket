@@ -5,6 +5,7 @@ import '../theme.dart';
 import 'fx.dart';
 import 'screens5.dart';
 import 'screens6.dart';
+import 'screens9.dart';
 import 'specs.dart';
 import 'widgets.dart';
 
@@ -212,12 +213,15 @@ class _NewProductState extends State<NewProductScreen> {
   String unit = 'unité';
   final specs = <String, dynamic>{};
   final media = <Map<String, String>>[];
+  final variants = <Map<String, dynamic>>[];
+  final tiers = <Map<String, dynamic>>[];
   bool busy = false;
 
   Future<void> save() async {
     final p = double.tryParse(price.text.replaceAll(',', '.'));
-    final st = int.tryParse(stock.text);
+    final st = variants.isNotEmpty ? variants.fold<int>(0, (a, v) => a + (v['stock'] as int)) : int.tryParse(stock.text);
     if (name.text.trim().length < 2 || p == null || p < 0 || st == null || st < 0) return toast(context, 'Nom, prix et stock valides requis.');
+    if (tiers.any((t) => (t['unit_price_minor'] as int) >= (p * 100).round())) return toast(context, "Chaque tarif par quantité doit être inférieur au prix normal.");
     setState(() => busy = true);
     try {
       final attrs = Map<String, dynamic>.from(specs);
@@ -232,6 +236,8 @@ class _NewProductState extends State<NewProductScreen> {
       final id = await Repo.addProduct(widget.shopId, name.text.trim(), (p * 100).round(), st, cover, !widget.bazar,
           description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit);
       if (media.isNotEmpty) await Repo.addProductMedia(id, media);
+      await Repo.addVariants(id, variants);
+      await Repo.addTiers(id, tiers);
       if (mounted) Navigator.of(context).pop(id);
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -275,7 +281,7 @@ class _NewProductState extends State<NewProductScreen> {
               ),
             ),
           ]),
-          Field(stock, 'Quantité disponible', type: TextInputType.number),
+          if (variants.isEmpty) Field(stock, 'Quantité disponible', type: TextInputType.number),
           const Text('Photos et vidéos', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
           const SizedBox(height: 8),
           MediaPickerField(items: media, onChanged: () => setState(() {})),
@@ -284,6 +290,14 @@ class _NewProductState extends State<NewProductScreen> {
             Text('Caractéristiques : ${cat!['name']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
             SpecsForm(key: ValueKey(cat!['id']), fields: specsFor(cat!['name'] as String), values: specs),
           ],
+          const SizedBox(height: 18),
+          VariantsEditor(
+            items: variants,
+            sizeOptions: [for (final f in specsFor(cat?['name'] as String?)) if (f.type == 'sizes') ...f.options],
+            onChanged: () => setState(() {}),
+          ),
+          const SizedBox(height: 14),
+          TiersEditor(items: tiers, basePriceMinor: double.tryParse(price.text.replaceAll(',', '.')) == null ? null : (double.parse(price.text.replaceAll(',', '.')) * 100).round(), onChanged: () => setState(() {})),
           const SizedBox(height: 24),
           PrimaryButton(label: busy ? 'Enregistrement…' : (widget.bazar ? "Enregistrer l'annonce" : 'Publier le produit'), icon: Icons.check, onPressed: busy ? null : save),
           const SizedBox(height: 30),

@@ -9,6 +9,7 @@ import 'fx.dart';
 import 'screens3.dart';
 import 'screens5.dart';
 import 'screens8.dart';
+import 'screens9.dart';
 import 'specs.dart';
 import 'widgets.dart';
 
@@ -81,9 +82,82 @@ class _GalleryState extends State<_Gallery> {
       );
 }
 
-class ProductDetailScreen extends StatelessWidget {
+class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> p;
   const ProductDetailScreen(this.p, {super.key});
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailState();
+}
+
+class _ProductDetailState extends State<ProductDetailScreen> {
+  Map<String, dynamic> get p => widget.p;
+  Map<String, dynamic>? variant;
+  late final Future<List<Map<String, dynamic>>> promos = Repo.productPromos(p['id'] as String);
+
+  List<Map<String, dynamic>> get variants => List<Map<String, dynamic>>.from(((p['product_variants'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
+  List<Map<String, dynamic>> get tiers {
+    final l = List<Map<String, dynamic>>.from(((p['product_tiers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
+    l.sort((a, b) => (a['min_qty'] as num).compareTo(b['min_qty'] as num));
+    return l;
+  }
+
+  List<Widget> variantsUi() {
+    final v = variants;
+    if (v.isEmpty) return [];
+    return [
+      heading('Choisissez une option'),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final x in v)
+          ChoiceChip(
+            avatar: x['color_hex'] == null ? null : CircleAvatar(radius: 8, backgroundColor: hexColor(x['color_hex'] as String?)),
+            label: Text('${variantText(x)}${(x['stock'] as num) <= 0 ? ' (épuisé)' : ''}'),
+            selected: variant?['id'] == x['id'],
+            onSelected: (x['stock'] as num) <= 0 ? null : (_) => setState(() => variant = x),
+          ),
+      ]),
+    ];
+  }
+
+  List<Widget> tiersUi() {
+    final t = tiers;
+    if (t.isEmpty) return [];
+    return [
+      heading('Tarifs par quantité'),
+      for (final x in t)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            const Icon(Icons.local_offer_outlined, size: 18, color: C.terracotta),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Dès ${x['min_qty']}${x['label'] == null ? '' : ' (${x['label']})'} : ${money(x['unit_price_minor'] as num, 'HTG')} / unité', style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink))),
+          ]),
+        ),
+    ];
+  }
+
+  List<Widget> promosUi() => [
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: promos,
+          builder: (_, s) {
+            final l = s.data ?? [];
+            if (l.isEmpty) return const SizedBox();
+            return Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final c in l)
+                  ActionChip(
+                    avatar: const Icon(Icons.sell_outlined, size: 18, color: C.terracotta),
+                    label: Text('Code ${c['code']} : −${c['kind'] == 'percent' ? '${c['value']} %' : money(c['value'] as num, 'HTG')}${c['expires_at'] == null ? '' : ' jusqu\'au ${(c['expires_at'] as String).substring(0, 10)}'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: '${c['code']}'));
+                      toast(context, 'Code copié : saisissez-le au moment de commander.');
+                    },
+                  ),
+              ]),
+            );
+          },
+        ),
+      ];
 
   Future<Map<String, dynamic>> loadStats(String? shopId) async {
     final s = await Repo.productStats(p['id'] as String);
@@ -180,6 +254,9 @@ class ProductDetailScreen extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(stock <= 5 ? 'Stock faible : $stock disponible(s)' : 'En stock', style: TextStyle(color: stock <= 5 ? C.terracotta : C.muted, fontWeight: FontWeight.w700)),
+        ...promosUi(),
+        ...variantsUi(),
+        ...tiersUi(),
         if (desc.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(desc, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.45)),
@@ -191,7 +268,8 @@ class ProductDetailScreen extends StatelessWidget {
             label: tr('Ajouter au panier'),
             icon: Icons.add_shopping_cart,
             onPressed: () {
-              CartStore.add(p);
+              if (variants.isNotEmpty && variant == null) return toast(context, 'Choisissez une option (taille ou couleur).');
+              CartStore.add(p, variant: variant);
               HapticFeedback.lightImpact();
               CartFly.fly(bc);
               Repo.trackCart(p['id'] as String);

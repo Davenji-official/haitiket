@@ -8,6 +8,7 @@ import 'screens5.dart';
 import 'screens6.dart';
 import 'screens7.dart';
 import 'screens8.dart';
+import 'screens9.dart';
 import 'widgets.dart';
 
 String statusFr(String s) =>
@@ -61,7 +62,7 @@ class _CheckoutState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final lines = CartStore.lines.value.values.toList();
-    final total = lines.fold<int>(0, (a, l) => a + l.priceMinor * l.qty);
+    final total = CartStore.totalMinor;
     return Scaffold(
       appBar: AppBar(title: const Text('Commande', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
       body: ListView(padding: const EdgeInsets.all(18), children: [
@@ -182,7 +183,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
                         Text(statusFr(o['status'] as String), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 6),
-                        for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}'),
+                        for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}${it['variant_label'] == null ? '' : ' (${it['variant_label']})'}'),
                         const SizedBox(height: 6),
                         Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
                         if (o['status'] == 'PENDING_PAYMENT') ...[
@@ -397,6 +398,11 @@ class _ShopPanelState extends State<ShopPanel> {
                 }
               },
             ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopCouponsScreen(shopId: widget.shop['id'] as String))),
+              icon: const Icon(Icons.local_offer_outlined),
+              label: const Text('Promotions et coupons'),
+            ),
             const SizedBox(height: 16),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: products,
@@ -410,8 +416,19 @@ class _ShopPanelState extends State<ShopPanel> {
                       title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text(sub(p)),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(onPressed: (p['stock'] as int) > 0 ? () => patch(p['id'] as String, {'stock': (p['stock'] as int) - 1}) : null, icon: const Icon(Icons.remove_circle_outline)),
-                        IconButton(onPressed: () => patch(p['id'] as String, {'stock': (p['stock'] as int) + 1}), icon: const Icon(Icons.add_circle_outline)),
+                        if (((p['product_variants'] as List?) ?? const []).isNotEmpty)
+                          IconButton(
+                            tooltip: 'Stock par variante',
+                            onPressed: () async {
+                              await variantStockDialog(context, p);
+                              reload();
+                            },
+                            icon: const Icon(Icons.inventory_2_outlined),
+                          )
+                        else ...[
+                          IconButton(onPressed: (p['stock'] as int) > 0 ? () => patch(p['id'] as String, {'stock': (p['stock'] as int) - 1}) : null, icon: const Icon(Icons.remove_circle_outline)),
+                          IconButton(onPressed: () => patch(p['id'] as String, {'stock': (p['stock'] as int) + 1}), icon: const Icon(Icons.add_circle_outline)),
+                        ],
                         if (p['source'] == 'bazar' && !paidOk(p)) TextButton(onPressed: () => payAndOpen(context, 'bazar_listing', p['id'] as String), child: const Text('Payer'))
                         else Switch(value: p['status'] == 'published', onChanged: (v) => patch(p['id'] as String, {'status': v ? 'published' : 'paused'})),
                       ]),
@@ -447,7 +464,7 @@ class _ShopPanelState extends State<ShopPanel> {
                         ];
                       },
                     ),
-                    title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}').join(', ')}'),
+                    title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}${i['variant_label'] == null ? '' : ' (${i['variant_label']})'}').join(', ')}'),
                     subtitle: Text('${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
                   ),
               ]);
