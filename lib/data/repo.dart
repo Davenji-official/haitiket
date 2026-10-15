@@ -8,32 +8,65 @@ User? currentUser() => Config.configured ? _c.auth.currentUser : null;
 String money(num minor, String cur) => '${(minor / 100).toStringAsFixed(2)} $cur';
 
 class CartLine {
-  final String id, name, currency;
-  final int priceMinor;
+  final String key, productId, name, currency;
+  final String? variantId, variantLabel;
+  final int basePrice;
+  final List<Map<String, dynamic>> tiers;
   int qty;
-  CartLine(this.id, this.name, this.priceMinor, this.currency, this.qty);
+  CartLine({required this.key, required this.productId, required this.name, required this.currency, required this.basePrice, required this.tiers, this.variantId, this.variantLabel, this.qty = 1});
 }
 
 class CartStore {
   static final lines = ValueNotifier<Map<String, CartLine>>({});
   static int get count => lines.value.values.fold(0, (a, l) => a + l.qty);
-  static void add(Map<String, dynamic> p) {
+  static int totalQtyOf(String productId) => lines.value.values.where((l) => l.productId == productId).fold(0, (a, l) => a + l.qty);
+
+  /// Prix unitaire estimé selon les paliers (le serveur recalcule le prix final).
+  static int unitFor(CartLine l) {
+    final tq = totalQtyOf(l.productId);
+    var price = l.basePrice;
+    var best = 0;
+    for (final t in l.tiers) {
+      final m = (t['min_qty'] as num).toInt();
+      if (m <= tq && m >= best) {
+        best = m;
+        price = (t['unit_price_minor'] as num).toInt();
+      }
+    }
+    return price;
+  }
+
+  static int get totalMinor => lines.value.values.fold(0, (a, l) => a + unitFor(l) * l.qty);
+  static bool hasVariants(Map<String, dynamic> p) => ((p['product_variants'] as List?) ?? const []).isNotEmpty;
+
+  static void add(Map<String, dynamic> p, {Map<String, dynamic>? variant}) {
     final m = Map<String, CartLine>.from(lines.value);
     final id = p['id'] as String;
-    if (m.containsKey(id)) {
-      m[id]!.qty++;
+    final key = variant == null ? id : '$id|${variant['id']}';
+    if (m.containsKey(key)) {
+      m[key]!.qty++;
     } else {
-      m[id] = CartLine(id, p['name'] as String, (p['price_minor'] as num).toInt(), (p['currency'] ?? 'HTG') as String, 1);
+      final label = variant == null ? null : [variant['size'], variant['color_name']].where((e) => e != null && '$e'.isNotEmpty).join(' · ');
+      m[key] = CartLine(
+        key: key,
+        productId: id,
+        name: p['name'] as String,
+        currency: (p['currency'] ?? 'HTG') as String,
+        basePrice: (p['price_minor'] as num).toInt(),
+        tiers: List<Map<String, dynamic>>.from(((p['product_tiers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map))),
+        variantId: variant?['id'] as String?,
+        variantLabel: label,
+      );
     }
     lines.value = m;
   }
 
-  static void change(String id, int delta) {
+  static void change(String key, int delta) {
     final m = Map<String, CartLine>.from(lines.value);
-    final l = m[id];
+    final l = m[key];
     if (l == null) return;
     l.qty += delta;
-    if (l.qty <= 0) m.remove(id);
+    if (l.qty <= 0) m.remove(key);
     lines.value = m;
   }
 }
@@ -43,7 +76,7 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId, String? source}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock),shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
     if (categoryId != null) f = f.eq('category_id', categoryId);
@@ -234,7 +267,7 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopProducts(String shopId) async {
-    final rows = await _c.from('products').select('id,name,price_minor,currency,stock,status,image_url,source,paid_until').eq('shop_id', shopId).order('created_at', ascending: false);
+    final rows = await _c.from('products').select('id,name,price_minor,currency,stock,status,image_url,source,paid_until,product_variants(id,size,color_name,stock)').eq('shop_id', shopId).order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -274,20 +307,20 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
-    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty)').eq('shop_id', shopId).order('created_at', ascending: false).limit(50);
+    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(50);
     return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<List<Map<String, dynamic>>> myOrders() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
+    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor,variant_label)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
     return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address, [String? coupon]) async {
     final res = await _c.rpc('create_orders', params: {
-      'p_items': [for (final l in lines) {'product_id': l.id, 'qty': l.qty}],
+      'p_items': [for (final l in lines) {'product_id': l.productId, 'variant_id': l.variantId, 'qty': l.qty}],
       'p_mode': mode,
       'p_address': address,
       'p_coupon': (coupon ?? '').trim().isEmpty ? null : coupon!.trim(),
@@ -560,6 +593,47 @@ class Repo {
 
   static Future<void> setDefaultAddress(String id) async {
     await _c.rpc('set_default_address', params: {'p_id': id});
+  }
+
+  // ===== Lot 11 : variantes, tarifs par quantité, coupons de boutique =====
+  static Future<void> addVariants(String productId, List<Map<String, dynamic>> v) async {
+    if (v.isEmpty) return;
+    await _c.from('product_variants').insert([
+      for (final x in v) {'product_id': productId, 'size': x['size'], 'color_name': x['color_name'], 'color_hex': x['color_hex'], 'stock': x['stock']},
+    ]);
+  }
+
+  static Future<void> addTiers(String productId, List<Map<String, dynamic>> t) async {
+    if (t.isEmpty) return;
+    await _c.from('product_tiers').insert([
+      for (final x in t) {'product_id': productId, 'min_qty': x['min_qty'], 'unit_price_minor': x['unit_price_minor'], 'label': x['label']},
+    ]);
+  }
+
+  static Future<void> updateVariantStock(String id, int stock) async {
+    await _c.from('product_variants').update({'stock': stock}).eq('id', id);
+  }
+
+  static Future<List<Map<String, dynamic>>> shopCoupons(String shopId) async {
+    final rows = await _c.from('coupons').select('id,code,kind,value,min_items_minor,max_uses,used_count,expires_at,active,visible,product_ids').eq('shop_id', shopId).order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> shopCreateCoupon({required String shopId, required String code, required String kind, required int value, required int minMinor, int? maxUses, required int days, List<String>? productIds, required bool visible}) async {
+    await _c.rpc('shop_create_coupon', params: {'p_shop': shopId, 'p_code': code, 'p_kind': kind, 'p_value': value, 'p_min': minMinor, 'p_max_uses': maxUses, 'p_days': days, 'p_products': productIds, 'p_visible': visible});
+  }
+
+  static Future<void> shopSetCouponActive(String id, bool active) async {
+    await _c.rpc('shop_set_coupon_active', params: {'p_id': id, 'p_active': active});
+  }
+
+  static Future<List<Map<String, dynamic>>> productPromos(String productId) async {
+    try {
+      final r = await _c.rpc('product_promos', params: {'p_product': productId});
+      return List<Map<String, dynamic>>.from(r as List);
+    } catch (_) {
+      return [];
+    }
   }
 
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
