@@ -39,20 +39,21 @@ class CartStore {
   static int get totalMinor => lines.value.values.fold(0, (a, l) => a + unitFor(l) * l.qty);
   static bool hasVariants(Map<String, dynamic> p) => ((p['product_variants'] as List?) ?? const []).isNotEmpty;
 
-  static void add(Map<String, dynamic> p, {Map<String, dynamic>? variant}) {
+  static void add(Map<String, dynamic> p, {Map<String, dynamic>? variant, int quantity = 1}) {
+    if (quantity < 1) return;
     final m = Map<String, CartLine>.from(lines.value);
     final id = p['id'] as String;
     final key = variant == null ? id : '$id|${variant['id']}';
     if (m.containsKey(key)) {
-      m[key]!.qty++;
+      m[key]!.qty += quantity;
     } else {
-      final label = variant == null ? null : [variant['size'], variant['color_name']].where((e) => e != null && '$e'.isNotEmpty).join(' · ');
+      final label = variant == null ? null : [variant['size'], variant['color_name'], variant['audience'], variant['unit_label']].where((e) => e != null && '$e'.isNotEmpty).join(' · ');
       m[key] = CartLine(
         key: key,
         productId: id,
         name: p['name'] as String,
         currency: (p['currency'] ?? 'HTG') as String,
-        basePrice: (p['price_minor'] as num).toInt(),
+        basePrice: ((variant?['price_minor'] as num?) ?? (p['price_minor'] as num)).toInt(),
         tiers: List<Map<String, dynamic>>.from(((p['product_tiers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map))),
         variantId: variant?['id'] as String?,
         variantLabel: label,
@@ -102,7 +103,7 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId, String? source}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock),shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
     if (categoryId != null) f = f.eq('category_id', categoryId);
@@ -292,12 +293,12 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopProducts(String shopId) async {
-    final rows = await _c.from('products').select('id,name,price_minor,currency,stock,status,image_url,source,paid_until,product_variants(id,size,color_name,stock)').eq('shop_id', shopId).order('created_at', ascending: false);
+    final rows = await _c.from('products').select('id,name,description,price_minor,currency,stock,status,image_url,source,paid_until,unit_label,audience,attributes,product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes)').eq('shop_id', shopId).neq('status', 'removed').order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<String> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish,
-      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité'}) async {
+      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité', String? audience}) async {
     final r = await _c.from('products').insert({
       'shop_id': shopId,
       'source': source,
@@ -310,6 +311,7 @@ class Repo {
       'image_url': (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(),
       'attributes': attributes ?? <String, dynamic>{},
       'unit_label': unitLabel,
+      'audience': audience,
       'status': publish ? 'published' : 'draft',
     }).select('id').single();
     return r['id'] as String;
@@ -328,7 +330,22 @@ class Repo {
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
-    await _c.from('products').update(patch).eq('id', id);
+    const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'status', 'category_id'};
+    final safe = Map<String, dynamic>.fromEntries(patch.entries.where((e) => allowed.contains(e.key)));
+    if (safe.isEmpty) throw ArgumentError('Aucune modification valide.');
+    safe['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    await _c.from('products').update(safe).eq('id', id);
+  }
+
+  /// Suppression logique : le produit disparaît du catalogue sans casser l'historique des commandes.
+  static Future<void> deleteProduct(String id) async {
+    await _c.from('products').update({'status': 'removed', 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+  }
+
+  static Future<void> deleteNotification(String id) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connexion requise.');
+    await _c.from('notifications').delete().eq('id', id).eq('user_id', u.id);
   }
 
   static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
