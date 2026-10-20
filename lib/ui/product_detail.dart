@@ -61,7 +61,47 @@ class _GalleryState extends State<_Gallery> {
                           child: Container(color: C.ink, child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.play_circle_fill, size: 84, color: Colors.white), SizedBox(height: 8), Text('Voir la vidéo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))])),
                         );
                       }
-                      return Image.network(it['url'] as String, fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder());
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => showDialog<void>(
+                          context: context,
+                          barrierColor: Colors.black,
+                          builder: (dialogContext) => Dialog.fullscreen(
+                            backgroundColor: Colors.black,
+                            child: Stack(children: [
+                              Center(
+                                child: InteractiveViewer(
+                                  minScale: 0.8,
+                                  maxScale: 5,
+                                  child: Image.network(
+                                    it['url'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white, size: 64),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 12,
+                                right: 12,
+                                child: SafeArea(
+                                  child: IconButton.filledTonal(
+                                    tooltip: 'Fermer l’image agrandie',
+                                    onPressed: () => Navigator.of(dialogContext).pop(),
+                                    icon: const Icon(Icons.close),
+                                  ),
+                                ),
+                              ),
+                              const Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 18,
+                                child: Text('Pincez pour zoomer · Faites glisser pour examiner l’image', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+                              ),
+                            ]),
+                          ),
+                        ),
+                        child: Image.network(it['url'] as String, fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder()),
+                      );
                     },
                   ),
                 Positioned(right: 6, top: 6, child: widget.overlay),
