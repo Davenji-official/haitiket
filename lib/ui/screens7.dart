@@ -211,6 +211,7 @@ class _NewProductState extends State<NewProductScreen> {
   late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
   Map<String, dynamic>? cat;
   String unit = 'unité';
+  String audience = 'Tout public';
   final specs = <String, dynamic>{};
   final media = <Map<String, String>>[];
   final variants = <Map<String, dynamic>>[];
@@ -234,7 +235,7 @@ class _NewProductState extends State<NewProductScreen> {
       attrs.removeWhere((k, v) => v == null || (v is List && v.isEmpty) || (v is String && v.isEmpty));
       final cover = media.where((m) => m['kind'] == 'image').map((m) => m['url']).firstOrNull;
       final id = await Repo.addProduct(widget.shopId, name.text.trim(), (p * 100).round(), st, cover, !widget.bazar,
-          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit);
+          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audience == 'Tout public' ? null : audience);
       if (media.isNotEmpty) await Repo.addProductMedia(id, media);
       await Repo.addVariants(id, variants);
       await Repo.addTiers(id, tiers);
@@ -275,12 +276,21 @@ class _NewProductState extends State<NewProductScreen> {
                 child: DropdownButtonFormField<String>(
                   initialValue: unit,
                   decoration: const InputDecoration(labelText: 'Vendu par'),
-                  items: [for (final u in ['unité', 'kg', 'L', 'lot', 'douzaine', 'paire']) DropdownMenuItem(value: u, child: Text(u))],
+                  items: [for (final u in ['unité', 'paire', 'lot', 'paquet', 'carton', 'douzaine', 'kg', 'g', 'L', 'm', 'boîte', 'sachet']) DropdownMenuItem(value: u, child: Text(u))],
                   onChanged: (v) => setState(() => unit = v ?? 'unité'),
                 ),
               ),
             ),
           ]),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DropdownButtonFormField<String>(
+              initialValue: audience,
+              decoration: const InputDecoration(labelText: 'Public cible'),
+              items: [for (final a in ['Tout public', 'Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe']) DropdownMenuItem(value: a, child: Text(a))],
+              onChanged: (v) => setState(() => audience = v ?? 'Tout public'),
+            ),
+          ),
           if (variants.isEmpty) Field(stock, 'Quantité disponible', type: TextInputType.number),
           const Text('Photos et vidéos', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
           const SizedBox(height: 8),

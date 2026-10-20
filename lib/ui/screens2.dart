@@ -325,25 +325,73 @@ class _ShopPanelState extends State<ShopPanel> {
     final price = TextEditingController(text: (((p['price_minor'] as num?) ?? 0) / 100).toStringAsFixed(2));
     final stock = TextEditingController(text: '${p['stock'] ?? 0}');
     final desc = TextEditingController(text: '${p['description'] ?? ''}');
-    final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
-      title: const Text('Modifier le produit'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: n, decoration: const InputDecoration(labelText: 'Nom')),
-        TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix (HTG)')),
-        TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock total')),
-        TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
-      ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Enregistrer'))],
+    final unit = TextEditingController(text: '${p['unit_label'] ?? 'unité'}');
+    final audienceOptions = ['Tout public', 'Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'];
+    String audience = audienceOptions.contains(p['audience']) ? p['audience'] as String : 'Tout public';
+    List<Map<String, String>> media = [];
+    try {
+      final existing = await Repo.productMedia(p['id'] as String);
+      media = existing.map((m) => {'url': '${m['url']}', 'kind': '${m['kind'] ?? 'image'}'}).toList();
+      if (media.isEmpty && (p['image_url'] as String?)?.isNotEmpty == true) {
+        media = [{'url': p['image_url'] as String, 'kind': 'image'}];
+      }
+    } catch (_) {
+      if ((p['image_url'] as String?)?.isNotEmpty == true) {
+        media = [{'url': p['image_url'] as String, 'kind': 'image'}];
+      }
+    }
+    final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (d) => StatefulBuilder(
+      builder: (d, setDialogState) => AlertDialog(
+        title: const Text('Modifier complètement le produit'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Photos et vidéos', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            MediaPickerField(items: media, onChanged: () => setDialogState(() {})),
+            const SizedBox(height: 14),
+            TextField(controller: n, decoration: const InputDecoration(labelText: 'Nom du produit')),
+            TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix (HTG)')),
+            TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock total')),
+            TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unité de vente (ex. unité, paire, lot, kg)')),
+            DropdownButtonFormField<String>(
+              value: audience,
+              decoration: const InputDecoration(labelText: 'Public concerné'),
+              items: [for (final a in audienceOptions) DropdownMenuItem(value: a, child: Text(a))],
+              onChanged: (v) { if (v != null) setDialogState(() => audience = v); },
+            ),
+            TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+            const SizedBox(height: 8),
+            const Text('Retire un média avec ✕. Le premier média image disponible devient la photo de couverture.', style: TextStyle(fontSize: 12, color: C.muted)),
+          ])),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Enregistrer toutes les modifications')),
+        ],
+      ),
     ));
     if (ok != true) return;
     final v = double.tryParse(price.text.replaceAll(',', '.'));
     final q = int.tryParse(stock.text);
-    if (n.text.trim().length < 2 || v == null || v < 0 || q == null || q < 0) return toast(context, 'Vérifie le nom, le prix et le stock.');
+    if (n.text.trim().length < 2 || v == null || v < 0 || q == null || q < 0 || unit.text.trim().isEmpty) {
+      return toast(context, 'Vérifie le nom, le prix, le stock et l’unité.');
+    }
     try {
-      await Repo.updateProduct(p['id'] as String, {'name': n.text.trim(), 'price_minor': (v * 100).round(), 'stock': q, 'description': desc.text.trim()});
+      await Repo.updateProduct(p['id'] as String, {
+        'name': n.text.trim(),
+        'price_minor': (v * 100).round(),
+        'stock': q,
+        'description': desc.text.trim(),
+        'unit_label': unit.text.trim(),
+        'audience': audience == 'Tout public' ? null : audience,
+      });
+      await Repo.replaceProductMedia(p['id'] as String, media);
       reload();
-      if (mounted) toast(context, 'Produit modifié.');
-    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+      if (mounted) toast(context, 'Produit, photos et vidéos mis à jour.');
+    } catch (e) {
+      if (mounted) toast(context, 'Enregistrement incomplet ou refusé : ${Repo.err(e)}');
+    }
   }
 
   Future<void> removeProduct(Map<String, dynamic> p) async {
