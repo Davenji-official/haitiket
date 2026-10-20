@@ -293,7 +293,7 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopProducts(String shopId) async {
-    final rows = await _c.from('products').select('id,name,description,price_minor,currency,stock,status,image_url,source,paid_until,unit_label,audience,attributes,product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes)').eq('shop_id', shopId).neq('status', 'removed').order('created_at', ascending: false);
+    final rows = await _c.from('products').select('id,name,description,price_minor,currency,stock,status,image_url,source,paid_until,unit_label,audience,attributes,category_id,product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes)').eq('shop_id', shopId).neq('status', 'removed').order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -329,6 +329,58 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  static Future<void> replaceProductVariants(String productId, List<Map<String, dynamic>> variants) async {
+    if (variants.length > 100) throw ArgumentError('100 variantes maximum.');
+    final existingRows = await _c.from('product_variants').select('id,size,color_name').eq('product_id', productId);
+    final existing = List<Map<String, dynamic>>.from(existingRows);
+    final usedIds = <String>{};
+    final normalized = <String>{};
+    String key(Map<String, dynamic> v) => '${(v['size'] ?? '').toString().trim().toLowerCase()}|${(v['color_name'] ?? '').toString().trim().toLowerCase()}';
+    for (final v in variants) {
+      if ((v['size'] ?? '').toString().trim().isEmpty && (v['color_name'] ?? '').toString().trim().isEmpty) {
+        throw ArgumentError('Chaque variante doit avoir une taille ou une couleur.');
+      }
+      if (!normalized.add(key(v))) throw ArgumentError('Deux variantes ne peuvent pas avoir la même taille et couleur.');
+      Map<String, dynamic>? match;
+      for (final candidate in existing) { if (key(candidate) == key(v)) { match = candidate; break; } }
+      final payload = <String, dynamic>{
+        'product_id': productId, 'size': v['size'], 'color_name': v['color_name'], 'color_hex': v['color_hex'], 'stock': v['stock'] ?? 0,
+        'audience': v['audience'], 'sku': v['sku'], 'unit_label': v['unit_label'] ?? 'unité', 'price_minor': v['price_minor'], 'attributes': v['attributes'] ?? <String, dynamic>{},
+      };
+      if (match != null) {
+        final id = match['id'] as String; usedIds.add(id);
+        await _c.from('product_variants').update(payload).eq('id', id);
+      } else {
+        final row = await _c.from('product_variants').insert(payload).select('id').single();
+        usedIds.add(row['id'] as String);
+      }
+    }
+    // Keep variants referenced by past orders to preserve foreign keys and audit history.
+    for (final old in existing) {
+      final id = old['id'] as String;
+      if (usedIds.contains(id)) continue;
+      final refs = await _c.from('order_items').select('id').eq('variant_id', id).limit(1);
+      if ((refs as List).isNotEmpty) {
+        await _c.from('product_variants').update({'stock': 0}).eq('id', id);
+      } else {
+        await _c.from('product_variants').delete().eq('id', id);
+      }
+    }
+  }
+  static Future<List<Map<String, dynamic>>> productVariants(String productId) async {
+    final rows = await _c.from('product_variants').select('id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes').eq('product_id', productId).order('created_at');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+  static Future<List<Map<String, dynamic>>> productTiers(String productId) async {
+    final rows = await _c.from('product_tiers').select('min_qty,unit_price_minor,label').eq('product_id', productId).order('min_qty');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+  static Future<void> replaceProductTiers(String productId, List<Map<String, dynamic>> tiers) async {
+    if (tiers.length > 30) throw ArgumentError('30 tarifs dégressifs maximum.');
+    await _c.from('product_tiers').delete().eq('product_id', productId);
+    if (tiers.isNotEmpty) await _c.from('product_tiers').insert([for (final t in tiers) {'product_id': productId, 'min_qty': t['min_qty'], 'unit_price_minor': t['unit_price_minor'], 'label': t['label']}]);
+  }
+
   /// Remplace la galerie d'un produit après validation des droits par RLS.
   /// La première image devient aussi la couverture principale.
   static Future<void> replaceProductMedia(String productId, List<Map<String, String>> media) async {
@@ -355,7 +407,7 @@ class Repo {
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
-    const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'status', 'category_id'};
+    const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'status', 'category_id', 'currency'};
     final safe = Map<String, dynamic>.fromEntries(patch.entries.where((e) => allowed.contains(e.key)));
     if (safe.isEmpty) throw ArgumentError('Aucune modification valide.');
     safe['updated_at'] = DateTime.now().toUtc().toIso8601String();
@@ -575,6 +627,38 @@ class Repo {
   }
 
   static Future<Map<String, dynamic>> myWallet() async => Map<String, dynamic>.from(await _c.rpc('my_wallet') as Map);
+
+  static Future<Map<String, dynamic>> myWalletV2() async => Map<String, dynamic>.from(await _c.rpc('my_wallet_v2') as Map);
+
+  static Future<Map<String, dynamic>> startWalletTopup(int amountMinor, String method, {String? phone}) async {
+    final r = await _c.functions.invoke('plopplop-wallet', body: {'action':'topup','amount_minor':amountMinor,'currency':'HTG','method':method,'phone':phone});
+    if (r.data is! Map || (r.data as Map)['reference'] == null) throw StateError((r.data is Map ? (r.data as Map)['error'] : null)?.toString() ?? 'Recharge impossible.');
+    return Map<String,dynamic>.from(r.data as Map);
+  }
+
+  static Future<String> checkWalletTopup(String reference) async {
+    final r = await _c.functions.invoke('plopplop-wallet', body: {'action':'check_topup','reference':reference});
+    if (r.data is! Map) throw StateError('Réponse de vérification invalide.');
+    return (r.data as Map)['status']?.toString() ?? 'pending';
+  }
+
+  static Future<Map<String, dynamic>> withdrawWallet(int amountMinor, String method, String phone) async {
+    final r = await _c.functions.invoke('plopplop-withdraw', body: {
+      'action': 'withdraw', 'amount_minor': amountMinor, 'currency': 'HTG', 'method': method, 'phone': phone,
+    });
+    if (r.data is! Map) throw StateError('Réponse de retrait invalide.');
+    final data = Map<String, dynamic>.from(r.data as Map);
+    if (r.status >= 400 && data['status'] != 'processing') throw StateError(data['error']?.toString() ?? 'Retrait refusé.');
+    return data;
+  }
+
+  static Future<String> checkWalletWithdrawal(String reference) async {
+    final r = await _c.functions.invoke('plopplop-withdraw', body: {'action':'check_withdrawal','reference':reference});
+    if (r.data is! Map) throw StateError('Réponse de vérification invalide.');
+    final data = Map<String, dynamic>.from(r.data as Map);
+    if (r.status >= 400) throw StateError(data['error']?.toString() ?? 'Vérification du retrait impossible.');
+    return data['status']?.toString() ?? 'processing';
+  }
 
   /// Sélection variée (au plus 2 produits par boutique), renouvelée toutes les 15 minutes par l'accueil.
   static Future<List<Map<String, dynamic>>> discover({int take = 8}) async {
