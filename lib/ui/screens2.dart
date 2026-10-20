@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../config.dart';
 import '../data/repo.dart';
@@ -10,6 +11,8 @@ import 'screens7.dart';
 import 'screens8.dart';
 import 'screens9.dart';
 import 'widgets.dart';
+
+int _jsonListCount(String value) { try { final x = jsonDecode(value.isEmpty ? '[]' : value); return x is List ? x.length : 0; } catch (_) { return 0; } }
 
 String statusFr(String s) =>
     const {
@@ -326,6 +329,14 @@ class _ShopPanelState extends State<ShopPanel> {
     final stock = TextEditingController(text: '${p['stock'] ?? 0}');
     final desc = TextEditingController(text: '${p['description'] ?? ''}');
     final unit = TextEditingController(text: '${p['unit_label'] ?? 'unité'}');
+    final attrs = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(p['attributes'] is Map ? p['attributes'] : <String, dynamic>{}));
+    String currency = (p['currency'] as String?) ?? 'HTG';
+    final variantsCtl = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(await Repo.productVariants(p['id'] as String)));
+    final tiersCtl = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(await Repo.productTiers(p['id'] as String)));
+    final statusOptions = ['published', 'paused', 'draft'];
+    String productStatus = statusOptions.contains(p['status']) ? p['status'] as String : 'published';
+    String? editCategory = p['category_id'] as String?;
+    final categories = await Repo.categories();
     final audienceOptions = ['Tout public', 'Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'];
     String audience = audienceOptions.contains(p['audience']) ? p['audience'] as String : 'Tout public';
     List<Map<String, String>> media = [];
@@ -361,6 +372,34 @@ class _ShopPanelState extends State<ShopPanel> {
               onChanged: (v) { if (v != null) setDialogState(() => audience = v); },
             ),
             TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+            DropdownButtonFormField<String?>(value: editCategory, decoration: const InputDecoration(labelText: 'Catégorie'), items: [const DropdownMenuItem<String?>(value: null, child: Text('Aucune catégorie')), for (final c in categories) DropdownMenuItem<String?>(value: c['id'] as String, child: Text('${c['name']}'))], onChanged: (v) { setDialogState(() => editCategory = v); }),
+            DropdownButtonFormField<String>(value: currency, decoration: const InputDecoration(labelText: 'Devise du prix'), items: const [DropdownMenuItem(value: 'HTG', child: Text('Gourdes (HTG)')), DropdownMenuItem(value: 'USD', child: Text('Dollars (USD)'))], onChanged: (v) { if (v != null) setDialogState(() => currency = v); }),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.tune),
+              label: Text('Modifier visuellement les variantes (${_jsonListCount(variantsCtl.text)})'),
+              onPressed: () async {
+                try {
+                  final raw = jsonDecode(variantsCtl.text.isEmpty ? '[]' : variantsCtl.text);
+                  if (raw is! List || raw.any((x) => x is! Map)) throw const FormatException();
+                  final result = await editProductVariantsDialog(context, raw.map((x) => Map<String, dynamic>.from(x as Map)).toList());
+                  if (result != null) setDialogState(() => variantsCtl.text = const JsonEncoder.withIndent('  ').convert(result));
+                } catch (_) { toast(context, 'Impossible de lire les variantes actuelles.'); }
+              },
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.price_change_outlined),
+              label: Text('Modifier les tarifs par quantité (${_jsonListCount(tiersCtl.text)})'),
+              onPressed: () async {
+                try {
+                  final raw = jsonDecode(tiersCtl.text.isEmpty ? '[]' : tiersCtl.text);
+                  if (raw is! List || raw.any((x) => x is! Map)) throw const FormatException();
+                  final result = await editProductTiersDialog(context, raw.map((x) => Map<String, dynamic>.from(x as Map)).toList());
+                  if (result != null) setDialogState(() => tiersCtl.text = const JsonEncoder.withIndent('  ').convert(result));
+                } catch (_) { toast(context, 'Impossible de lire les tarifs actuels.'); }
+              },
+            ),
+            DropdownButtonFormField<String>(value: productStatus, decoration: const InputDecoration(labelText: 'Visibilité du produit'), items: [for (final st in statusOptions) DropdownMenuItem(value: st, child: Text({'published':'Publié','paused':'Masqué / en pause','draft':'Brouillon'}[st]!))], onChanged: (v) { if (v != null) setDialogState(() => productStatus = v); }),
+            TextField(controller: attrs, maxLines: 5, decoration: const InputDecoration(labelText: 'Caractéristiques supplémentaires (JSON)', helperText: 'Ex. marque, matière, modèle, dimensions, état, garantie…')),
             const SizedBox(height: 8),
             const Text('Retire un média avec ✕. Le premier média image disponible devient la photo de couverture.', style: TextStyle(fontSize: 12, color: C.muted)),
           ])),
@@ -385,7 +424,17 @@ class _ShopPanelState extends State<ShopPanel> {
         'description': desc.text.trim(),
         'unit_label': unit.text.trim(),
         'audience': audience == 'Tout public' ? null : audience,
+        'category_id': editCategory,
+        'status': productStatus,
+        'attributes': jsonDecode(attrs.text.isEmpty ? '{}' : attrs.text) as Map<String, dynamic>,
+        'currency': currency,
       });
+      final variantsJson = jsonDecode(variantsCtl.text.isEmpty ? '[]' : variantsCtl.text);
+      final tiersJson = jsonDecode(tiersCtl.text.isEmpty ? '[]' : tiersCtl.text);
+      if (variantsJson is! List || variantsJson.any((x) => x is! Map)) throw const FormatException('Les variantes doivent être un tableau JSON d’objets.');
+      if (tiersJson is! List || tiersJson.any((x) => x is! Map)) throw const FormatException('Les tarifs doivent être un tableau JSON d’objets.');
+      await Repo.replaceProductVariants(p['id'] as String, variantsJson.map((x) => Map<String, dynamic>.from(x as Map)).toList());
+      await Repo.replaceProductTiers(p['id'] as String, tiersJson.map((x) => Map<String, dynamic>.from(x as Map)).toList());
       await Repo.replaceProductMedia(p['id'] as String, media);
       reload();
       if (mounted) toast(context, 'Produit, photos et vidéos mis à jour.');

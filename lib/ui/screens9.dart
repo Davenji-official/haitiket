@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -314,3 +315,39 @@ class _ShopCouponsState extends State<ShopCouponsScreen> {
         ),
       );
 }
+
+/// Éditeur visuel des variantes d'un produit déjà publié.
+Future<List<Map<String, dynamic>>?> editProductVariantsDialog(BuildContext context, List<Map<String, dynamic>> initial) async {
+  final items = initial.map((e) => Map<String, dynamic>.from(e)..remove('id')).toList();
+  return showDialog<List<Map<String, dynamic>>>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, setState) => AlertDialog(
+    title: const Text('Gérer les variantes'),
+    content: SizedBox(width: 560, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Text('Modifie chaque option, son prix, son stock et ses références. Les anciennes commandes gardent leur propre historique.'),
+      const SizedBox(height: 10),
+      for (var i=0; i<items.length; i++) Card(child: ListTile(
+        title: Text(variantText(items[i]).isEmpty ? 'Variante ${i+1}' : variantText(items[i])),
+        subtitle: Text('Prix : ${items[i]['price_minor'] == null ? 'prix du produit' : money(items[i]['price_minor'] as num, 'HTG')} · Stock : ${items[i]['stock'] ?? 0} · SKU : ${items[i]['sku'] ?? '—'}'),
+        trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [IconButton(tooltip:'Modifier',icon:const Icon(Icons.edit_outlined),onPressed:() async { final result=await _variantEditDialog(context,items[i]); if(result!=null)setState(()=>items[i]=result); }),IconButton(tooltip:'Supprimer la variante',icon:const Icon(Icons.delete_outline),onPressed:()=>setState(()=>items.removeAt(i)))]),
+      )),
+      OutlinedButton.icon(onPressed:() async { final result=await _variantEditDialog(context,{}); if(result!=null)setState(()=>items.add(result)); },icon:const Icon(Icons.add),label:const Text('Ajouter une variante')),
+    ]))),
+    actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(dialogContext,items),child:const Text('Appliquer'))],
+  )));
+}
+
+Future<Map<String, dynamic>?> _variantEditDialog(BuildContext context, Map<String, dynamic> source) async {
+  final size=TextEditingController(text:'${source['size']??''}'), color=TextEditingController(text:'${source['color_name']??''}'), hex=TextEditingController(text:'${source['color_hex']??''}'), stock=TextEditingController(text:'${source['stock']??0}'), sku=TextEditingController(text:'${source['sku']??''}'), unit=TextEditingController(text:'${source['unit_label']??''}'), price=TextEditingController(text:source['price_minor']==null?'':((source['price_minor'] as num)/100).toStringAsFixed(2)), audience=TextEditingController(text:'${source['audience']??''}'), attrs=TextEditingController(text:const JsonEncoder.withIndent('  ').convert(source['attributes'] is Map ? source['attributes'] : <String,dynamic>{}));
+  final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:Text(source.isEmpty?'Nouvelle variante':'Modifier la variante'),content:SizedBox(width:480,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:size,decoration:const InputDecoration(labelText:'Taille / pointure / modèle')),TextField(controller:color,decoration:const InputDecoration(labelText:'Couleur')),TextField(controller:hex,decoration:const InputDecoration(labelText:'Code couleur (facultatif, ex. #FF0000)')),TextField(controller:stock,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Stock')),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Prix spécifique (vide = prix produit)')),TextField(controller:sku,decoration:const InputDecoration(labelText:'SKU / référence')),TextField(controller:unit,decoration:const InputDecoration(labelText:'Unité spécifique (facultatif)')),TextField(controller:audience,decoration:const InputDecoration(labelText:'Public (facultatif)')),TextField(controller:attrs,maxLines:4,decoration:const InputDecoration(labelText:'Attributs additionnels JSON'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Valider'))]));
+  if(ok!=true)return null;
+  final q=int.tryParse(stock.text); final p=price.text.trim().isEmpty?null:double.tryParse(price.text.replaceAll(',','.'));
+  if((size.text.trim().isEmpty&&color.text.trim().isEmpty)||q==null||q<0||(price.text.trim().isNotEmpty&&(p==null||p<=0))) { toast(context,'Taille ou couleur, stock et prix valides requis.'); return null; }
+  dynamic parsed; try{parsed=jsonDecode(attrs.text.isEmpty?'{}':attrs.text);if(parsed is! Map)throw const FormatException();}catch(_){toast(context,'Les attributs doivent être un objet JSON valide.');return null;}
+  return {'size':size.text.trim().isEmpty?null:size.text.trim(),'color_name':color.text.trim().isEmpty?null:color.text.trim(),'color_hex':hex.text.trim().isEmpty?null:hex.text.trim(),'stock':q,'price_minor':p==null?null:(p*100).round(),'sku':sku.text.trim().isEmpty?null:sku.text.trim(),'unit_label':unit.text.trim().isEmpty?null:unit.text.trim(),'audience':audience.text.trim().isEmpty?null:audience.text.trim(),'attributes':Map<String,dynamic>.from(parsed as Map)};
+}
+
+/// Éditeur visuel des tarifs dégressifs.
+Future<List<Map<String, dynamic>>?> editProductTiersDialog(BuildContext context, List<Map<String, dynamic>> initial) async {
+  final items=initial.map((e)=>Map<String,dynamic>.from(e)).toList();
+  return showDialog<List<Map<String,dynamic>>>(context:context,builder:(dc)=>StatefulBuilder(builder:(context,setState)=>AlertDialog(title:const Text('Tarifs par quantité'),content:SizedBox(width:500,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Définis le nombre minimum d’articles et le prix par article pour ce palier.'),for(var i=0;i<items.length;i++)ListTile(title:Text('Dès ${items[i]['min_qty']} unités'),subtitle:Text('${money(items[i]['unit_price_minor'] as num,'HTG')} / unité · ${items[i]['label']??''}'),trailing:Wrap(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:const Icon(Icons.edit_outlined),onPressed:()async{final x=await _tierEditDialog(context,items[i]);if(x!=null)setState(()=>items[i]=x);}),IconButton(icon:const Icon(Icons.delete_outline),onPressed:()=>setState(()=>items.removeAt(i)))])),OutlinedButton.icon(onPressed:()async{final x=await _tierEditDialog(context,{});if(x!=null){if(items.any((e)=>e['min_qty']==x['min_qty'])){toast(context,'Un tarif existe déjà pour cette quantité.');return;}setState(()=>items.add(x));items.sort((a,b)=>(a['min_qty'] as int).compareTo(b['min_qty'] as int));}},icon:const Icon(Icons.add),label:const Text('Ajouter un palier'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(dc),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(dc,items),child:const Text('Appliquer'))])));
+}
+Future<Map<String,dynamic>?> _tierEditDialog(BuildContext context,Map<String,dynamic> src)async{final qty=TextEditingController(text:'${src['min_qty']??''}'),price=TextEditingController(text:src['unit_price_minor']==null?'':((src['unit_price_minor'] as num)/100).toStringAsFixed(2)),label=TextEditingController(text:'${src['label']??''}');final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Tarif de quantité'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Quantité minimum')),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Prix unitaire (HTG)')),TextField(controller:label,decoration:const InputDecoration(labelText:'Libellé (facultatif)')]),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Valider'))]));if(ok!=true)return null;final q=int.tryParse(qty.text),p=double.tryParse(price.text.replaceAll(',','.'));if(q==null||q<2||p==null||p<=0){toast(context,'Quantité (2+) et prix valides requis.');return null;}return {'min_qty':q,'unit_price_minor':(p*100).round(),'label':label.text.trim().isEmpty?null:label.text.trim()};}

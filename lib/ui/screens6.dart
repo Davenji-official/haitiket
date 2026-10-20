@@ -118,39 +118,92 @@ class _BrandingState extends State<BrandingEditor> {
       );
 }
 
-class WalletScreen extends StatelessWidget {
+class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
-  Widget card(String title, String a, String b) => Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: C.line)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
-          const SizedBox(height: 10),
-          Text('En attente : $a', style: const TextStyle(color: C.muted, fontSize: 16)),
-          Text('Disponible à verser : $b', style: const TextStyle(color: C.green, fontSize: 18, fontWeight: FontWeight.w800)),
-        ]),
-      );
+  @override
+  State<WalletScreen> createState() => _WalletScreenState();
+}
 
+class _WalletScreenState extends State<WalletScreen> {
+  late Future<Map<String, dynamic>> future = Repo.myWalletV2();
+  final amount = TextEditingController();
+  final phone = TextEditingController();
+  final withdrawAmount = TextEditingController();
+  final withdrawPhone = TextEditingController();
+  String method = 'moncash';
+  String withdrawMethod = 'moncash';
+  bool busy = false;
+  void reload() => setState(() => future = Repo.myWalletV2());
+  Future<void> topup() async {
+    final v = double.tryParse(amount.text.replaceAll(',', '.'));
+    if (v == null || v < 20) return toast(context, 'Montant minimum : 20 HTG.');
+    if (method.endsWith('_ussd') && !RegExp(r'^509\d{8}$').hasMatch(phone.text.trim())) return toast(context, 'Entre un numéro haïtien au format 509XXXXXXXX.');
+    setState(() => busy = true);
+    try {
+      final result = await Repo.startWalletTopup((v * 100).round(), method, phone: phone.text.trim());
+      final redirect = result['redirect_url']?.toString();
+      if (redirect != null && redirect.isNotEmpty) {
+        final ok = await launchUrl(Uri.parse(redirect), mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication, webOnlyWindowName: '_self');
+        if (!ok && mounted) toast(context, 'Paiement créé, mais impossible d’ouvrir la page de paiement. Référence : ${result['reference']}');
+      } else if (mounted) {
+        toast(context, 'Demande de recharge créée. Confirme le code USSD sur ton téléphone. Référence : ${result['reference']}');
+      }
+      amount.clear();
+      if (mounted) await showDialog<void>(context: context, builder: (d) => AlertDialog(title: const Text('Vérifier la recharge'), content: Text('Référence : ${result['reference']}\nAprès avoir confirmé le paiement, appuie sur « Vérifier ». Le solde ne sera crédité qu’après confirmation de Plop Plop.'), actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Fermer')), FilledButton(onPressed: () async { try { final st = await Repo.checkWalletTopup(result['reference'].toString()); if (d.mounted) Navigator.pop(d); if (mounted) toast(context, st == 'successful' ? 'Recharge confirmée.' : 'Statut : $st'); reload(); } catch(e) { if (mounted) toast(context, Repo.err(e)); } }, child: const Text('Vérifier'))]));
+      reload();
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+    if (mounted) setState(() => busy = false);
+  }
+
+  Future<void> withdraw() async {
+    final v = double.tryParse(withdrawAmount.text.replaceAll(',', '.'));
+    final ph = withdrawPhone.text.trim();
+    if (v == null || v < 50) return toast(context, 'Le retrait minimum est de 50 HTG.');
+    if (!RegExp(r'^509\d{8}$').hasMatch(ph)) return toast(context, 'Entre un numéro haïtien au format 509XXXXXXXX.');
+    final confirmed = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Confirmer le retrait'),
+      content: Text('Demander le retrait de ${money((v * 100).round(), 'HTG')} vers $ph par ${withdrawMethod == 'moncash' ? 'MonCash' : 'NatCash'} ? Le montant peut rester temporairement réservé si le fournisseur ne confirme pas immédiatement.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Confirmer'))],
+    ));
+    if (confirmed != true) return;
+    setState(() => busy = true);
+    try {
+      final result = await Repo.withdrawWallet((v * 100).round(), withdrawMethod, ph);
+      final ref = result['reference']?.toString() ?? '';
+      final status = result['status']?.toString() ?? 'processing';
+      if (mounted) await showDialog<void>(context: context, builder: (d) => AlertDialog(
+        title: Text(status == 'successful' ? 'Retrait confirmé' : status == 'failed' ? 'Retrait échoué' : 'Retrait en vérification'),
+        content: Text('${result['message'] ?? result['error'] ?? 'Statut : $status'}\nRéférence : $ref\nNe soumets pas un deuxième retrait pour remplacer celui-ci tant que son statut n’est pas confirmé.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Fermer')), if (status == 'processing') FilledButton(onPressed: () async { try { final st = await Repo.checkWalletWithdrawal(ref); if (d.mounted) Navigator.pop(d); if (mounted) toast(context, 'Statut du retrait : $st'); reload(); } catch(e) { if (mounted) toast(context, Repo.err(e)); } }, child: const Text('Vérifier'))],
+      ));
+      withdrawAmount.clear();
+      reload();
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+    if (mounted) setState(() => busy = false);
+  }
+
+  Widget card(String title, String value) => Container(margin: const EdgeInsets.only(bottom: 12),padding: const EdgeInsets.all(18),decoration: BoxDecoration(color: Colors.white,borderRadius: BorderRadius.circular(20),border: Border.all(color:C.line)),child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.w800,color:C.ink)),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:C.green))]));
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        const Padding(padding: EdgeInsets.only(bottom: 18), child: Text('Portefeuille', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
-        if (currentUser() == null)
-          const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour voir vos soldes.')
-        else
-          FutureBuilder<Map<String, dynamic>>(
-            future: Repo.myWallet(),
-            builder: (_, s) {
-              if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-              if (s.hasError) return ErrorState(s.error);
-              final d = s.data!;
-              String m(String k) => money((d[k] as num), 'HTG');
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                card('Ventes (vendeur)', m('seller_pending'), m('seller_available')),
-                card('Livraisons (livreur)', m('courier_pending'), m('courier_available')),
-                const Text("Ces soldes sont calculés à partir des commandes réellement payées. « Disponible » signifie livré et confirmé. Le versement vers votre portefeuille MonCash est effectué après validation par HAITIKET ; il n'est pas encore automatique.", style: TextStyle(color: C.muted, height: 1.4)),
-              ]);
-            },
-          ),
-      ]);
+    const Padding(padding: EdgeInsets.only(bottom:18),child:Text('Portefeuille HAITIKET',style:TextStyle(fontSize:32,fontWeight:FontWeight.w800,color:C.ink,letterSpacing:-1))),
+    if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
+      FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};String bal(String c)=>money(((balances[c] as num?)??0),c);return Column(children:[card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);}),
+      const SizedBox(height:8), const Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
+      Field(amount,'Montant en HTG'),
+      DropdownButtonFormField<String>(value:method,decoration:const InputDecoration(labelText:'Méthode de paiement'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash — page de paiement')),DropdownMenuItem(value:'natcash',child:Text('NatCash — page de paiement')),DropdownMenuItem(value:'moncash_ussd',child:Text('MonCash USSD')),DropdownMenuItem(value:'natcash_ussd',child:Text('NatCash USSD'))],onChanged:(v)=>setState(()=>method=v??'moncash')),
+      if(method.endsWith('_ussd')) Field(phone,'Téléphone haïtien (509XXXXXXXX)'),
+      const SizedBox(height:10),PrimaryButton(label:busy?'Préparation…':'Ajouter de l’argent',icon:Icons.add_card,onPressed:busy?null:topup),
+      const SizedBox(height:22),
+      const Text('Retirer vers MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
+      const SizedBox(height:6),
+      const Text('Retrait en HTG seulement. Minimum 50 HTG. Le fournisseur doit confirmer le transfert. Le retrait dépend aussi de la disponibilité du solde prépayé marchand Plop Plop.',style:TextStyle(color:C.muted,height:1.4)),
+      Field(withdrawAmount,'Montant à retirer (HTG)'),
+      Field(withdrawPhone,'Numéro destinataire (509XXXXXXXX)',type:TextInputType.phone),
+      DropdownButtonFormField<String>(value:withdrawMethod,decoration:const InputDecoration(labelText:'Recevoir par'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash')),DropdownMenuItem(value:'natcash',child:Text('NatCash'))],onChanged:(v)=>setState(()=>withdrawMethod=v??'moncash')),
+      const SizedBox(height:10),PrimaryButton(label:busy?'Traitement…':'Demander un retrait',icon:Icons.payments_outlined,onPressed:busy?null:withdraw),
+      const SizedBox(height:10),
+      const Text('Les achats, abonnements et revenus des ventes/livraisons doivent encore être reliés au portefeuille dans les flux métier. Ne considère pas le portefeuille comme prêt à la production avant validation du rapprochement Plop Plop et des tests réels.',style:TextStyle(color:C.muted,height:1.45)),
+      const SizedBox(height:10),OutlinedButton.icon(onPressed:reload,icon:const Icon(Icons.refresh),label:const Text('Actualiser le portefeuille')),
+    ]
+  ]);
 }
