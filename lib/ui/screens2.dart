@@ -320,6 +320,43 @@ class _ShopPanelState extends State<ShopPanel> {
     }
   }
 
+  Future<void> editProduct(Map<String, dynamic> p) async {
+    final n = TextEditingController(text: '${p['name'] ?? ''}');
+    final price = TextEditingController(text: (((p['price_minor'] as num?) ?? 0) / 100).toStringAsFixed(2));
+    final stock = TextEditingController(text: '${p['stock'] ?? 0}');
+    final desc = TextEditingController(text: '${p['description'] ?? ''}');
+    final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Modifier le produit'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: n, decoration: const InputDecoration(labelText: 'Nom')),
+        TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix (HTG)')),
+        TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock total')),
+        TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Enregistrer'))],
+    ));
+    if (ok != true) return;
+    final v = double.tryParse(price.text.replaceAll(',', '.'));
+    final q = int.tryParse(stock.text);
+    if (n.text.trim().length < 2 || v == null || v < 0 || q == null || q < 0) return toast(context, 'Vérifie le nom, le prix et le stock.');
+    try {
+      await Repo.updateProduct(p['id'] as String, {'name': n.text.trim(), 'price_minor': (v * 100).round(), 'stock': q, 'description': desc.text.trim()});
+      reload();
+      if (mounted) toast(context, 'Produit modifié.');
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  Future<void> removeProduct(Map<String, dynamic> p) async {
+    final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Supprimer ce produit ?'),
+      content: Text('« ${p['name']} » sera retiré du catalogue. Les commandes déjà passées conserveront leur historique.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Supprimer'))],
+    ));
+    if (ok != true) return;
+    try { await Repo.deleteProduct(p['id'] as String); reload(); if (mounted) toast(context, 'Produit retiré du catalogue.'); }
+    catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
   Future<void> orderAction(Map<String, dynamic> o, String v) async {
     final id = o['id'] as String;
     try {
@@ -416,6 +453,16 @@ class _ShopPanelState extends State<ShopPanel> {
                       title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text(sub(p)),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          tooltip: 'Modifier les informations principales',
+                          onPressed: () => editProduct(p),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Supprimer du catalogue',
+                          onPressed: () => removeProduct(p),
+                          icon: const Icon(Icons.delete_outline, color: C.terracotta),
+                        ),
                         if (((p['product_variants'] as List?) ?? const []).isNotEmpty)
                           IconButton(
                             tooltip: 'Stock par variante',

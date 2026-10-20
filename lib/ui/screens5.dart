@@ -125,10 +125,12 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsState extends State<NotificationsScreen> {
-  late final Future<List<Map<String, dynamic>>> f = Repo.myNotifications().then((l) {
+  late Future<List<Map<String, dynamic>>> f = Repo.myNotifications().then((l) {
     Repo.markNotificationsRead().catchError((_) {});
     return l;
   });
+
+  void reload() => setState(() => f = Repo.myNotifications());
 
   IconData icon(String k) => switch (k) {
         'order' => Icons.receipt_long_outlined,
@@ -162,6 +164,9 @@ class _NotificationsState extends State<NotificationsScreen> {
                         leading: Icon(icon(items[i]['kind'] as String), color: C.green),
                         title: Text('${items[i]['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: items[i]['body'] == null ? null : Text('${items[i]['body']}'),
+                        trailing: IconButton(tooltip: 'Supprimer cette notification', icon: const Icon(Icons.delete_outline), onPressed: () async {
+                          try { await Repo.deleteNotification(items[i]['id'] as String); reload(); } catch (e) { if (context.mounted) toast(context, Repo.err(e)); }
+                        }),
                       ),
                     ),
                   ),

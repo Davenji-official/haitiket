@@ -132,6 +132,7 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailState extends State<ProductDetailScreen> {
   Map<String, dynamic> get p => widget.p;
   Map<String, dynamic>? variant;
+  int quantity = 1;
   late final Future<List<Map<String, dynamic>>> promos = Repo.productPromos(p['id'] as String);
 
   List<Map<String, dynamic>> get variants => List<Map<String, dynamic>>.from(((p['product_variants'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
@@ -150,9 +151,9 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         for (final x in v)
           ChoiceChip(
             avatar: x['color_hex'] == null ? null : CircleAvatar(radius: 8, backgroundColor: hexColor(x['color_hex'] as String?)),
-            label: Text('${variantText(x)}${(x['stock'] as num) <= 0 ? ' (épuisé)' : ''}'),
+            label: Text('${variantText(x)}${x['audience'] == null ? '' : ' · ${x['audience']}'}${(x['stock'] as num) <= 0 ? ' (épuisé)' : ''}'),
             selected: variant?['id'] == x['id'],
-            onSelected: (x['stock'] as num) <= 0 ? null : (_) => setState(() => variant = x),
+            onSelected: (x['stock'] as num) <= 0 ? null : (_) => setState(() { variant = x; quantity = 1; }),
           ),
       ]),
     ];
@@ -174,6 +175,21 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         ),
     ];
   }
+
+  int get availableStock => variants.isNotEmpty
+      ? ((variant?['stock'] as num?)?.toInt() ?? 0)
+      : ((p['stock'] as num?)?.toInt() ?? 0);
+
+  Widget quantitySelector() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        heading('Quantité'),
+        Row(children: [
+          IconButton.filledTonal(onPressed: quantity > 1 ? () => setState(() => quantity--) : null, icon: const Icon(Icons.remove)),
+          SizedBox(width: 54, child: Center(child: Text('$quantity', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)))),
+          IconButton.filledTonal(onPressed: quantity < availableStock ? () => setState(() => quantity++) : null, icon: const Icon(Icons.add)),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Disponible : ${availableStock < 0 ? 0 : availableStock} · ${(p['unit_label'] as String?) ?? 'unité'}', style: const TextStyle(color: C.muted))),
+        ]),
+      ]);
 
   List<Widget> promosUi() => [
         FutureBuilder<List<Map<String, dynamic>>>(
@@ -265,7 +281,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
           if (bazar) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(12)), child: const Text('Bazar', style: TextStyle(fontWeight: FontWeight.w800))),
         ]),
         const SizedBox(height: 6),
-        Text('${money(p['price_minor'] as num, (p['currency'] ?? 'HTG') as String)}${unit == 'unité' ? '' : ' / $unit'}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
+        Text('${money((variant?['price_minor'] as num?) ?? (p['price_minor'] as num), (p['currency'] ?? 'HTG') as String)}${(variant?['unit_label'] as String? ?? unit) == 'unité' ? '' : ' / ${(variant?['unit_label'] as String? ?? unit)}'}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
         const SizedBox(height: 10),
         FutureBuilder<Map<String, dynamic>>(
           future: loadStats(shopId),
@@ -296,7 +312,9 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         Text(stock <= 5 ? 'Stock faible : $stock disponible(s)' : 'En stock', style: TextStyle(color: stock <= 5 ? C.terracotta : C.muted, fontWeight: FontWeight.w700)),
         ...promosUi(),
         ...variantsUi(),
+        if ((p['audience'] as String?)?.isNotEmpty == true) chip(Icons.people_alt_outlined, 'Pour ${p['audience']}'),
         ...tiersUi(),
+        quantitySelector(),
         if (desc.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(desc, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.45)),
@@ -309,7 +327,8 @@ class _ProductDetailState extends State<ProductDetailScreen> {
             icon: Icons.add_shopping_cart,
             onPressed: () {
               if (variants.isNotEmpty && variant == null) return toast(context, 'Choisissez une option (taille ou couleur).');
-              CartStore.add(p, variant: variant);
+              if (quantity > availableStock || availableStock <= 0) return toast(context, 'Quantité indisponible.');
+              CartStore.add(p, variant: variant, quantity: quantity);
               HapticFeedback.lightImpact();
               CartFly.fly(bc);
               Repo.trackCart(p['id'] as String);
