@@ -327,7 +327,7 @@ Future<List<Map<String, dynamic>>?> editProductVariantsDialog(BuildContext conte
       for (var i=0; i<items.length; i++) Card(child: ListTile(
         title: Text(variantText(items[i]).isEmpty ? 'Variante ${i+1}' : variantText(items[i])),
         subtitle: Text('Prix : ${items[i]['price_minor'] == null ? 'prix du produit' : money(items[i]['price_minor'] as num, 'HTG')} · Stock : ${items[i]['stock'] ?? 0} · SKU : ${items[i]['sku'] ?? '—'}'),
-        trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [IconButton(tooltip:'Modifier',icon:const Icon(Icons.edit_outlined),onPressed:() async { final result=await _variantEditDialog(context,items[i]); if(result!=null)setState(()=>items[i]=result); }),IconButton(tooltip:'Supprimer la variante',icon:const Icon(Icons.delete_outline),onPressed:()=>setState(()=>items.removeAt(i)))]),
+        trailing: Wrap(children: [IconButton(tooltip:'Modifier',icon:const Icon(Icons.edit_outlined),onPressed:() async { final result=await _variantEditDialog(context,items[i]); if(result!=null)setState(()=>items[i]=result); }),IconButton(tooltip:'Supprimer la variante',icon:const Icon(Icons.delete_outline),onPressed:()=>setState(()=>items.removeAt(i)))]),
       )),
       OutlinedButton.icon(onPressed:() async { final result=await _variantEditDialog(context,{}); if(result!=null)setState(()=>items.add(result)); },icon:const Icon(Icons.add),label:const Text('Ajouter une variante')),
     ]))),
@@ -346,8 +346,137 @@ Future<Map<String, dynamic>?> _variantEditDialog(BuildContext context, Map<Strin
 }
 
 /// Éditeur visuel des tarifs dégressifs.
-Future<List<Map<String, dynamic>>?> editProductTiersDialog(BuildContext context, List<Map<String, dynamic>> initial) async {
-  final items=initial.map((e)=>Map<String,dynamic>.from(e)).toList();
-  return showDialog<List<Map<String,dynamic>>>(context:context,builder:(dc)=>StatefulBuilder(builder:(context,setState)=>AlertDialog(title:const Text('Tarifs par quantité'),content:SizedBox(width:500,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Définis le nombre minimum d’articles et le prix par article pour ce palier.'),for(var i=0;i<items.length;i++)ListTile(title:Text('Dès ${items[i]['min_qty']} unités'),subtitle:Text('${money(items[i]['unit_price_minor'] as num,'HTG')} / unité · ${items[i]['label']??''}'),trailing:Wrap(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:const Icon(Icons.edit_outlined),onPressed:()async{final x=await _tierEditDialog(context,items[i]);if(x!=null)setState(()=>items[i]=x);}),IconButton(icon:const Icon(Icons.delete_outline),onPressed:()=>setState(()=>items.removeAt(i)))])),OutlinedButton.icon(onPressed:()async{final x=await _tierEditDialog(context,{});if(x!=null){if(items.any((e)=>e['min_qty']==x['min_qty'])){toast(context,'Un tarif existe déjà pour cette quantité.');return;}setState(()=>items.add(x));items.sort((a,b)=>(a['min_qty'] as int).compareTo(b['min_qty'] as int));}},icon:const Icon(Icons.add),label:const Text('Ajouter un palier'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(dc),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(dc,items),child:const Text('Appliquer'))])));
+Future<List<Map<String, dynamic>>?> editProductTiersDialog(
+  BuildContext context,
+  List<Map<String, dynamic>> initial,
+) async {
+  final items = initial.map((e) => Map<String, dynamic>.from(e)).toList();
+  return showDialog<List<Map<String, dynamic>>>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Tarifs par quantité'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Définis le nombre minimum d’articles et le prix par article pour ce palier.'),
+                for (var i = 0; i < items.length; i++)
+                  ListTile(
+                    title: Text('Dès ${items[i]['min_qty']} unités'),
+                    subtitle: Text('${money(items[i]['unit_price_minor'] as num, 'HTG')} / unité · ${items[i]['label'] ?? ''}'),
+                    trailing: Wrap(children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () async {
+                          final updated = await _tierEditDialog(context, items[i]);
+                          if (updated != null) setState(() => items[i] = updated);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => setState(() => items.removeAt(i)),
+                      ),
+                    ]),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final created = await _tierEditDialog(context, {});
+                    if (created == null) return;
+                    if (items.any((item) => item['min_qty'] == created['min_qty'])) {
+                      toast(context, 'Un tarif existe déjà pour cette quantité.');
+                      return;
+                    }
+                    setState(() {
+                      items.add(created);
+                      items.sort((a, b) => (a['min_qty'] as int).compareTo(b['min_qty'] as int));
+                    });
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Ajouter un palier'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, items), child: const Text('Appliquer')),
+        ],
+      ),
+    ),
+  );
 }
-Future<Map<String,dynamic>?> _tierEditDialog(BuildContext context,Map<String,dynamic> src)async{final qty=TextEditingController(text:'${src['min_qty']??''}'),price=TextEditingController(text:src['unit_price_minor']==null?'':((src['unit_price_minor'] as num)/100).toStringAsFixed(2)),label=TextEditingController(text:'${src['label']??''}');final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Tarif de quantité'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Quantité minimum')),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Prix unitaire (HTG)')),TextField(controller:label,decoration:const InputDecoration(labelText:'Libellé (facultatif)')]),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Valider'))]));if(ok!=true)return null;final q=int.tryParse(qty.text),p=double.tryParse(price.text.replaceAll(',','.'));if(q==null||q<2||p==null||p<=0){toast(context,'Quantité (2+) et prix valides requis.');return null;}return {'min_qty':q,'unit_price_minor':(p*100).round(),'label':label.text.trim().isEmpty?null:label.text.trim()};}
+
+Future<Map<String, dynamic>?> _tierEditDialog(
+  BuildContext context,
+  Map<String, dynamic> src,
+) async {
+  final qty = TextEditingController(text: '${src['min_qty'] ?? ''}');
+  final price = TextEditingController(
+    text: src['unit_price_minor'] == null
+        ? ''
+        : ((src['unit_price_minor'] as num) / 100).toStringAsFixed(2),
+  );
+  final label = TextEditingController(text: '${src['label'] ?? ''}');
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Tarif de quantité'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: qty,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Quantité minimum',
+              ),
+            ),
+            TextField(
+              controller: price,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Prix unitaire (HTG)',
+              ),
+            ),
+            TextField(
+              controller: label,
+              decoration: const InputDecoration(
+                labelText: 'Libellé (facultatif)',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Valider'),
+        ),
+      ],
+    ),
+  );
+
+  if (ok != true) return null;
+  final quantity = int.tryParse(qty.text.trim());
+  final unitPrice = double.tryParse(price.text.trim().replaceAll(',', '.'));
+  if (quantity == null || quantity < 2 || unitPrice == null || unitPrice <= 0) {
+    toast(context, 'Quantité (2+) et prix valides requis.');
+    return null;
+  }
+
+  return {
+    'min_qty': quantity,
+    'unit_price_minor': (unitPrice * 100).round(),
+    'label': label.text.trim().isEmpty ? null : label.text.trim(),
+  };
+}
