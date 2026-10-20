@@ -329,6 +329,31 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  /// Remplace la galerie d'un produit après validation des droits par RLS.
+  /// La première image devient aussi la couverture principale.
+  static Future<void> replaceProductMedia(String productId, List<Map<String, String>> media) async {
+    if (media.length > 10) throw ArgumentError('10 médias maximum par produit.');
+    await _c.from('product_media').delete().eq('product_id', productId);
+    if (media.isNotEmpty) {
+      await _c.from('product_media').insert([
+        for (var i = 0; i < media.length; i++) {
+          'product_id': productId,
+          'url': media[i]['url'],
+          'kind': media[i]['kind'] ?? 'image',
+          'position': i,
+        },
+      ]);
+    }
+    Map<String, String>? firstImage;
+    for (final item in media) {
+      if (item['kind'] == 'image') { firstImage = item; break; }
+    }
+    await _c.from('products').update({
+      'image_url': firstImage?['url'],
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', productId);
+  }
+
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
     const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'status', 'category_id'};
     final safe = Map<String, dynamic>.fromEntries(patch.entries.where((e) => allowed.contains(e.key)));
