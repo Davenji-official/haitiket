@@ -152,11 +152,16 @@ Deno.serve(async (req: Request) => {
       let exchangeRate: number | null = null;
       let providerAmountMinor = amountMinor;
       if (currency === "USD") {
-        const { data: setting, error: rateError } = await admin
+        let { data: setting, error: rateError } = await admin
           .from("platform_settings")
           .select("value")
-          .eq("key", "usd_htg_rate")
+          .eq("key", "usd_htg_topup_rate")
           .maybeSingle();
+        if (!setting && !rateError) {
+          const fallback = await admin.from("platform_settings").select("value").eq("key", "usd_htg_rate").maybeSingle();
+          setting = fallback.data;
+          rateError = fallback.error;
+        }
         const parsedRate = Number(setting?.value);
         if (rateError || !Number.isFinite(parsedRate) || parsedRate <= 0) {
           return response({ error: "Le taux USD → HTG n'est pas configuré par l'administration." }, 503);
@@ -201,7 +206,7 @@ Deno.serve(async (req: Request) => {
 
       if (createError || !transactionId) {
         return response(
-          { error: "Impossible de créer la demande de recharge." },
+          { error: `Impossible de créer la demande de recharge : ${createError?.message ?? "réponse serveur vide"}` },
           400,
         );
       }
