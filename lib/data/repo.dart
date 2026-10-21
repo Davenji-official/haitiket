@@ -637,6 +637,13 @@ class Repo {
     return rate != null && rate.isFinite && rate > 0 ? rate : null;
   }
 
+  static Future<double?> walletWithdrawExchangeRate() async {
+    final value = await _c.rpc('wallet_withdraw_exchange_rate');
+    if (value == null) return null;
+    final rate = value is num ? value.toDouble() : double.tryParse(value.toString());
+    return rate != null && rate.isFinite && rate > 0 ? rate : null;
+  }
+
   static Future<Map<String, dynamic>> startWalletTopup(int amountMinor, String currency, String method, {String? phone}) async {
     final r = await _c.functions.invoke('plopplop-wallet', body: {'action':'topup','amount_minor':amountMinor,'currency':currency,'method':method,'phone':phone});
     if (r.data is! Map || (r.data as Map)['reference'] == null) throw StateError((r.data is Map ? (r.data as Map)['error'] : null)?.toString() ?? 'Recharge impossible.');
