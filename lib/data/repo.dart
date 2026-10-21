@@ -649,9 +649,9 @@ class Repo {
     return (r.data as Map)['status']?.toString() ?? 'pending';
   }
 
-  static Future<Map<String, dynamic>> withdrawWallet(int amountMinor, String method, String phone) async {
+  static Future<Map<String, dynamic>> withdrawWallet(int amountMinor, String currency, String method, String phone) async {
     final r = await _c.functions.invoke('plopplop-withdraw', body: {
-      'action': 'withdraw', 'amount_minor': amountMinor, 'currency': 'HTG', 'method': method, 'phone': phone,
+      'action': 'withdraw', 'amount_minor': amountMinor, 'currency': currency, 'method': method, 'phone': phone,
     });
     if (r.data is! Map) throw StateError('Réponse de retrait invalide.');
     final data = Map<String, dynamic>.from(r.data as Map);
