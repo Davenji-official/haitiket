@@ -23,7 +23,7 @@ function env(name: string): string {
 function amountMinor(value: unknown): number | null {
   const n = Number(value);
   if (!Number.isSafeInteger(n)) return null;
-  if (n < 1 || n > 50_000_000) return null;
+  if (n < 100 || n > 50_000_000) return null;
   return n;
 }
 
@@ -132,13 +132,22 @@ Deno.serve(async (req) => {
     // ---------------------------------------------------------------
     if (action === "withdraw") {
       const amount = amountMinor(body.amount_minor);
+      const currency = String(body.currency ?? "HTG").toUpperCase();
       const phone = String(body.phone ?? "").trim();
       const method = String(body.method ?? "").toLowerCase();
 
-      if (amount === null || amount < 5000) {
-        return json({
-          error: "Le retrait doit être compris entre 50 et 500 000 HTG.",
-        }, 400);
+      if (!(["HTG", "USD"].includes(currency)) || amount === null || (currency === "USD" ? amount < 100 : amount < 5000)) {
+        return json({ error: currency === "USD" ? "Le retrait minimum est de 1 USD." : "Le retrait minimum est de 50 HTG." }, 400);
+      }
+
+      let providerAmount = amount;
+      let exchangeRate = 1;
+      if (currency === "USD") {
+        const { data: setting, error: rateError } = await admin.from("platform_settings").select("value").eq("key", "usd_htg_rate").maybeSingle();
+        exchangeRate = Number(setting?.value);
+        if (rateError || !Number.isFinite(exchangeRate) || exchangeRate <= 0) return json({ error: "Taux USD → HTG non configuré." }, 400);
+        providerAmount = Math.round((amount / 100) * exchangeRate * 100);
+        if (!Number.isSafeInteger(providerAmount) || providerAmount < 5000 || providerAmount > 50000000) return json({ error: "Le montant converti est hors limites du fournisseur." }, 400);
       }
 
       if (!/^509\d{8}$/.test(phone)) {
@@ -157,25 +166,18 @@ Deno.serve(async (req) => {
         "prepare_wallet_withdrawal",
         {
           p_amount_minor: amount,
-          p_currency: "HTG",
+          p_currency: currency,
           p_phone: phone,
           p_reference: reference,
         },
       );
 
-            if (prepareError) {
-        console.error("[WITHDRAWAL_PREPARATION_FAILED]", {
-          code: prepareError.code ?? null,
-          message: prepareError.message ?? null,
-          details: prepareError.details ?? null,
-          hint: prepareError.hint ?? null,
-        });
-
+      if (prepareError) {
         return json({
           error: "Impossible de préparer le retrait.",
           code: "WITHDRAWAL_PREPARATION_FAILED",
         }, 400);
-    }
+      }
 
       let authResult: Awaited<ReturnType<typeof providerPost>>;
 
@@ -219,7 +221,7 @@ Deno.serve(async (req) => {
       }
 
       // Le montant est exprimé en HTG dans l'API fournisseur.
-      const amountHTG = amount / 100;
+      const amountHTG = providerAmount / 100;
       const amountString = amountHTG.toFixed(2);
       const timestamp = Math.floor(Date.now() / 1000);
 
@@ -404,7 +406,7 @@ Deno.serve(async (req) => {
           status: "successful",
           reference,
           amount_minor: amount,
-          fee_minor: feeMinor,
+          fee_minor: currency === "USD" ? Math.round((feeMinor / 100 / exchangeRate) * 100) : feeMinor,
           message: "Retrait confirmé par le fournisseur.",
         });
       }
