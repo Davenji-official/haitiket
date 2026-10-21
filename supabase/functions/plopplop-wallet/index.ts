@@ -30,7 +30,7 @@ function parseAmount(value: unknown): number | null {
 
   if (
     !Number.isSafeInteger(amount) ||
-    amount < 2000 ||
+    amount < 100 ||
     amount > 50000000
   ) {
     return null;
@@ -137,9 +137,9 @@ Deno.serve(async (req: Request) => {
       const method = String(body.method ?? "");
       const phone = String(body.phone ?? "").trim();
 
-      if (amountMinor === null) {
+      if (amountMinor === null || (currency === "USD" ? amountMinor < 100 : amountMinor < 2000)) {
         return response(
-          { error: "Montant invalide. Minimum : 20 unités de la devise choisie." },
+          { error: currency === "USD" ? "Montant invalide. Minimum : 1 USD." : "Montant invalide. Minimum : 20 HTG." },
           400,
         );
       }
