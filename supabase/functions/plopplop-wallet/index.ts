@@ -11,8 +11,8 @@ Deno.serve(async(req)=>{
   const userClient=createClient(url,anon,{global:{headers:{Authorization:req.headers.get("Authorization")??""}}});
   const {data:{user}}=await userClient.auth.getUser(); if(!user)return json({error:"Connexion requise"},401);
   const admin=createClient(url,service); const b=await req.json(); const action=String(b.action??"");
-  const clientId=Deno.env.get("pp_f9f1d87a0ef26b97f01398319c67")!;
-  if(!clientId||!Deno.env.get("63e7a773db6f168686c5f4482946c9a0a082d1367137e3b6634590237e75453a"))return json({error:"Plop Plop non configuré côté serveur"},503);
+  const clientId=Deno.env.get("PLOPPLOP_CLIENT_ID")!;
+  if(!clientId||!Deno.env.get("PLOPPLOP_CLIENT_SECRET"))return json({error:"Plop Plop non configuré côté serveur"},503);
   if(action==="topup"){
     const amount=Math.round(Number(b.amount_minor)); const currency=String(b.currency??"HTG"); const method=String(b.method??"");
     if(!Number.isSafeInteger(amount)||amount<2000||amount>50000000)return json({error:"Montant invalide (minimum 20 HTG équivalent)"},400);
