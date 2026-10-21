@@ -20,3 +20,9 @@
 - Cette modification ne permet pas encore de convertir un solde USD déjà présent en solde HTG. Elle concerne la conversion du montant à payer en gourdes pour créditer le portefeuille USD.
 - Les retraits restent en HTG.
 - Le projet n'a pas été connecté à Supabase ni déployé par cette modification. Aucun paiement réel n'a été exécuté. Vérifier la compatibilité exacte avec les réponses Plop Plop avant la production.
+
+
+## Minimums recharge/retrait
+- Recharge portefeuille USD : minimum 1 USD. Recharge HTG : minimum 20 HTG.
+- Retrait portefeuille USD : minimum 1 USD, converti en HTG au taux d'administration avant l'appel Plop Plop. Retrait HTG : minimum 50 HTG.
+- Appliquer la migration `0017_wallet_usd_withdrawal_minimum.sql`, redéployer `plopplop-wallet` et `plopplop-withdraw`, puis reconstruire l'application. Ce code n'a pas été testé avec une transaction réelle.
