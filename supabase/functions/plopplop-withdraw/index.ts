@@ -143,9 +143,14 @@ Deno.serve(async (req) => {
       let providerAmount = amount;
       let exchangeRate = 1;
       if (currency === "USD") {
-        const { data: setting, error: rateError } = await admin.from("platform_settings").select("value").eq("key", "usd_htg_rate").maybeSingle();
+        let { data: setting, error: rateError } = await admin.from("platform_settings").select("value").eq("key", "usd_htg_withdraw_rate").maybeSingle();
+        if (!setting && !rateError) {
+          const fallback = await admin.from("platform_settings").select("value").eq("key", "usd_htg_rate").maybeSingle();
+          setting = fallback.data;
+          rateError = fallback.error;
+        }
         exchangeRate = Number(setting?.value);
-        if (rateError || !Number.isFinite(exchangeRate) || exchangeRate <= 0) return json({ error: "Taux USD → HTG non configuré." }, 400);
+        if (rateError || !Number.isFinite(exchangeRate) || exchangeRate <= 0) return json({ error: "Taux USD → HTG pour les retraits non configuré." }, 400);
         providerAmount = Math.round((amount / 100) * exchangeRate * 100);
         if (!Number.isSafeInteger(providerAmount) || providerAmount < 5000 || providerAmount > 50000000) return json({ error: "Le montant converti est hors limites du fournisseur." }, 400);
       }
