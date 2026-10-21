@@ -7,7 +7,7 @@ async function hmac(secret:string,body:string){const k=await crypto.subtle.impor
 Deno.serve(async(req)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
  try{
-  const url=Deno.env.get("https://ntroqvxeotifsmdzrwyo.supabase.co")!, service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, anon=Deno.env.get("SUPABASE_ANON_KEY")!;
+  const url=Deno.env.get("SUPABASE_URL")!, service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, anon=Deno.env.get("SUPABASE_ANON_KEY")!;
   const userClient=createClient(url,anon,{global:{headers:{Authorization:req.headers.get("Authorization")??""}}});
   const {data:{user}}=await userClient.auth.getUser(); if(!user)return json({error:"Connexion requise"},401);
   const admin=createClient(url,service); const b=await req.json(); const action=String(b.action??"");
