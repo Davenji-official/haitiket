@@ -134,6 +134,7 @@ class _WalletScreenState extends State<WalletScreen> {
   String topupCurrency = 'HTG';
   late Future<double?> rateFuture = Repo.walletExchangeRate();
   String withdrawMethod = 'moncash';
+  String withdrawCurrency = 'HTG';
   bool busy = false;
   @override
   void initState() { super.initState(); amount.addListener(_amountChanged); }
@@ -143,7 +144,7 @@ class _WalletScreenState extends State<WalletScreen> {
   void reload() => setState(() { future = Repo.myWalletV2(); rateFuture = Repo.walletExchangeRate(); });
   Future<void> topup() async {
     final v = double.tryParse(amount.text.replaceAll(',', '.'));
-    if (v == null || v < 20) return toast(context, 'Montant minimum : 20 ${topupCurrency}.');
+    if (v == null || v < (topupCurrency == 'USD' ? 1 : 20)) return toast(context, 'Montant minimum : ${topupCurrency == 'USD' ? '1 USD' : '20 HTG'}.');
     if (method.endsWith('_ussd') && !RegExp(r'^509\d{8}$').hasMatch(phone.text.trim())) return toast(context, 'Entre un numéro haïtien au format 509XXXXXXXX.');
     setState(() => busy = true);
     try {
@@ -165,7 +166,8 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> withdraw() async {
     final v = double.tryParse(withdrawAmount.text.replaceAll(',', '.'));
     final ph = withdrawPhone.text.trim();
-    if (v == null || v < 50) return toast(context, 'Le retrait minimum est de 50 HTG.');
+    final minimum = withdrawCurrency == 'USD' ? 1.0 : 50.0;
+    if (v == null || v < minimum) return toast(context, 'Le retrait minimum est de ${withdrawCurrency == 'USD' ? '1 USD' : '50 HTG'}.');
     if (!RegExp(r'^509\d{8}$').hasMatch(ph)) return toast(context, 'Entre un numéro haïtien au format 509XXXXXXXX.');
     final confirmed = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
       title: const Text('Confirmer le retrait'),
@@ -175,7 +177,7 @@ class _WalletScreenState extends State<WalletScreen> {
     if (confirmed != true) return;
     setState(() => busy = true);
     try {
-      final result = await Repo.withdrawWallet((v * 100).round(), withdrawMethod, ph);
+      final result = await Repo.withdrawWallet((v * 100).round(), withdrawCurrency, withdrawMethod, ph);
       final ref = result['reference']?.toString() ?? '';
       final status = result['status']?.toString() ?? 'processing';
       if (mounted) await showDialog<void>(context: context, builder: (d) => AlertDialog(
@@ -205,8 +207,10 @@ class _WalletScreenState extends State<WalletScreen> {
       const SizedBox(height:22),
       const Text('Retirer vers MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
       const SizedBox(height:6),
-      const Text('Retrait en HTG seulement. Minimum 50 HTG. Le fournisseur doit confirmer le transfert. Le retrait dépend aussi de la disponibilité du solde prépayé marchand Plop Plop.',style:TextStyle(color:C.muted,height:1.4)),
-      Field(withdrawAmount,'Montant à retirer (HTG)'),
+      const Text('Le retrait USD est converti en HTG au taux configuré par l’administration. Minimum : 1 USD ou 50 HTG. Le fournisseur doit confirmer le transfert et disposer du solde marchand nécessaire.',style:TextStyle(color:C.muted,height:1.4)),
+      DropdownButtonFormField<String>(value:withdrawCurrency,decoration:const InputDecoration(labelText:'Devise à retirer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>withdrawCurrency=v??'HTG')),
+      Field(withdrawAmount,'Montant à retirer ($withdrawCurrency)'),
+      if (withdrawCurrency == 'USD') FutureBuilder<double?>(future:rateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(withdrawAmount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?value*rate:null;return Padding(padding:const EdgeInsets.only(top:4,bottom:8),child:Text(rate==null?'Taux USD → HTG non configuré.': 'Montant estimé reçu en HTG : ${converted?.toStringAsFixed(2) ?? '—'} HTG',style:const TextStyle(color:C.muted)));}),
       Field(withdrawPhone,'Numéro destinataire (509XXXXXXXX)',type:TextInputType.phone),
       DropdownButtonFormField<String>(value:withdrawMethod,decoration:const InputDecoration(labelText:'Recevoir par'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash')),DropdownMenuItem(value:'natcash',child:Text('NatCash'))],onChanged:(v)=>setState(()=>withdrawMethod=v??'moncash')),
       const SizedBox(height:10),PrimaryButton(label:busy?'Traitement…':'Demander un retrait',icon:Icons.payments_outlined,onPressed:busy?null:withdraw),
