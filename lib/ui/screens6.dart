@@ -131,16 +131,23 @@ class _WalletScreenState extends State<WalletScreen> {
   final withdrawAmount = TextEditingController();
   final withdrawPhone = TextEditingController();
   String method = 'moncash';
+  String topupCurrency = 'HTG';
+  late Future<double?> rateFuture = Repo.walletExchangeRate();
   String withdrawMethod = 'moncash';
   bool busy = false;
-  void reload() => setState(() => future = Repo.myWalletV2());
+  @override
+  void initState() { super.initState(); amount.addListener(_amountChanged); }
+  void _amountChanged() { if (mounted) setState(() {}); }
+  @override
+  void dispose() { amount.removeListener(_amountChanged); amount.dispose(); phone.dispose(); withdrawAmount.dispose(); withdrawPhone.dispose(); super.dispose(); }
+  void reload() => setState(() { future = Repo.myWalletV2(); rateFuture = Repo.walletExchangeRate(); });
   Future<void> topup() async {
     final v = double.tryParse(amount.text.replaceAll(',', '.'));
-    if (v == null || v < 20) return toast(context, 'Montant minimum : 20 HTG.');
+    if (v == null || v < 20) return toast(context, 'Montant minimum : 20 ${topupCurrency}.');
     if (method.endsWith('_ussd') && !RegExp(r'^509\d{8}$').hasMatch(phone.text.trim())) return toast(context, 'Entre un numéro haïtien au format 509XXXXXXXX.');
     setState(() => busy = true);
     try {
-      final result = await Repo.startWalletTopup((v * 100).round(), method, phone: phone.text.trim());
+      final result = await Repo.startWalletTopup((v * 100).round(), topupCurrency, method, phone: phone.text.trim());
       final redirect = result['redirect_url']?.toString();
       if (redirect != null && redirect.isNotEmpty) {
         final ok = await launchUrl(Uri.parse(redirect), mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication, webOnlyWindowName: '_self');
@@ -149,7 +156,7 @@ class _WalletScreenState extends State<WalletScreen> {
         toast(context, 'Demande de recharge créée. Confirme le code USSD sur ton téléphone. Référence : ${result['reference']}');
       }
       amount.clear();
-      if (mounted) await showDialog<void>(context: context, builder: (d) => AlertDialog(title: const Text('Vérifier la recharge'), content: Text('Référence : ${result['reference']}\nAprès avoir confirmé le paiement, appuie sur « Vérifier ». Le solde ne sera crédité qu’après confirmation de Plop Plop.'), actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Fermer')), FilledButton(onPressed: () async { try { final st = await Repo.checkWalletTopup(result['reference'].toString()); if (d.mounted) Navigator.pop(d); if (mounted) toast(context, st == 'successful' ? 'Recharge confirmée.' : 'Statut : $st'); reload(); } catch(e) { if (mounted) toast(context, Repo.err(e)); } }, child: const Text('Vérifier'))]));
+      if (mounted) await showDialog<void>(context: context, builder: (d) => AlertDialog(title: const Text('Vérifier la recharge'), content: Text('Référence : ${result['reference']}\nMontant à créditer : ${(result['wallet_amount_minor'] as num? ?? (v * 100).round()) / 100} $topupCurrency\nMontant demandé par Plop Plop : ${((result['provider_amount_minor'] as num? ?? (v * 100).round()) / 100).toStringAsFixed(2)} HTG\nAprès avoir confirmé le paiement, appuie sur « Vérifier ». Le solde ne sera crédité qu’après confirmation de Plop Plop.'), actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Fermer')), FilledButton(onPressed: () async { try { final st = await Repo.checkWalletTopup(result['reference'].toString()); if (d.mounted) Navigator.pop(d); if (mounted) toast(context, st == 'successful' ? 'Recharge confirmée.' : 'Statut : $st'); reload(); } catch(e) { if (mounted) toast(context, Repo.err(e)); } }, child: const Text('Vérifier'))]));
       reload();
     } catch (e) { if (mounted) toast(context, Repo.err(e)); }
     if (mounted) setState(() => busy = false);
@@ -189,7 +196,9 @@ class _WalletScreenState extends State<WalletScreen> {
     if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
       FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};String bal(String c)=>money(((balances[c] as num?)??0),c);return Column(children:[card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);}),
       const SizedBox(height:8), const Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
-      Field(amount,'Montant en HTG'),
+      DropdownButtonFormField<String>(value:topupCurrency,decoration:const InputDecoration(labelText:'Devise à créditer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>topupCurrency=v??'HTG')),
+      Field(amount,'Montant à créditer en $topupCurrency'),
+      if (topupCurrency == 'USD') FutureBuilder<double?>(future:rateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(amount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?(value*rate):null;return Container(margin:const EdgeInsets.only(top:6,bottom:8),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:C.mint,borderRadius:BorderRadius.circular(12)),child:Text(rateState.connectionState!=ConnectionState.done?'Chargement du taux officiel HAITIKET…':rate==null?'Taux USD → HTG non configuré. La recharge USD est indisponible.': 'Taux fixé par l’administration : 1 USD = ${rate.toStringAsFixed(4)} HTG\nMontant estimé payé en HTG : ${converted==null?'—':converted.toStringAsFixed(2)} HTG. Le montant final est calculé côté serveur.',style:const TextStyle(color:C.ink,height:1.4)));}),
       DropdownButtonFormField<String>(value:method,decoration:const InputDecoration(labelText:'Méthode de paiement'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash — page de paiement')),DropdownMenuItem(value:'natcash',child:Text('NatCash — page de paiement')),DropdownMenuItem(value:'moncash_ussd',child:Text('MonCash USSD')),DropdownMenuItem(value:'natcash_ussd',child:Text('NatCash USSD'))],onChanged:(v)=>setState(()=>method=v??'moncash')),
       if(method.endsWith('_ussd')) Field(phone,'Téléphone haïtien (509XXXXXXXX)'),
       const SizedBox(height:10),PrimaryButton(label:busy?'Préparation…':'Ajouter de l’argent',icon:Icons.add_card,onPressed:busy?null:topup),

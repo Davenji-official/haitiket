@@ -95,7 +95,7 @@ class AdminSettingsTab extends StatefulWidget {
 class _SettingsState extends State<AdminSettingsTab> {
   late Future<Map<String, String>> f = Repo.adminSettings();
   static const defs = [
-    ['usd_htg_rate', 'Taux USD → HTG', 'Obligatoire pour les frais Bazar (2 USD) et boutique (20 USD). Ex. 131.5'],
+    ['usd_htg_rate', 'Taux USD → HTG', 'Utilisé pour les frais Bazar/boutique et pour payer en HTG les recharges du portefeuille USD. Ex. 131.5'],
     ['bazar_fee_usd', 'Frais annonce Bazar (USD / 14 jours)', 'Ex. 2'],
     ['shop_fee_usd', 'Abonnement boutique pro (USD / 30 jours)', 'Ex. 20'],
     ['delivery_flat_minor', 'Frais de livraison forfaitaires (centimes de HTG)', 'Ex. 5000 = 50 HTG. Sans valeur, la livraison reste indisponible.'],
