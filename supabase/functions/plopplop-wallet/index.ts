@@ -131,23 +131,41 @@ Deno.serve(async (req: Request) => {
     // ACTION 1 : CRÉER UNE RECHARGE
     // ---------------------------------------------------------
     if (action === "topup") {
+      // amount_minor représente le montant à créditer dans le portefeuille choisi.
       const amountMinor = parseAmount(body.amount_minor);
-      const currency = String(body.currency ?? "HTG");
+      const currency = String(body.currency ?? "HTG").toUpperCase();
       const method = String(body.method ?? "");
       const phone = String(body.phone ?? "").trim();
 
       if (amountMinor === null) {
         return response(
-          { error: "Montant invalide. Minimum : 20 HTG." },
+          { error: "Montant invalide. Minimum : 20 unités de la devise choisie." },
           400,
         );
       }
 
-      if (currency !== "HTG") {
-        return response(
-          { error: "Les recharges sont actuellement limitées au HTG." },
-          400,
-        );
+      if (currency !== "HTG" && currency !== "USD") {
+        return response({ error: "Devise de portefeuille invalide." }, 400);
+      }
+
+      // Le fournisseur Plop Plop est payé en HTG, même pour créditer le portefeuille USD.
+      let exchangeRate: number | null = null;
+      let providerAmountMinor = amountMinor;
+      if (currency === "USD") {
+        const { data: setting, error: rateError } = await admin
+          .from("platform_settings")
+          .select("value")
+          .eq("key", "usd_htg_rate")
+          .maybeSingle();
+        const parsedRate = Number(setting?.value);
+        if (rateError || !Number.isFinite(parsedRate) || parsedRate <= 0) {
+          return response({ error: "Le taux USD → HTG n'est pas configuré par l'administration." }, 503);
+        }
+        exchangeRate = parsedRate;
+        providerAmountMinor = Math.round((amountMinor / 100) * exchangeRate * 100);
+        if (!Number.isSafeInteger(providerAmountMinor) || providerAmountMinor < 2000 || providerAmountMinor > 50000000) {
+          return response({ error: "Le montant converti en HTG est hors des limites du fournisseur." }, 400);
+        }
       }
 
       const allowedMethods = [
@@ -173,10 +191,12 @@ Deno.serve(async (req: Request) => {
 
       // Créer une intention en attente. Aucun crédit à ce stade.
       const { data: transactionId, error: createError } =
-        await userClient.rpc("create_wallet_topup", {
+        await userClient.rpc("create_wallet_topup_fx", {
           p_amount_minor: amountMinor,
           p_currency: currency,
           p_reference: reference,
+          p_provider_amount_minor: providerAmountMinor,
+          p_exchange_rate: exchangeRate,
         });
 
       if (createError || !transactionId) {
@@ -189,7 +209,7 @@ Deno.serve(async (req: Request) => {
       const payload: JsonObject = {
         client_id: clientId,
         refference_id: reference,
-        montant: amountMinor / 100,
+        montant: providerAmountMinor / 100,
         payment_method: method,
       };
 
@@ -213,6 +233,10 @@ Deno.serve(async (req: Request) => {
             metadata: {
               reason: "provider_timeout_or_network_error",
               method,
+              provider_amount_minor: providerAmountMinor,
+              payment_currency: "HTG",
+              wallet_currency: currency,
+              exchange_rate: exchangeRate,
             },
           })
           .eq("id", transactionId)
@@ -247,6 +271,10 @@ Deno.serve(async (req: Request) => {
               reason: "provider_creation_unconfirmed",
               method,
               provider_http_status: providerResult.status,
+              provider_amount_minor: providerAmountMinor,
+              payment_currency: "HTG",
+              wallet_currency: currency,
+              exchange_rate: exchangeRate,
             },
           })
           .eq("id", transactionId)
@@ -274,6 +302,10 @@ Deno.serve(async (req: Request) => {
               typeof providerData.message === "string"
                 ? providerData.message
                 : null,
+            provider_amount_minor: providerAmountMinor,
+            payment_currency: "HTG",
+            wallet_currency: currency,
+            exchange_rate: exchangeRate,
           },
           updated_at: new Date().toISOString(),
         })
@@ -299,6 +331,10 @@ Deno.serve(async (req: Request) => {
         redirect_url:
           typeof providerData.url === "string" ? providerData.url : null,
         status: "pending",
+        wallet_currency: currency,
+        wallet_amount_minor: amountMinor,
+        provider_amount_minor: providerAmountMinor,
+        exchange_rate: exchangeRate,
         message: method.endsWith("_ussd")
           ? "Vérifie ton téléphone et confirme la demande USSD."
           : "Suis les instructions du fournisseur pour terminer le paiement.",
@@ -318,7 +354,7 @@ Deno.serve(async (req: Request) => {
       const { data: transaction, error: readError } = await userClient
         .from("wallet_transactions")
         .select(
-          "reference,amount_minor,currency,status,provider_transaction_id",
+          "reference,amount_minor,currency,status,provider_transaction_id,metadata",
         )
         .eq("reference", reference)
         .eq("user_id", user.id)
@@ -396,10 +432,14 @@ Deno.serve(async (req: Request) => {
       const providerAmount = Number(providerData.montant);
       const amountMinor = Math.round(providerAmount * 100);
 
+      const transactionMetadata = (transaction.metadata ?? {}) as JsonObject;
+      const expectedProviderAmount = Number(
+        transactionMetadata.provider_amount_minor ?? transaction.amount_minor,
+      );
       if (
         !Number.isSafeInteger(amountMinor) ||
-        amountMinor !== Number(transaction.amount_minor) ||
-        transaction.currency !== "HTG"
+        amountMinor !== expectedProviderAmount ||
+        transactionMetadata.payment_currency !== "HTG"
       ) {
         await admin
           .from("wallet_transactions")
