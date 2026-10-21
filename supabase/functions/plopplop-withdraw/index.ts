@@ -163,12 +163,19 @@ Deno.serve(async (req) => {
         },
       );
 
-      if (prepareError) {
+            if (prepareError) {
+        console.error("[WITHDRAWAL_PREPARATION_FAILED]", {
+          code: prepareError.code ?? null,
+          message: prepareError.message ?? null,
+          details: prepareError.details ?? null,
+          hint: prepareError.hint ?? null,
+        });
+
         return json({
           error: "Impossible de préparer le retrait.",
           code: "WITHDRAWAL_PREPARATION_FAILED",
         }, 400);
-      }
+    }
 
       let authResult: Awaited<ReturnType<typeof providerPost>>;
 
