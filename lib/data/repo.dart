@@ -456,6 +456,30 @@ class Repo {
     });
   }
 
+  // ===== V14 : propositions de prix de livraison (interface à raccorder aux écrans) =====
+  static Future<String> proposeDeliveryPrice(String jobId, int amountMinor, String currency, int etaMinutes, {String? note}) async {
+    if (amountMinor <= 0) throw ArgumentError('Le prix de livraison doit être positif.');
+    if (!const {'HTG', 'USD'}.contains(currency)) throw ArgumentError('Devise de livraison invalide.');
+    if (etaMinutes < 1 || etaMinutes > 1440) throw ArgumentError('Délai estimé invalide.');
+    final result = await _c.rpc('propose_delivery_price', params: {
+      'p_job': jobId,
+      'p_amount_minor': amountMinor,
+      'p_currency': currency,
+      'p_eta_minutes': etaMinutes,
+      'p_note': note,
+    });
+    return result.toString();
+  }
+
+  static Future<List<Map<String, dynamic>>> deliveryPriceOffers(String jobId) async {
+    final result = await _c.rpc('list_delivery_price_offers', params: {'p_job': jobId});
+    return List<Map<String, dynamic>>.from(result as List);
+  }
+
+  static Future<void> selectDeliveryPriceOffer(String offerId) async {
+    await _c.rpc('select_delivery_price_offer', params: {'p_offer': offerId});
+  }
+
   static Future<void> publishCourierLocation(double lat, double lng, {double? accuracyM}) async {
     await _c.rpc('publish_courier_location', params: {
       'p_lat': lat,
