@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -142,13 +144,102 @@ class CourierScreen extends StatefulWidget {
   State<CourierScreen> createState() => _CourierState();
 }
 
-class _CourierState extends State<CourierScreen> {
+class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   late Future<Map<String, dynamic>> f = load();
+  StreamSubscription<Position>? _positionSubscription;
+  bool _gpsStarting = false;
+  bool _gpsActive = false;
+  bool _availabilityChecked = false;
+  DateTime? _lastGpsWrite;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Limite la collecte en arrière-plan : ce sprint ne revendique pas un service GPS natif permanent.
+    if (state == AppLifecycleState.resumed) {
+      if (_availabilityChecked) _startGps();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+      _stopGps();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _positionSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _stopGps() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+    _gpsActive = false;
+  }
+
+  Future<void> _startGps() async {
+    if (_gpsStarting || _gpsActive || !mounted) return;
+    _gpsStarting = true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) toast(context, 'Activez la localisation GPS pour partager votre position pendant les missions.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) toast(context, 'Autorisez la localisation pour publier votre position de coursier.');
+        return;
+      }
+      final settings = const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 15);
+      // Activer avant de s'abonner pour ne pas ignorer la première position émise immédiatement.
+      _gpsActive = true;
+      _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen((position) async {
+        if (!mounted || !_gpsActive || !_availabilityChecked) return;
+        final now = DateTime.now();
+        if (_lastGpsWrite != null && now.difference(_lastGpsWrite!) < const Duration(seconds: 12)) return;
+        _lastGpsWrite = now;
+        try {
+          await Repo.publishCourierLocation(position.latitude, position.longitude, accuracyM: position.accuracy);
+        } catch (e) {
+          // Ne pas interrompre le flux GPS sur une erreur réseau ponctuelle.
+          debugPrint('HAITIKET GPS publish failed: ${Repo.err(e)}');
+        }
+      }, onError: (Object e) {
+        if (mounted) debugPrint('HAITIKET GPS stream error: $e');
+      });
+    } catch (e) {
+      if (mounted) toast(context, 'GPS indisponible : ${Repo.err(e)}');
+    } finally {
+      _gpsStarting = false;
+    }
+  }
+
+  Future<void> _setAvailability(bool available) async {
+    await Repo.setCourierAvailable(available);
+    _availabilityChecked = available;
+    if (available) {
+      await _startGps();
+    } else {
+      await _stopGps();
+    }
+  }
 
   Future<Map<String, dynamic>> load() async {
     final app = await Repo.myCourierApplication();
     if (app == null || app['status'] != 'approved') return {'app': app};
     final avail = await Repo.courierAvailable();
+    _availabilityChecked = avail;
+    if (avail && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      // La disponibilité peut avoir été conservée côté serveur après fermeture de l'écran.
+      await _startGps();
+    } else if (!avail) {
+      await _stopGps();
+    }
     final open = avail ? await Repo.openJobs() : <Map<String, dynamic>>[];
     final mine = await Repo.myJobs();
     return {'app': app, 'avail': avail, 'open': open, 'mine': mine};
@@ -193,6 +284,10 @@ class _CourierState extends State<CourierScreen> {
               if (app == null) return const EmptyState(title: 'Aucune candidature', text: "Déposez votre candidature dans « HAITIKET Network » pour devenir livreur.");
               if (app['status'] != 'approved') return EmptyState(title: 'Candidature en cours', text: 'Statut : ${app['status']}. Vous recevrez des missions après approbation.');
               final avail = d['avail'] as bool;
+              if (!_availabilityChecked) {
+                _availabilityChecked = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted && avail) _startGps(); });
+              }
               final open = List<Map<String, dynamic>>.from(d['open'] as List);
               final mine = List<Map<String, dynamic>>.from(d['mine'] as List);
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -200,7 +295,7 @@ class _CourierState extends State<CourierScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(avail ? 'Disponible pour les livraisons' : 'Indisponible', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                   value: avail,
-                  onChanged: (v) => run(() => Repo.setCourierAvailable(v)),
+                  onChanged: (v) => run(() => _setAvailability(v)),
                 ),
                 const SizedBox(height: 12),
                 const Text('Missions proposées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),

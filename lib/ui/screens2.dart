@@ -46,31 +46,39 @@ class _CheckoutState extends State<CheckoutScreen> {
   final coupon = TextEditingController();
   late Future<List<Map<String, dynamic>>> addrs = Repo.myAddresses();
   bool busy = false;
-  bool locating = false;
   double? deliveryLat;
   double? deliveryLng;
-  double? deliveryAccuracy;
+  double? deliveryAccuracyM;
+  String? coordinateAddressSnapshot;
+  bool locating = false;
 
   Future<void> useCurrentLocation() async {
     if (locating) return;
     setState(() => locating = true);
     try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) throw Exception('Active la localisation GPS de ton appareil, puis réessaie.');
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) throw Exception('Autorisation de localisation refusée.');
-      if (permission == LocationPermission.deniedForever) throw Exception('La localisation est bloquée dans les paramètres de l’appareil.');
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.bestForNavigation, timeLimit: Duration(seconds: 20)));
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) toast(context, 'Autorisez la localisation dans les paramètres pour utiliser votre position.');
+        return;
+      }
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (mounted) toast(context, 'Activez le GPS de votre téléphone puis réessayez.');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 20)));
       if (!mounted) return;
-      deliveryLat = pos.latitude;
-      deliveryLng = pos.longitude;
-      deliveryAccuracy = pos.accuracy;
-      address.text = 'Position GPS du lieu de livraison : ${pos.latitude.toStringAsFixed(7)}, ${pos.longitude.toStringAsFixed(7)}. Précision déclarée par l’appareil : ${pos.accuracy.toStringAsFixed(0)} m. Heure de capture : ${pos.timestamp.toIso8601String()}. Le client a sélectionné ce lieu au moment de la commande.';
-      setState(() {});
-      toast(context, 'Position actuelle ajoutée. Vérifie que tu peux recevoir le colis à cet endroit.');
-    } catch (e) {
-      if (mounted) toast(context, e.toString().replaceFirst('Exception: ', ''));
+      setState(() {
+        deliveryLat = position.latitude;
+        deliveryLng = position.longitude;
+        deliveryAccuracyM = position.accuracy;
+        address.text = 'Position GPS (${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})';
+        coordinateAddressSnapshot = address.text;
+      });
+      toast(context, 'Position récupérée. Vérifiez que vous êtes bien à la destination souhaitée.');
+    } catch (_) {
+      if (mounted) toast(context, 'Impossible de récupérer le GPS. Vous pouvez saisir une adresse manuellement.');
     } finally {
       if (mounted) setState(() => locating = false);
     }
@@ -82,10 +90,22 @@ class _CheckoutState extends State<CheckoutScreen> {
     setState(() => busy = true);
     try {
       final orders = await Repo.createOrders(lines, mode, address.text, coupon.text);
+      var locationSaved = true;
+      final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
+      if (mode == 'delivery' && deliveryLat != null && deliveryLng != null && coordinatesMatchAddress) {
+        for (final order in orders) {
+          try {
+            await Repo.setOrderDeliveryLocation(order['id'].toString(), deliveryLat!, deliveryLng!, accuracyM: deliveryAccuracyM);
+          } catch (_) {
+            locationSaved = false;
+          }
+        }
+      }
       CartStore.lines.value = {};
       if (!mounted) return;
       Navigator.of(context).pop();
-      toast(context, '${orders.length} commande(s) enregistrée(s). Stock réservé 30 min — paiement indisponible pour le moment.');
+      final gpsMessage = mode == 'delivery' && deliveryLat != null && coordinatesMatchAddress ? (locationSaved ? ' Destination GPS enregistrée.' : ' Attention : la commande existe, mais les coordonnées GPS n’ont pas toutes été enregistrées. Contactez le support avant de recommander.') : ''; 
+      toast(context, '${orders.length} commande(s) enregistrée(s). Stock réservé 30 min — paiement indisponible pour le moment.$gpsMessage');
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
@@ -124,22 +144,24 @@ class _CheckoutState extends State<CheckoutScreen> {
                     onChanged: (v) {
                       final a = l.firstWhere((x) => x['id'] == v);
                       address.text = formatAddress(a);
+                      deliveryLat = (a['lat'] as num?)?.toDouble();
+                      deliveryLng = (a['lng'] as num?)?.toDouble();
+                      deliveryAccuracyM = null;
+                      coordinateAddressSnapshot = address.text;
                       setState(() {});
                     },
                   ),
                 );
               },
             ),
+            Field(address, 'Adresse de livraison (commune, quartier, repères)'),
             OutlinedButton.icon(
               onPressed: locating ? null : useCurrentLocation,
               icon: locating ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.my_location),
-              label: Text(locating ? 'Localisation en cours…' : 'Livrer à ma position actuelle'),
+              label: Text(locating ? 'Localisation en cours…' : 'Utiliser ma position actuelle'),
             ),
-            if (deliveryLat != null && deliveryLng != null) Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Position sélectionnée : ${deliveryLat!.toStringAsFixed(6)}, ${deliveryLng!.toStringAsFixed(6)} · précision GPS déclarée : ${deliveryAccuracy!.toStringAsFixed(0)} m. Vérifie le point exact avant de commander.', style: const TextStyle(color: C.muted)),
-            ),
-            Field(address, 'Adresse ou lieu exact de livraison (domicile, école, université, travail, ami, camping, déplacement…)'),
+            if (deliveryLat != null && deliveryLng != null)
+              Text('Position sélectionnée • précision estimée ${deliveryAccuracyM?.round() ?? 'inconnue'} m', style: const TextStyle(color: C.muted)),
             TextButton.icon(
               onPressed: () async {
                 await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen()));
