@@ -447,6 +447,34 @@ class Repo {
     return List<Map<String, dynamic>>.from(res as List);
   }
 
+  static Future<void> setOrderDeliveryLocation(String orderId, double lat, double lng, {double? accuracyM}) async {
+    await _c.rpc('set_order_delivery_location', params: {
+      'p_order': orderId,
+      'p_lat': lat,
+      'p_lng': lng,
+      'p_accuracy_m': accuracyM,
+    });
+  }
+
+  static Future<void> publishCourierLocation(double lat, double lng, {double? accuracyM}) async {
+    await _c.rpc('publish_courier_location', params: {
+      'p_lat': lat,
+      'p_lng': lng,
+      'p_accuracy_m': accuracyM,
+    });
+  }
+
+  /// Lit la position du coursier assigné uniquement si le demandeur est autorisé.
+  /// La fonction SQL vérifie le client ou le propriétaire de la boutique côté serveur.
+  static Future<Map<String, dynamic>?> activeCourierLocation(String orderId) async {
+    final result = await _c.rpc('get_active_courier_location', params: {'p_order': orderId});
+    if (result == null) return null;
+    if (result is List && result.isEmpty) return null;
+    if (result is List) return Map<String, dynamic>.from(result.first as Map);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    throw const FormatException('Réponse de localisation inattendue.');
+  }
+
   static Future<void> cancelOrder(String id) async {
     await _c.rpc('cancel_order', params: {'p_order': id});
   }
