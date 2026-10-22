@@ -27,3 +27,37 @@ La présence de code ou de tables ne prouve pas que le parcours complet fonction
 - Intégrer Pay'm Plop Plop côté serveur en suivant sa documentation officielle; valider signatures/webhooks, idempotence, remboursements et statuts. Ne pas utiliser une clé privée exposée précédemment.
 - Vérifier les migrations déjà appliquées, les politiques RLS, les variables de configuration, les tests Android/Web et les workflows GitHub Actions.
 - Valider la livraison réelle, l'acceptation atomique des missions, le GPS en arrière-plan, le suivi temps réel et les preuves de remise avant toute annonce de mise en production.
+
+
+## Sprint Turbo Supra Luminique V9
+
+Voir `docs/SPRINT_TURBO_SUPRA_LUMINIQUE_V9.md`. Ajout de l'écran de suivi client qui interroge la RPC sécurisée existante. La compilation et les tests restent à exécuter.
+
+## Sprint Turbo Supra Luminique V10
+
+Ajout d'un sélecteur de destination sur carte au checkout afin que le client puisse demander la remise du colis à l'emplacement où il se trouve au moment de la commande. Détails, limites et tests : `docs/SPRINT_TURBO_SUPRA_LUMINIQUE_V10.md`.
+
+## V11 — V9.1 suivi GPS plus explicite
+- Horodatage de position basé sur le champ serveur `location_updated_at`.
+- Indicateur de position périmée après 2 minutes.
+- Marqueurs coursier et destination réelle lorsque les coordonnées existent.
+- Migration 0021 pour la RPC sécurisée de suivi.
+- Build Flutter non exécuté dans l'environnement de création; voir `docs/SPRINT_TURBO_SUPRA_LUMINIQUE_V11_V9_1.md`.
+
+## V12 — V9.2 diffusion géographique et acceptation concurrente
+- Ajout de `0022_courier_broadcast_atomic_acceptance.sql` : missions à proximité (25 km à vol d'oiseau), GPS récent, boutique active et revalidation serveur.
+- `accept_job` sérialise les acceptations par coursier, vérifie la capacité de trois missions et verrouille la mission avant attribution.
+- Limite : pas de notification push garantie en arrière-plan; il s'agit d'une diffusion via RPC côté application. Pas de test Flutter/Supabase réel exécuté dans cet environnement.
+
+## V13 — V9.3 Audit financier
+- Ajout de `supabase/migrations/0023_financial_audit_v9_3.sql`.
+- Ajout d'un audit admin en lecture seule sur portefeuilles, paiements, ledger et remboursements.
+- L'audit journalise son exécution et n'altère aucun solde.
+- Limite explicitée : le ledger actuel n'est pas encore un système comptable en partie double.
+- Tests distants et compilation Flutter non exécutés dans cet environnement.
+
+## V14 — 2026-10-22 — V9.4 offres de prix de livraison
+- Ajout migration 0024_delivery_price_offers.sql : offres de coursiers, expiration, liste client et sélection atomique.
+- Ajout méthodes repository Flutter pour proposer/lister/sélectionner les offres.
+- Ajout audit statique de couverture du cahier des charges et écarts restants.
+- Limite : écrans pas encore raccordés; aucune compilation Flutter ni exécution distante Supabase confirmée.
