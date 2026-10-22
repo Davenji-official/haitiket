@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -45,6 +46,35 @@ class _CheckoutState extends State<CheckoutScreen> {
   final coupon = TextEditingController();
   late Future<List<Map<String, dynamic>>> addrs = Repo.myAddresses();
   bool busy = false;
+  bool locating = false;
+  double? deliveryLat;
+  double? deliveryLng;
+  double? deliveryAccuracy;
+
+  Future<void> useCurrentLocation() async {
+    if (locating) return;
+    setState(() => locating = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) throw Exception('Active la localisation GPS de ton appareil, puis réessaie.');
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) throw Exception('Autorisation de localisation refusée.');
+      if (permission == LocationPermission.deniedForever) throw Exception('La localisation est bloquée dans les paramètres de l’appareil.');
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.bestForNavigation, timeLimit: Duration(seconds: 20)));
+      if (!mounted) return;
+      deliveryLat = pos.latitude;
+      deliveryLng = pos.longitude;
+      deliveryAccuracy = pos.accuracy;
+      address.text = 'Position GPS du lieu de livraison : ${pos.latitude.toStringAsFixed(7)}, ${pos.longitude.toStringAsFixed(7)}. Précision déclarée par l’appareil : ${pos.accuracy.toStringAsFixed(0)} m. Heure de capture : ${pos.timestamp.toIso8601String()}. Le client a sélectionné ce lieu au moment de la commande.';
+      setState(() {});
+      toast(context, 'Position actuelle ajoutée. Vérifie que tu peux recevoir le colis à cet endroit.');
+    } catch (e) {
+      if (mounted) toast(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
 
   Future<void> submit() async {
     final lines = CartStore.lines.value.values.toList();
@@ -100,7 +130,16 @@ class _CheckoutState extends State<CheckoutScreen> {
                 );
               },
             ),
-            Field(address, 'Adresse de livraison (commune, quartier, repères)'),
+            OutlinedButton.icon(
+              onPressed: locating ? null : useCurrentLocation,
+              icon: locating ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.my_location),
+              label: Text(locating ? 'Localisation en cours…' : 'Livrer à ma position actuelle'),
+            ),
+            if (deliveryLat != null && deliveryLng != null) Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Position sélectionnée : ${deliveryLat!.toStringAsFixed(6)}, ${deliveryLng!.toStringAsFixed(6)} · précision GPS déclarée : ${deliveryAccuracy!.toStringAsFixed(0)} m. Vérifie le point exact avant de commander.', style: const TextStyle(color: C.muted)),
+            ),
+            Field(address, 'Adresse ou lieu exact de livraison (domicile, école, université, travail, ami, camping, déplacement…)'),
             TextButton.icon(
               onPressed: () async {
                 await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen()));
