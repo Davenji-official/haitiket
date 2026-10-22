@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
@@ -87,9 +90,13 @@ class _CheckoutState extends State<CheckoutScreen> {
   Future<void> submit() async {
     final lines = CartStore.lines.value.values.toList();
     if (lines.isEmpty) return;
+    if (mode == 'delivery' && address.text.trim().isEmpty) {
+      toast(context, 'Indiquez une destination ou choisissez un point sur la carte avant de commander.');
+      return;
+    }
     setState(() => busy = true);
     try {
-      final orders = await Repo.createOrders(lines, mode, address.text, coupon.text);
+      final orders = await Repo.createOrders(lines, mode, address.text.trim(), coupon.text);
       var locationSaved = true;
       final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
       if (mode == 'delivery' && deliveryLat != null && deliveryLng != null && coordinatesMatchAddress) {
@@ -160,8 +167,35 @@ class _CheckoutState extends State<CheckoutScreen> {
               icon: locating ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.my_location),
               label: Text(locating ? 'Localisation en cours…' : 'Utiliser ma position actuelle'),
             ),
-            if (deliveryLat != null && deliveryLng != null)
-              Text('Position sélectionnée • précision estimée ${deliveryAccuracyM?.round() ?? 'inconnue'} m', style: const TextStyle(color: C.muted)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final selected = await Navigator.of(context).push<DestinationPoint>(
+                  MaterialPageRoute(builder: (_) => DestinationMapPicker(
+                    initialLat: deliveryLat,
+                    initialLng: deliveryLng,
+                  )),
+                );
+                if (selected == null || !mounted) return;
+                setState(() {
+                  deliveryLat = selected.lat;
+                  deliveryLng = selected.lng;
+                  deliveryAccuracyM = null;
+                  address.text = address.text.trim().isEmpty
+                      ? 'Point GPS choisi sur la carte (${selected.lat.toStringAsFixed(6)}, ${selected.lng.toStringAsFixed(6)})'
+                      : '${address.text.trim()} — point GPS (${selected.lat.toStringAsFixed(6)}, ${selected.lng.toStringAsFixed(6)})';
+                  coordinateAddressSnapshot = address.text;
+                });
+                toast(context, 'Point exact choisi. Ajoutez un repère clair pour aider le livreur à vous trouver.');
+              },
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Choisir le point exact sur la carte'),
+            ),
+            if (deliveryLat != null && deliveryLng != null) ...[
+              const SizedBox(height: 6),
+              Text('Destination sélectionnée : ${deliveryLat!.toStringAsFixed(6)}, ${deliveryLng!.toStringAsFixed(6)}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w700)),
+              Text('Précision GPS estimée : ${deliveryAccuracyM?.round() ?? 'point sélectionné sur la carte'}', style: const TextStyle(color: C.muted)),
+            ],
             TextButton.icon(
               onPressed: () async {
                 await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen()));
@@ -183,6 +217,83 @@ class _CheckoutState extends State<CheckoutScreen> {
       ]),
     );
   }
+}
+
+class DestinationPoint {
+  final double lat;
+  final double lng;
+  const DestinationPoint(this.lat, this.lng);
+}
+
+/// Carte de sélection de destination. L'utilisateur place le repère en touchant la carte.
+/// Ce choix est une coordonnée réelle saisie par l'utilisateur, jamais une position simulée.
+class DestinationMapPicker extends StatefulWidget {
+  final double? initialLat;
+  final double? initialLng;
+  const DestinationMapPicker({super.key, this.initialLat, this.initialLng});
+
+  @override
+  State<DestinationMapPicker> createState() => _DestinationMapPickerState();
+}
+
+class _DestinationMapPickerState extends State<DestinationMapPicker> {
+  static const LatLng haitiCenter = LatLng(18.9712, -72.2852);
+  late LatLng selected = widget.initialLat != null && widget.initialLng != null
+      ? LatLng(widget.initialLat!, widget.initialLng!)
+      : haitiCenter;
+  bool touched = false;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Choisir la destination')),
+        body: Column(children: [
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Touchez la carte à l’endroit exact où le colis doit être remis : domicile, école, université, travail, chez un proche ou autre lieu.', style: TextStyle(height: 1.4)),
+          ),
+          Expanded(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: selected,
+                initialZoom: widget.initialLat != null ? 16 : 8,
+                onTap: (_, point) => setState(() { selected = point; touched = true; }),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: const String.fromEnvironment('MAP_TILE_URL', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                  userAgentPackageName: 'com.haitiket.app',
+                ),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: selected,
+                    width: 54,
+                    height: 58,
+                    child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.location_pin, size: 42, color: C.terracotta),
+                      Text('Livraison', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                    ]),
+                  ),
+                ]),
+                RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
+              ],
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('Latitude : ${selected.latitude.toStringAsFixed(6)}  ·  Longitude : ${selected.longitude.toStringAsFixed(6)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).pop(DestinationPoint(selected.latitude, selected.longitude)),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(touched || (widget.initialLat != null && widget.initialLng != null) ? 'Confirmer ce point' : 'Utiliser le centre affiché'),
+                ),
+              ]),
+            ),
+          ),
+        ]),
+      );
 }
 
 class OrdersScreen extends StatefulWidget {
@@ -262,6 +373,14 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                           ),
                         ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
+                        if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].contains(o['status']))
+                          TextButton.icon(
+                            icon: const Icon(Icons.location_on_outlined),
+                            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => OrderTrackingScreen(orderId: o['id'] as String, shopName: ((o['shops'] as Map?)?['name'] ?? 'Boutique').toString()),
+                            )),
+                            label: const Text('Suivre la livraison'),
+                          ),
                         if (o['status'] == 'DELIVERED' || o['status'] == 'COMPLETED') TextButton(onPressed: () => reviewDialog(context, o['id'] as String), child: const Text('Laisser un avis')),
                         if (o['status'] == 'PAID')
                           TextButton(
@@ -679,4 +798,160 @@ class _ShopPanelState extends State<ShopPanel> {
       ),
     );
   }
+}
+
+
+/// Suivi client de la position du coursier affecté.
+/// La position est lue via une RPC sécurisée côté serveur; aucune lecture directe de courier_status.
+class OrderTrackingScreen extends StatefulWidget {
+  final String orderId;
+  final String shopName;
+  const OrderTrackingScreen({super.key, required this.orderId, required this.shopName});
+
+  @override
+  State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+}
+
+class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsBindingObserver {
+  static const LatLng _haitiCenter = LatLng(18.9712, -72.2852);
+  final MapController _mapController = MapController();
+  Timer? _poller;
+  Map<String, dynamic>? _courier;
+  bool _loading = true;
+  String? _error;
+  DateTime? _lastUpdate;
+  DateTime? _courierPositionAt;
+
+  double? get _destinationLat => double.tryParse('${_courier?['destination_lat'] ?? ''}');
+  double? get _destinationLng => double.tryParse('${_courier?['destination_lng'] ?? ''}');
+  bool get _hasDestination => _destinationLat != null && _destinationLng != null &&
+      _destinationLat!.isFinite && _destinationLng!.isFinite &&
+      _destinationLat! >= -90 && _destinationLat! <= 90 &&
+      _destinationLng! >= -180 && _destinationLng! <= 180;
+
+  double? get _lat => double.tryParse('${_courier?['lat'] ?? ''}');
+  double? get _lng => double.tryParse('${_courier?['lng'] ?? ''}');
+  bool get _hasPosition => _lat != null && _lng != null &&
+      _lat!.isFinite && _lng!.isFinite && _lat! >= -90 && _lat! <= 90 &&
+      _lng! >= -180 && _lng! <= 180;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+    _poller = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) _refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _poller?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final row = await Repo.activeCourierLocation(widget.orderId);
+      if (!mounted) return;
+      setState(() {
+        _courier = row;
+        _error = null;
+        _loading = false;
+        final rawTimestamp = row?['location_updated_at'];
+        _courierPositionAt = rawTimestamp == null ? null : DateTime.tryParse(rawTimestamp.toString())?.toLocal();
+        _lastUpdate = DateTime.now();
+      });
+      if (_hasPosition) {
+        _mapController.move(LatLng(_lat!, _lng!), 15);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = Repo.err(e);
+        _loading = false;
+      });
+    }
+  }
+
+  String _updatedText() {
+    if (_courierPositionAt == null) return 'Dernière position du coursier : inconnue.';
+    final local = _courierPositionAt!;
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    final ss = local.second.toString().padLeft(2, '0');
+    final age = DateTime.now().difference(_courierPositionAt!);
+    final stale = age > const Duration(minutes: 2);
+    final suffix = stale ? ' · position périmée (${age.inMinutes} min)' : '';
+    return 'Dernière position serveur : $hh:$mm:$ss$suffix';
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Suivi de livraison')),
+        body: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.shopName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+              const SizedBox(height: 4),
+              const Text('La carte affiche uniquement la position du coursier autorisée par le serveur.'),
+              const SizedBox(height: 8),
+              if (_loading) const LinearProgressIndicator(),
+              if (_error != null) Text('Impossible de récupérer la position : $_error', style: const TextStyle(color: C.terracotta)),
+              if (!_loading && _error == null && !_hasPosition)
+                const Text('POSITION INDISPONIBLE : aucune coordonnée valide reçue. Vérifie que le coursier est affecté, autorisé à partager sa position et connecté.'),
+              if (_hasPosition && _courierPositionAt != null && DateTime.now().difference(_courierPositionAt!) > const Duration(minutes: 2))
+                const Text('ATTENTION : la dernière position est ancienne. Le marqueur ne représente pas nécessairement la position actuelle.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+              if (!_hasDestination)
+                const Text('Destination réelle non enregistrée pour cette commande. La carte ne peut pas inventer son emplacement.', style: TextStyle(color: C.terracotta)),
+              if (_hasPosition) Text('Coursier : ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}'),
+              if (_hasDestination) Text('Destination : ${_destinationLat!.toStringAsFixed(5)}, ${_destinationLng!.toStringAsFixed(5)}'),
+              Text(_updatedText(), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              Align(alignment: Alignment.centerRight, child: TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Actualiser'),
+              )),
+            ]),
+          ),
+          Expanded(
+            child: FlutterMap(
+              mapController: _mapController,
+              options: const MapOptions(initialCenter: _haitiCenter, initialZoom: 8),
+              children: [
+                TileLayer(
+                  urlTemplate: const String.fromEnvironment('MAP_TILE_URL', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                  userAgentPackageName: 'com.haitiket.app',
+                ),
+                if (_hasPosition || _hasDestination)
+                  MarkerLayer(markers: [
+                    if (_hasPosition) Marker(
+                      point: LatLng(_lat!, _lng!), width: 64, height: 64,
+                      child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.delivery_dining, size: 38, color: C.terracotta),
+                        Text('Coursier', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                      ]),
+                    ),
+                    if (_hasDestination) Marker(
+                      point: LatLng(_destinationLat!, _destinationLng!), width: 76, height: 64,
+                      child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.location_on, size: 38, color: Colors.blue),
+                        Text('Destination', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                      ]),
+                    ),
+                  ]),
+              ],
+            ),
+          ),
+        ]),
+      );
 }

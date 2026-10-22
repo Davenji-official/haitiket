@@ -151,6 +151,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   bool _gpsActive = false;
   bool _availabilityChecked = false;
   DateTime? _lastGpsWrite;
+  Timer? _missionPoll;
 
   @override
   void initState() {
@@ -172,6 +173,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionSubscription?.cancel();
+    _missionPoll?.cancel();
     super.dispose();
   }
 
@@ -237,7 +239,15 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
     if (avail && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
       // La disponibilité peut avoir été conservée côté serveur après fermeture de l'écran.
       await _startGps();
+      // Actualise les missions ouvertes en premier plan; ce polling n'est pas une notification push.
+      _missionPoll ??= Timer.periodic(const Duration(seconds: 15), (_) {
+        if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed && _availabilityChecked) {
+          reload();
+        }
+      });
     } else if (!avail) {
+      _missionPoll?.cancel();
+      _missionPoll = null;
       await _stopGps();
     }
     final open = avail ? await Repo.openJobs() : <Map<String, dynamic>>[];
@@ -245,7 +255,10 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
     return {'app': app, 'avail': avail, 'open': open, 'mine': mine};
   }
 
-  void reload() => setState(() => f = load());
+  void reload() {
+    if (!mounted) return;
+    setState(() => f = load());
+  }
 
   Future<void> confirm(Map<String, dynamic> j, bool pickup) async {
     final pin = await askText(context, pickup ? 'Code donné par le vendeur' : 'Code donné par le client', type: TextInputType.number);
