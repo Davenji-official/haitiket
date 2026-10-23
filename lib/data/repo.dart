@@ -101,9 +101,9 @@ String friendlyError(Object? e) {
 class Repo {
   static final search = ValueNotifier<String>('');
 
-  static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId, String? source}) async {
+  static Future<List<Map<String, dynamic>>> products({String q = '', int limit = 24, String? categoryId, int? minMinor, int? maxMinor, String sort = 'recent', String? shopId, String? source, String? audience}) async {
     if (!Config.configured) return [];
-    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,unit_label,attributes,category_id,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind)').eq('status', 'published').gt('stock', 0);
+    var f = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,is_featured,unit_label,attributes,category_id,audience,audiences,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind,is_official,official_badge_label,verified_at)').eq('status', 'published').gt('stock', 0);
     final t = q.trim().replaceAll(RegExp(r'[%,()]'), ' ');
     if (t.isNotEmpty) f = f.ilike('name', '%$t%');
     if (categoryId != null) f = f.eq('category_id', categoryId);
@@ -111,16 +111,24 @@ class Repo {
     if (maxMinor != null) f = f.lte('price_minor', maxMinor);
     if (shopId != null) f = f.eq('shop_id', shopId);
     if (source != null) f = f.eq('source', source);
+    if (audience != null) f = f.contains('audiences', [audience]);
     final rows = switch (sort) {
-      'price_asc' => await f.order('price_minor', ascending: true).limit(limit),
-      'price_desc' => await f.order('price_minor', ascending: false).limit(limit),
-      _ => await f.order('created_at', ascending: false).limit(limit),
+      'price_asc' => await f.order('is_featured', ascending: false).order('price_minor', ascending: true).limit(limit),
+      'price_desc' => await f.order('is_featured', ascending: false).order('price_minor', ascending: false).limit(limit),
+      _ => await f.order('is_featured', ascending: false).order('created_at', ascending: false).limit(limit),
     };
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  static Future<Map<String, dynamic>> productById(String id) async {
+    if (!Config.configured) throw StateError('Catalogue indisponible.');
+    final row = await _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,is_featured,unit_label,attributes,category_id,audience,audiences,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind,is_official,official_badge_label,verified_at)')
+      .eq('id', id).eq('status', 'published').gt('stock', 0).single();
+    return Map<String, dynamic>.from(row);
+  }
+
   static Future<Map<String, dynamic>> shopInfo(String id) async {
-    return Map<String, dynamic>.from(await _c.from('shops').select('id,name,city,lat,lng,kind,logo_url,banner_url,slogan,color_primary,color_accent').eq('id', id).single());
+    return Map<String, dynamic>.from(await _c.from('shops').select('id,name,city,lat,lng,kind,logo_url,banner_url,slogan,color_primary,color_accent,verified_at').eq('id', id).single());
   }
 
   static Future<List<Map<String, dynamic>>> categories() async {
@@ -261,6 +269,177 @@ class Repo {
     await _c.from('shops').insert({'owner_id': u.id, 'name': name, 'city': city, 'status': 'pending'});
   }
 
+
+  static Future<List<Map<String, dynamic>>> searchShops(String query, {int limit = 6}) async {
+    if (!Config.configured || query.trim().length < 2) return [];
+    final q = query.trim().replaceAll(RegExp(r'[%,()]'), ' ');
+    final rows = await _c.from('shops').select('id,name,city,kind,logo_url,slogan,is_official,official_badge_label,verified_at')
+      .eq('status', 'active').ilike('name', '%$q%').order('name').limit(limit);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<Map<String, dynamic>> manageOwnShop(String shopId, {required String action, String? name}) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour gérer votre boutique.');
+    final result = await _c.rpc('seller_manage_own_shop_v53', params: {'p_shop': shopId, 'p_name': name ?? '', 'p_action': action});
+    return Map<String, dynamic>.from(result as Map);
+  }
+
+  static Future<List<Map<String, dynamic>>> wholesaleOffers({String query = '', int limit = 40}) async {
+    if (!Config.configured) return [];
+    var q = _c.from('products').select('id,shop_id,name,description,price_minor,currency,stock,image_url,wholesale_price_minor,wholesale_min_qty,shops!inner(id,name,city,status,kind,is_official)')
+      .eq('status', 'published').eq('wholesale_enabled', true).gt('stock', 0).eq('shops.status', 'active');
+    final needle = query.trim();
+    if (needle.isNotEmpty) q = q.ilike('name', '%${needle.replaceAll(RegExp(r"[%(),]"), ' ')}%');
+    final rows = await q.order('created_at', ascending: false).limit(limit);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<String> setWholesaleOffer(String productId, {required bool enabled, required int priceMinor, required int minQty}) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour gérer une offre de gros.');
+    final result = await _c.rpc('seller_set_wholesale_offer_v54', params: {'p_product': productId, 'p_enabled': enabled, 'p_price_minor': priceMinor, 'p_min_qty': minQty});
+    return (result as Map)['product_id'].toString();
+  }
+
+  static Future<String> createWholesaleRequest(String productId, String buyerShopId, int quantity, {String? note}) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour demander un achat fournisseur.');
+    final result = await _c.rpc('create_wholesale_request_v54', params: {'p_product': productId, 'p_buyer_shop': buyerShopId, 'p_quantity': quantity, 'p_note': note});
+    return result.toString();
+  }
+
+  static Future<List<Map<String, dynamic>>> wholesaleRequests() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('wholesale_requests').select('id,product_id,seller_shop_id,buyer_shop_id,product_name,seller_shop_name,buyer_shop_name,quantity,unit_price_minor,total_minor,currency,status,buyer_note,created_at,updated_at,expires_at').order('created_at', ascending: false).limit(100);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> updateWholesaleRequest(String requestId, String action) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour gérer cette demande.');
+    await _c.rpc('update_wholesale_request_v54', params: {'p_request': requestId, 'p_action': action});
+  }
+
+  static Future<List<Map<String, dynamic>>> stockMovements({int limit = 200}) async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('product_stock_movements').select(
+      'id,product_id,shop_id,movement_type,old_stock,new_stock,quantity_delta,reason,actor_id,created_at'
+    ).order('created_at', ascending: false).order('id', ascending: false).limit(limit);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adjustProductStock(String productId, int delta, String reason) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour ajuster le stock.');
+    await _c.rpc('seller_adjust_product_stock_v58', params: {
+      'p_product': productId, 'p_delta': delta, 'p_reason': reason.trim(),
+    });
+  }
+
+  static Future<void> adjustVariantStock(String variantId, int delta, String reason) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour ajuster le stock.');
+    await _c.rpc('seller_adjust_variant_stock_v59', params: {
+      'p_variant': variantId, 'p_delta': delta, 'p_reason': reason.trim(),
+    });
+  }
+
+  static Future<void> recordStockInflow({required String productId, String? variantId, required int quantity, required String reason, String referenceType = 'supplier_receipt', String? referenceId}) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour enregistrer une réception ou un retour.');
+    await _c.rpc('seller_record_stock_inflow_v60', params: {
+      'p_product': productId, 'p_variant': variantId, 'p_quantity': quantity,
+      'p_reason': reason.trim(), 'p_reference_type': referenceType,
+      'p_reference_id': referenceId,
+    });
+  }
+
+  static Future<Map<String, dynamic>> requestShopDeletion(String shopId, String reason) async {
+    final r = await _c.rpc('seller_request_shop_deletion_v60', params: {'p_shop': shopId, 'p_reason': reason.trim()});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminReviewShopDeletion(String shopId, bool approve, String reason) async {
+    final r = await _c.rpc('admin_review_shop_deletion_v60', params: {'p_shop': shopId, 'p_approve': approve, 'p_reason': reason.trim()});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<bool> adminFinalizeShopDeletion(String shopId) async =>
+      await _c.rpc('admin_finalize_shop_deletion_v60', params: {'p_shop': shopId}) as bool;
+
+  static Future<void> submitIdentityVerification({required DateTime dateOfBirth, required String documentType,
+    String? identityDocumentPath, String? birthCertificatePath, String? guardianName, DateTime? guardianDateOfBirth,
+    String? guardianDocumentPath, required String recentPhotoPath}) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour soumettre le dossier KYC.');
+    await _c.rpc('submit_identity_verification_v60', params: {
+      'p_dob': dateOfBirth.toIso8601String().split('T').first, 'p_document_type': documentType,
+      'p_document_path': identityDocumentPath, 'p_birth_certificate_path': birthCertificatePath,
+      'p_guardian_name': guardianName, 'p_guardian_dob': guardianDateOfBirth?.toIso8601String().split('T').first,
+      'p_guardian_document_path': guardianDocumentPath, 'p_recent_photo_path': recentPhotoPath,
+    });
+  }
+
+  static Future<String> adminSignedKycDocumentUrl(String path) async =>
+      await _c.storage.from('kyc-private').createSignedUrl(path, 120);
+
+  static Future<List<Map<String, dynamic>>> adminPendingShopDeletions() async {
+    final rows = await _c.from('shops').select('id,name,owner_id,status,deletion_requested_at,deletion_scheduled_at,deletion_review_status')
+      .inFilter('deletion_review_status', ['pending_admin', 'approved']).order('deletion_requested_at', ascending: true).limit(100);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminReviewIdentityVerification(String id, String status, String note) async {
+    await _c.rpc('admin_review_identity_verification_v60', params: {'p_id': id, 'p_status': status, 'p_note': note.trim()});
+  }
+
+  static Future<Map<String, dynamic>> myVerificationBadges() async {
+    final r = await _c.rpc('my_verification_badges_v60');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Publishing on Bazar requires an identity dossier explicitly approved by an administrator.
+  /// The database trigger in migration 0051 enforces the same rule even if a client bypasses this UI.
+  static Future<void> requireApprovedIdentityForBazar() async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour publier une annonce.');
+    final badges = await myVerificationBadges();
+    if (badges['identity_status'] != 'approved') {
+      throw StateError('La publication au Bazar exige une vérification KYC approuvée par l’administration. Ouvrez votre profil, complétez le dossier et attendez sa validation.');
+    }
+  }
+
+  static Future<Map<String, dynamic>> adminManageUser(String userId, String action, String reason) async {
+    final r = await _c.rpc('admin_manage_user_v60', params: {'p_user': userId, 'p_action': action, 'p_reason': reason.trim()});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<List<Map<String, dynamic>>> adminIdentityVerifications() async {
+    final rows = await _c.from('identity_verifications').select(
+      'id,user_id,date_of_birth,age_at_submission,identity_document_type,identity_document_path,birth_certificate_path,guardian_full_name,guardian_date_of_birth,guardian_document_path,recent_photo_path,status,created_at'
+    ).order('created_at', ascending: false).limit(100);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> wholesaleRequestEvents({int limit = 200}) async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('wholesale_request_events').select(
+      'id,request_id,seller_shop_id,buyer_shop_id,event_type,old_status,new_status,quantity,unit_price_minor,total_minor,currency,expires_at,actor_id,created_at'
+    ).order('created_at', ascending: false).order('id', ascending: false).limit(limit);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> withdrawCourier() async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour gérer votre candidature livreur.');
+    await _c.rpc('courier_withdraw_self_v53');
+    try { await setCourierAvailable(false); } catch (_) {}
+  }
+
   static Future<void> createListingDraft(String title, int priceMinor, String city, [String? imageUrl]) async {
     final u = currentUser();
     if (u == null) throw 'Connectez-vous pour publier une annonce.';
@@ -270,6 +449,8 @@ class Repo {
   static Future<void> applyCourier(String name, String phone, String transport, String zone) async {
     final u = currentUser();
     if (u == null) throw 'Connectez-vous pour déposer une candidature.';
+    final badges = await myVerificationBadges();
+    if (!['pending', 'approved'].contains(badges['identity_status'])) throw StateError('Soumettez d’abord votre dossier KYC; l’administration doit le vérifier avant toute approbation comme livreur.');
     await _c.from('courier_applications').insert({'user_id': u.id, 'full_name': name, 'phone': phone, 'transport': transport, 'zone': zone});
   }
 
@@ -288,17 +469,17 @@ class Repo {
   static Future<List<Map<String, dynamic>>> myShops() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('shops').select('id,name,status,city,kind,lat,lng,plan_paid_until,logo_url,banner_url,slogan,color_primary,color_accent').eq('owner_id', u.id).order('created_at');
+    final rows = await _c.from('shops').select('id,name,status,city,kind,is_official,official_badge_label,verified_at,deletion_requested_at,deletion_scheduled_at,deletion_review_status,lat,lng,plan_paid_until,logo_url,banner_url,slogan,color_primary,color_accent').eq('owner_id', u.id).order('created_at');
     return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<List<Map<String, dynamic>>> shopProducts(String shopId) async {
-    final rows = await _c.from('products').select('id,name,description,price_minor,currency,stock,status,image_url,source,paid_until,unit_label,audience,attributes,category_id,product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes)').eq('shop_id', shopId).neq('status', 'removed').order('created_at', ascending: false);
+    final rows = await _c.from('products').select('id,name,description,price_minor,currency,stock,status,image_url,source,paid_until,is_featured,wholesale_enabled,wholesale_price_minor,wholesale_min_qty,unit_label,audience,audiences,attributes,category_id,product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes)').eq('shop_id', shopId).neq('status', 'removed').order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
 
   static Future<String> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish,
-      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité', String? audience}) async {
+      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité', String? audience, List<String>? audiences}) async {
     final r = await _c.from('products').insert({
       'shop_id': shopId,
       'source': source,
@@ -312,6 +493,7 @@ class Repo {
       'attributes': attributes ?? <String, dynamic>{},
       'unit_label': unitLabel,
       'audience': audience,
+      'audiences': audiences ?? (audience == null ? <String>[] : <String>[audience]),
       'status': publish ? 'published' : 'draft',
     }).select('id').single();
     return r['id'] as String;
@@ -407,7 +589,7 @@ class Repo {
   }
 
   static Future<void> updateProduct(String id, Map<String, dynamic> patch) async {
-    const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'status', 'category_id', 'currency'};
+    const allowed = {'name', 'description', 'price_minor', 'stock', 'image_url', 'attributes', 'unit_label', 'audience', 'audiences', 'status', 'category_id', 'currency'};
     final safe = Map<String, dynamic>.fromEntries(patch.entries.where((e) => allowed.contains(e.key)));
     if (safe.isEmpty) throw ArgumentError('Aucune modification valide.');
     safe['updated_at'] = DateTime.now().toUtc().toIso8601String();
@@ -480,6 +662,29 @@ class Repo {
     await _c.rpc('select_delivery_price_offer', params: {'p_offer': offerId});
   }
 
+  static Future<bool> reportDeliveryTrafficDelay(String jobId, int minutes, String reason) async {
+    final result = await _c.rpc('report_delivery_traffic_delay', params: {
+      'p_job': jobId, 'p_minutes': minutes, 'p_reason': reason,
+    });
+    return result == true;
+  }
+
+  static Future<Map<String, dynamic>?> deliveryTrafficDelay(String orderId) async {
+    final result = await _c.rpc('get_delivery_traffic_delay', params: {'p_order': orderId});
+    if (result == null) return null;
+    return Map<String, dynamic>.from(result as Map);
+  }
+
+  static Future<List<Map<String, dynamic>>> deliveryOffersForOrder(String orderId) async {
+    final result = await _c.rpc('list_delivery_price_offers_for_order', params: {'p_order': orderId});
+    return List<Map<String, dynamic>>.from(result as List);
+  }
+
+  static Future<int> deliveryFeeDue(String orderId) async {
+    final result = await _c.rpc('delivery_fee_due', params: {'p_order': orderId});
+    return (result as num).toInt();
+  }
+
   static Future<void> publishCourierLocation(double lat, double lng, {double? accuracyM}) async {
     await _c.rpc('publish_courier_location', params: {
       'p_lat': lat,
@@ -516,10 +721,23 @@ class Repo {
     return r == true;
   }
 
+  static Future<Map<String, dynamic>?> adminOfficialShop() async {
+    final r = await _c.rpc('admin_get_official_shop');
+    if (r == null) return null;
+    if (r is Map) return Map<String, dynamic>.from(r);
+    throw const FormatException('Réponse boutique officielle invalide.');
+  }
+
+  static Future<Map<String, dynamic>> adminSaveOfficialShop({required String name, required String city, required String slogan}) async {
+    final r = await _c.rpc('admin_save_official_shop', params: {'p_name': name, 'p_city': city, 'p_slogan': slogan});
+    if (r is Map) return Map<String, dynamic>.from(r);
+    throw const FormatException('Enregistrement de la boutique officielle invalide.');
+  }
+
   static Future<List<Map<String, dynamic>>> adminList(String kind) async {
     final cfg = {
-      'shop': ['shops', 'id,name,city,status'],
-      'courier': ['courier_applications', 'id,full_name,phone,transport,zone,status'],
+      'shop': ['shops', 'id,name,city,status,verified_at,deletion_requested_at,deletion_scheduled_at,deletion_review_status'],
+      'courier': ['courier_applications', 'id,full_name,phone,transport,zone,status,verified_at'],
       'listing': ['products', 'id,name,price_minor,currency,status,paid_until'],
       'ticket': ['support_tickets', 'id,subject,message,status,admin_reply'],
       'payment': ['payment_attempts', 'id,purpose,amount_minor,status'],
@@ -531,6 +749,13 @@ class Repo {
     if (kind == 'listing') q = q.eq('source', 'bazar');
     final rows = await q.order('created_at', ascending: false).limit(100);
     return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminSetOfficialProductFeatured(String productId, bool featured) async {
+    await _c.rpc('admin_set_official_product_featured_v49', params: {
+      'p_product': productId,
+      'p_featured': featured,
+    });
   }
 
   static Future<void> adminSet(String kind, String id, String status, String reason) async {
@@ -564,7 +789,7 @@ class Repo {
   static Future<Map<String, dynamic>?> myCourierApplication() async {
     final u = currentUser();
     if (u == null) return null;
-    final rows = await _c.from('courier_applications').select('status,transport,zone').eq('user_id', u.id).order('created_at', ascending: false).limit(1);
+    final rows = await _c.from('courier_applications').select('status,transport,zone,verified_at').eq('user_id', u.id).order('created_at', ascending: false).limit(1);
     final l = List<Map<String, dynamic>>.from(rows);
     return l.isEmpty ? null : l.first;
   }
@@ -627,18 +852,22 @@ class Repo {
     await _c.rpc('admin_reply_ticket', params: {'p_id': id, 'p_reply': reply});
   }
 
-  // ===== Paiements Bazik =====
-  static Future<String> startPayment(String purpose, String targetId) async {
-    final res = await _c.functions.invoke('bazik-pay', body: {'action': 'create', 'purpose': purpose, 'target_id': targetId});
-    final d = res.data;
-    if (d is Map && d['redirectUrl'] != null) return d['redirectUrl'] as String;
-    throw (d is Map && d['error'] != null) ? d['error'].toString() : 'Paiement impossible pour le moment.';
+  // ===== Paiement interne des commandes =====
+  static Future<Map<String, dynamic>> payOrderFromWallet(String orderId) async {
+    final result = await _c.rpc('pay_order_from_wallet', params: {'p_order': orderId});
+    if (result is! Map) throw StateError('Réponse de paiement invalide.');
+    return Map<String, dynamic>.from(result);
   }
 
+  // ===== Garde-fou pour les anciens flux externes non migrés =====
+  // N'appelle jamais Bazik : ces écrans doivent être migrés vers les débits internes avant réactivation.
+  static Future<String> startPayment(String purpose, String targetId) async {
+    throw StateError('Ce paiement ($purpose) n’est pas encore migré vers le portefeuille interne. Aucun paiement externe n’a été lancé.');
+  }
+
+  @Deprecated('Les paiements internes sont vérifiés côté serveur ; ne pas appeler un prestataire historique.')
   static Future<void> checkPayment(String purpose, String targetId) async {
-    try {
-      await _c.functions.invoke('bazik-pay', body: {'action': 'check', 'purpose': purpose, 'target_id': targetId});
-    } catch (_) {}
+    throw StateError('La vérification du paiement externe est désactivée. Utilisez le portefeuille interne ou contactez le support.');
   }
 
   static Future<int?> quoteFee(String kind) async {
@@ -648,6 +877,28 @@ class Repo {
     } catch (_) {
       return null;
     }
+  }
+
+  // ===== Paiements internes V20 (USD sans conversion implicite) =====
+  static Future<double?> quoteWalletFeeUsd(String kind) async {
+    try {
+      final r = await _c.rpc('quote_wallet_fee_usd', params: {'p_kind': kind});
+      return r == null ? null : (r as num).toDouble();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> payBazarListingFromWallet(String productId) async {
+    final r = await _c.rpc('pay_bazar_listing_from_wallet', params: {'p_product': productId});
+    if (r is! Map) throw StateError('Réponse de paiement Bazar invalide.');
+    return Map<String, dynamic>.from(r);
+  }
+
+  static Future<Map<String, dynamic>> payShopPlanFromWallet(String shopId, {String period = 'monthly'}) async {
+    final r = await _c.rpc('pay_shop_plan_from_wallet', params: {'p_shop': shopId, 'p_period': period});
+    if (r is! Map) throw StateError('Réponse de paiement abonnement invalide.');
+    return Map<String, dynamic>.from(r);
   }
 
   static Future<String> ensurePersonalShop(String city) async {
@@ -745,6 +996,42 @@ class Repo {
   // ===== Lot 10 : réglages, tableau de bord, adresses, litiges, signalements, comptes =====
   static Future<Map<String, dynamic>> adminDashboard() async => Map<String, dynamic>.from(await _c.rpc('admin_dashboard') as Map);
 
+  /// Série historique des commandes par jour, séparée strictement par devise.
+  static Future<List<Map<String, dynamic>>> adminOrderHistory({int days = 30, String currency = 'ALL'}) async {
+    final result = await _c.rpc('admin_order_history_v47', params: {'p_days': days, 'p_currency': currency});
+    return (result as List).map((row) => Map<String, dynamic>.from(row as Map)).toList();
+  }
+
+  /// Flux de l'annonce globale active.
+  static Stream<List<Map<String, dynamic>>> globalAnnouncementStream() {
+    return _c.from('platform_announcements').stream(primaryKey: ['id'])
+      .eq('active', true).order('created_at', ascending: false).limit(10)
+      .map((rows) => List<Map<String, dynamic>>.from(rows));
+  }
+
+  static Future<List<Map<String, dynamic>>> adminAnnouncements() async {
+    final rows = await _c.from('platform_announcements')
+      .select('id,title,body,severity,active,starts_at,ends_at,created_at')
+      .order('created_at', ascending: false).limit(30);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<void> adminPublishAnnouncement(String title, String body, String severity) async {
+    await _c.rpc('admin_publish_announcement', params: {
+      'p_title': title, 'p_body': body, 'p_severity': severity, 'p_ends_at': null,
+    });
+  }
+
+  static Future<void> adminDeactivateAnnouncement(String id) async {
+    await _c.rpc('admin_deactivate_announcement', params: {'p_id': id});
+  }
+
+  /// Journal d'audit en lecture seule, disponible uniquement après déverrouillage admin.
+  static Future<List<Map<String, dynamic>>> adminAuditLog({int take = 100}) async {
+    final rows = await _c.rpc('admin_read_audit_log', params: {'p_take': take.clamp(1, 200).toInt()});
+    return List<Map<String, dynamic>>.from(rows as List);
+  }
+
   static Future<Map<String, String>> adminSettings() async {
     final rows = await _c.from('platform_settings').select('key,value');
     return {for (final r in rows) r['key'] as String: r['value'] as String};
@@ -767,8 +1054,53 @@ class Repo {
     await _c.rpc('admin_resolve_dispute', params: {'p_id': id, 'p_outcome': outcome, 'p_note': note});
   }
 
+  static Future<Map<String, dynamic>> adminRunWalletIntegrityAuditV21() async {
+    final r = await _c.rpc('run_wallet_integrity_audit_v21');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminRunFinancialReconciliationV24() async {
+    final r = await _c.rpc('run_financial_reconciliation_v24');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminRunFinancialGuardAuditV26() async {
+    final r = await _c.rpc('run_financial_guard_audit_v26');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminRunDeliveryFlowAuditV27() async {
+    final r = await _c.rpc('run_delivery_flow_audit_v27');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminRunCommercialFlowAuditV28() async {
+    final r = await _c.rpc('run_commercial_flow_audit_v28');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminReleaseReadinessV62() async {
+    final r = await _c.rpc('admin_release_readiness_v62');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminRunLaunchReadinessAuditV29() async {
+    final r = await _c.rpc('run_launch_readiness_audit_v29');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  static Future<Map<String, dynamic>> adminReleaseDisputedOrderEarnings(String orderId, String note) async {
+    final r = await _c.rpc('admin_release_disputed_order_earnings', params: {'p_order': orderId, 'p_note': note});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
   static Future<void> adminMarkRefund(String id, bool executed, String note) async {
     await _c.rpc('admin_mark_refund', params: {'p_id': id, 'p_executed': executed, 'p_note': note});
+  }
+
+  static Future<Map<String, dynamic>> adminExecuteWalletRefund(String id, String note) async {
+    final r = await _c.rpc('admin_execute_wallet_refund', params: {'p_id': id, 'p_note': note});
+    return Map<String, dynamic>.from(r as Map);
   }
 
   static Future<void> adminQueueRefund(String attemptId) async {
@@ -888,4 +1220,15 @@ class Repo {
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
   static Future<void> signOut() => _c.auth.signOut();
+}
+
+// V61: explicit reactivation after an admin rejects a shop-deletion request.
+// The server verifies ownership, approved KYC, and resolved refunds.
+extension ShopReactivationV61 on Repo {
+  static Future<Map<String, dynamic>> reactivateShopAfterDeletionRejection(String shopId) async {
+    final u = currentUser();
+    if (u == null) throw StateError('Connectez-vous pour réactiver votre boutique.');
+    final result = await _c.rpc('seller_reactivate_shop_v61', params: {'p_shop': shopId});
+    return Map<String, dynamic>.from(result as Map);
+  }
 }
