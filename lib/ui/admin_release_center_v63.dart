@@ -46,7 +46,17 @@ class _AdminReleaseCenterV63State extends State<AdminReleaseCenterV63> {
           const SizedBox(height: 12),
           Card(color: total == 0 ? const Color(0xFFEAF7EF) : const Color(0xFFFFF1EC), child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [Icon(total == 0 ? Icons.verified_outlined : Icons.warning_amber_rounded, size: 32, color: total == 0 ? C.green : C.terracotta), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(total == 0 ? 'Aucun bloqueur recensé par cet audit' : '$total éléments signalés', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)), const Text('Ce résultat ne remplace pas les tests de staging ni la confirmation des prestataires.')]))])),
           const SizedBox(height: 8),
-          for (final key in keys) Card(child: ListTile(leading: Icon(((data[key] as num?) ?? 0) > 0 ? Icons.error_outline : Icons.check_circle_outline, color: ((data[key] as num?) ?? 0) > 0 ? C.terracotta : C.green), title: Text(_label(key)), trailing: Text('${data[key] ?? 0}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)))),
+          for (final key in keys)
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  ((data[key] as num?) ?? 0) > 0 ? Icons.error_outline : Icons.check_circle_outline,
+                  color: ((data[key] as num?) ?? 0) > 0 ? C.terracotta : C.green,
+                ),
+                title: Text(_label(key)),
+                trailing: Text('${data[key] ?? 0}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+              ),
+            ),
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _refresh, icon: const Icon(Icons.refresh), label: const Text('Actualiser les contrôles')),
           FilledButton.icon(onPressed: () async { await Clipboard.setData(ClipboardData(text: const JsonEncoder.withIndent('  ').convert(data))); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapport JSON copié dans le presse-papiers.'))); }, icon: const Icon(Icons.copy_all_outlined), label: const Text('Copier le rapport JSON')),

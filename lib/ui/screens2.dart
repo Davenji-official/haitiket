@@ -1234,7 +1234,7 @@ class _WholesaleCenterScreenState extends State<WholesaleCenterScreen> {
             leading: offer['image_url'] == null ? const Icon(Icons.inventory_2_outlined) : null,
             title: Text('${offer['name']}'), subtitle: Text('${shop['name'] ?? 'Fournisseur'} · ${money(offer['wholesale_price_minor'] as num, offer['currency'] as String)} / unité · min. ${offer['wholesale_min_qty']} · stock ${offer['stock']}'),
             trailing: FilledButton(onPressed: buyerShopId == null ? null : () => requestOffer(offer, buyerShopId!), child: const Text('Demander')),
-          );
+          ));
         })]);
       }),
       const SizedBox(height: 24),

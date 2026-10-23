@@ -465,7 +465,7 @@ class _AnnouncementsState extends State<AdminAnnouncementsTab> {
     if (mounted) setState(() => busy = false);
   }
 
-  Future<void> deactivate(String id) async {
+  Future<void> deactivateAnnouncement(String id) async {
     try {
       await Repo.adminDeactivateAnnouncement(id);
       setState(() => f = Repo.adminAnnouncements());
@@ -503,7 +503,7 @@ class _AnnouncementsState extends State<AdminAnnouncementsTab> {
         title: Text('${a['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text('${a['body']}\nStatut : ${a['active'] == true ? 'ACTIF' : 'Inactif'} · Type : ${a['severity']}'),
         isThreeLine: true,
-        trailing: a['active'] == true ? IconButton(tooltip: 'Désactiver', onPressed: () => deactivate(a['id'] as String), icon: const Icon(Icons.visibility_off_outlined)) : null,
+        trailing: a['active'] == true ? IconButton(tooltip: 'Désactiver', onPressed: () => deactivateAnnouncement(a['id'] as String), icon: const Icon(Icons.visibility_off_outlined)) : null,
       ))]);
     }),
   ]);
@@ -642,7 +642,22 @@ class _AdminOrderHistoryPanelState extends State<AdminOrderHistoryPanel> {
         for (final row in rows) ...[
           Row(children: [
             SizedBox(width: 48, child: Text('${row['day']}'.toString().substring(5), style: const TextStyle(fontSize: 11, color: C.muted))),
-            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(5), child: Container(height: 10, color: C.mint, child: Align(alignment: Alignment.centerLeft, child: FractionallySizedBox(widthFactor: ((((row[metric] as num?) ?? 0).toDouble() / maxValue).clamp(0, 1)).toDouble(), child: Container(color: C.green))))),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: Container(
+                  height: 10,
+                  color: C.mint,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: (((((row[metric] as num?) ?? 0).toDouble() / maxValue).clamp(0, 1))).toDouble(),
+                      child: Container(color: C.green),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             SizedBox(width: 66, child: Text('${row[metric] ?? 0}', textAlign: TextAlign.end, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
           ]),

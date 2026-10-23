@@ -17,6 +17,7 @@ import 'product_detail.dart';
 import 'screens6.dart';
 import '../i18n.dart';
 import 'mascot.dart';
+import 'widgets.dart';
 
 enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support, notifications, wallet }
 

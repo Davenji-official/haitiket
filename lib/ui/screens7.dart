@@ -362,7 +362,7 @@ Future<void> startBazarListing(BuildContext context) async {
         ],
       ),
     );
-    if (pay == true && context.mounted) { await payBazarFromWallet(context, id); if (mounted) setState(() {}); }
+    if (pay == true && context.mounted) { await payBazarFromWallet(context, id); }
   } catch (e) {
     if (context.mounted) toast(context, Repo.err(e));
   }
