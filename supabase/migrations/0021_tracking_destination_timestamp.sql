@@ -1,7 +1,11 @@
 -- HAITIKET V9.1 : expose uniquement au client/propriétaire les coordonnées réelles
 -- de destination et l'horodatage réel de la dernière position du coursier.
 -- À appliquer dans Supabase avant d'utiliser la nouvelle version de l'écran.
-create or replace function public.get_active_courier_location(p_order uuid)
+-- IMPORTANT: PostgreSQL ne permet pas de changer le type de retour OUT avec CREATE OR REPLACE.
+-- DROP puis recréation est nécessaire si la fonction de 0020 existe avec l’ancien contrat.
+drop function if exists public.get_active_courier_location(uuid);
+
+create function public.get_active_courier_location(p_order uuid)
 returns table (
   courier_id uuid,
   lat double precision,

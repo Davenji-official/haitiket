@@ -32,7 +32,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_uid uuid := auth.uid(); v_job public.delivery_jobs; v_lat double precision; v_lng double precision;
   v_updated timestamptz; v_shop_lat double precision; v_shop_lng double precision;
-  v_distance double precision; v_id uuid;
+  v_distance double precision; v_id uuid; v_expiry integer := 10;
 begin
   if v_uid is null then raise exception 'Connexion requise'; end if;
   if not public._is_approved_courier() then raise exception 'Coursier non approuvé'; end if;
@@ -60,8 +60,12 @@ begin
   ))));
   if v_distance > 25.0 then raise exception 'Mission hors du rayon autorisé de 25 km'; end if;
 
+  select greatest(1, least(60, coalesce(value::integer, 10))) into v_expiry
+  from public.platform_settings where key = 'delivery_offer_expiry_minutes';
+  v_expiry := coalesce(v_expiry, 10);
+
   insert into public.delivery_job_offers(job_id,courier_id,amount_minor,currency,eta_minutes,note,status,expires_at,updated_at)
-  values(p_job,v_uid,p_amount_minor,p_currency,p_eta_minutes,nullif(trim(coalesce(p_note,'')),''),'pending',now()+interval '10 minutes',now())
+  values(p_job,v_uid,p_amount_minor,p_currency,p_eta_minutes,nullif(trim(coalesce(p_note,'')),''),'pending',now()+make_interval(mins => v_expiry),now())
   on conflict(job_id,courier_id) do update set
     amount_minor=excluded.amount_minor, currency=excluded.currency, eta_minutes=excluded.eta_minutes,
     note=excluded.note, status='pending', expires_at=excluded.expires_at, updated_at=now()
