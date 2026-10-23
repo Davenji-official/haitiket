@@ -61,3 +61,30 @@ Ajout d'un sélecteur de destination sur carte au checkout afin que le client pu
 - Ajout méthodes repository Flutter pour proposer/lister/sélectionner les offres.
 - Ajout audit statique de couverture du cahier des charges et écarts restants.
 - Limite : écrans pas encore raccordés; aucune compilation Flutter ni exécution distante Supabase confirmée.
+
+## V17 — retards de circulation et réglages admin
+- Ajout `0027_traffic_delay_and_admin_settings.sql` : déclaration unique d'un retard de 2 h ou 4 h par le coursier affecté, motif obligatoire et accès au détail limité au client de la commande et au coursier concerné.
+- Interface coursier : action pour signaler le retard; interface de suivi : affiche la prolongation et le motif.
+- La durée d'expiration des offres (1 à 60 minutes) est désormais lue par la fonction serveur de proposition d'offre.
+- La liste blanche `admin_set_setting` est alignée sur les réglages affichés dans l'interface et journalise les modifications.
+- Limites : paiement automatique après choix du coursier et intégration complète du prestataire restent à terminer. Compilation Flutter et tests Supabase réels non exécutés.
+
+
+## V24 — rapprochement financier et état du projet
+- Ajout de `0034_financial_reconciliation_v24.sql` avec anomalies et alertes opérationnelles distinctes.
+- Administration connectée à `run_financial_reconciliation_v24()` et rapport plus lisible.
+- Inventaire d’état et limites dans `docs/ETAT_REEL_PROJET_V24.md`.
+- Validation statique uniquement; pas de compilation Flutter ni exécution sur Supabase réel.
+
+## V25 — parcours commande vers paiement interne
+- Après réservation, l'interface dirige le client vers « Mes commandes » pour payer la commande depuis le portefeuille de même devise.
+- Suppression du message trompeur indiquant que le paiement est indisponible alors qu'un bouton de paiement interne existe dans la liste des commandes.
+- Désactivation du bouton pendant la vérification du paiement afin de réduire les doubles clics; l'idempotence serveur reste la protection principale.
+- Script `scripts_validate_v25.sh` : contrôles statiques reproductibles.
+- Limites : pas de compilation Flutter/Dart ni de test sur Supabase réel dans cet environnement.
+
+
+## V55 — Réservations de gros à durée limitée
+- Échéance de sept jours sur acceptation; expiration et annulation libèrent la réservation de stock.
+- Nettoyage planifiable réservé à `service_role`; ne jamais exposer cette clé au client.
+- Pas de flux de paiement ajouté. Compilation et tests Supabase staging requis.

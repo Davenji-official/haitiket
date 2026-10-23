@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+SQL="$ROOT/supabase/migrations/0037_commercial_flows_audit_v28.sql"
+REPO="$ROOT/lib/data/repo.dart"
+ADMIN="$ROOT/lib/ui/admin2.dart"
+SHOP="$ROOT/lib/ui/screens6.dart"
+test -s "$SQL"
+grep -q "shop_fee_yearly_usd" "$SQL"
+grep -q "create or replace function public.run_commercial_flow_audit_v28" "$SQL"
+grep -q "mutations_performed',false" "$SQL"
+grep -q "adminRunCommercialFlowAuditV28" "$REPO"
+grep -q "Audit commercial boutiques et Bazar V28" "$ADMIN"
+grep -q "shop_plan_yearly" "$SHOP"
+grep -q "period: 'yearly'" "$SHOP"
+echo "V28 static checks: OK"
