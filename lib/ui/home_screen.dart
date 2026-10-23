@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -7,6 +8,7 @@ import '../i18n.dart';
 import 'screens4.dart';
 import 'shell.dart';
 import 'widgets.dart';
+import 'mascot.dart';
 
 class SearchPill extends StatelessWidget {
   final void Function(String) onSubmit;
@@ -102,44 +104,65 @@ class _HomeState extends State<HomeScreen> {
         future: Repo.activeShops(),
         builder: (_, s) {
           final n = s.data ?? 0;
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(40),
-            child: Container(
-              height: 280,
-              color: C.mint,
-              child: Stack(children: [
-                Positioned(right: -40, top: -60, child: Container(width: 330, height: 330, decoration: const BoxDecoration(color: C.sun, shape: BoxShape.circle))),
-                Positioned(left: -60, bottom: -110, child: Container(width: 380, height: 380, decoration: const BoxDecoration(color: C.coral, shape: BoxShape.circle))),
-                const Positioned(right: 50, top: 28, child: Floating(child: Text('🧺', style: TextStyle(fontSize: 76)))),
+          final label = n > 0 ? '$n vendeur${n > 1 ? 's' : ''} local${n > 1 ? 'aux' : ''}' : 'Ouvrez la première boutique';
+          return LayoutBuilder(builder: (context, c) {
+            final w = c.maxWidth;
+            // La mascotte grandit avec l'écran ; sur grand écran elle dépasse du cadre par le haut.
+            final mw = (w * (w >= 520 ? .5 : .64)).clamp(190.0, 340.0);
+            final mh = mw / Mascot.home.ratio;
+            const cardH = 330.0;
+            final outerH = math.max(cardH, mh + 12);
+            final textW = (w - mw * .74 - 22).clamp(120.0, 420.0);
+            final big = textW >= 300;
+            final headline = tr('Achetez local.\nVivez mieux.');
+            return SizedBox(
+              height: outerH,
+              child: Stack(clipBehavior: Clip.none, children: [
                 Positioned(
-                  left: 24,
-                  top: 24,
-                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .8), borderRadius: BorderRadius.circular(24)), child: Text(tr('Fait en Haïti'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 16))),
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: cardH,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(40),
+                    child: Container(
+                      color: C.mint,
+                      child: Stack(children: [
+                        Positioned(right: -40, top: -60, child: Container(width: 330, height: 330, decoration: const BoxDecoration(color: C.sun, shape: BoxShape.circle))),
+                        Positioned(left: -60, bottom: -110, child: Container(width: 380, height: 380, decoration: const BoxDecoration(color: C.coral, shape: BoxShape.circle))),
+                        Positioned(
+                          left: 22,
+                          top: 22,
+                          child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .8), borderRadius: BorderRadius.circular(24)), child: Text(tr('Fait en Haïti'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 15))),
+                        ),
+                        Positioned(
+                          left: 22,
+                          bottom: 22,
+                          width: textW,
+                          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(big ? headline : headline.replaceAll(' ', '\n'), style: TextStyle(fontSize: big ? 42 : 30, height: 1.1, fontWeight: FontWeight.w800, color: C.ink)),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: 110,
+                              height: 46,
+                              child: Stack(children: [
+                                Positioned(left: 0, child: avatar('M', C.yellow, C.ink)),
+                                Positioned(left: 30, child: avatar('A', C.terracotta, C.ink)),
+                                Positioned(left: 60, child: avatar('J', C.ink, Colors.white)),
+                              ]),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 14)),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ),
                 ),
-                Positioned(
-                  left: 24,
-                  bottom: 24,
-                  right: 24,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr('Achetez local.\nVivez mieux.'), style: const TextStyle(fontSize: 42, height: 1.1, fontWeight: FontWeight.w800, color: C.ink)),
-                    const SizedBox(height: 16),
-                    Row(children: [
-                      SizedBox(
-                        width: 110,
-                        height: 46,
-                        child: Stack(children: [
-                          Positioned(left: 0, child: avatar('M', C.yellow, C.ink)),
-                          Positioned(left: 30, child: avatar('A', C.terracotta, C.ink)),
-                          Positioned(left: 60, child: avatar('J', C.ink, Colors.white)),
-                        ]),
-                      ),
-                      Expanded(child: Text(n > 0 ? '$n vendeur${n > 1 ? 's' : ''} local${n > 1 ? 'aux' : ''}' : 'Ouvrez la première boutique', style: const TextStyle(fontWeight: FontWeight.w700, color: C.green, fontSize: 16))),
-                    ]),
-                  ]),
-                ),
+                Positioned(right: -6, bottom: 10, width: mw, height: mh, child: const MascotImage(Mascot.home, delay: Duration(milliseconds: 350))),
               ]),
-            ),
-          );
+            );
+          });
         },
       ),
       const SizedBox(height: 56),

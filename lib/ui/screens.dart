@@ -14,12 +14,7 @@ import 'map_screen.dart';
 import '../i18n.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'widgets.dart';
-
-Widget _title(String t, [String? sub]) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)),
-      if (sub != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(sub, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.4))),
-      const SizedBox(height: 20),
-    ]);
+import 'mascot.dart';
 
 Widget _promo(BuildContext context, String title, String text, String cta, IconData icon, VoidCallback onTap) => Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -32,6 +27,19 @@ Widget _promo(BuildContext context, String title, String text, String cta, IconD
         const SizedBox(height: 14),
         PrimaryButton(label: cta, icon: icon, onPressed: onTap),
       ]),
+    );
+
+Widget _mapButton(BuildContext context, String kind) => Pressable(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MapScreen(kind: kind))),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.map_outlined, color: C.ink, size: 20),
+          const SizedBox(width: 8),
+          Text(tr('Carte'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+        ]),
+      ),
     );
 
 Widget _notConfigured() => const EmptyState(title: 'En attente de configuration', text: "Le serveur n'est pas encore connecté. Ajoutez SUPABASE_URL et SUPABASE_ANON_KEY dans les secrets GitHub, puis relancez le build.");
@@ -96,16 +104,8 @@ class _MarketplaceState extends State<MarketplaceScreen> {
             f = load(q);
           }
           return ListView(padding: const EdgeInsets.all(18), children: [
-            Row(children: [
-              Expanded(child: Text(tr('Marketplace'), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
-              Pressable(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen(kind: 'pro'))),
-                child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.map_outlined, color: C.ink)),
-              ),
-            ]),
-            const SizedBox(height: 6),
-            const Text('Produits des boutiques professionnelles vérifiées.', style: TextStyle(fontSize: 17, color: C.muted, height: 1.4)),
-            const SizedBox(height: 16),
+            MascotHeader(mascot: Mascot.boutiques, title: tr('Marketplace'), subtitle: 'Produits des boutiques professionnelles vérifiées.', action: _mapButton(context, 'pro')),
+            const SizedBox(height: 8),
             _promo(context, tr('Vous êtes commerçant ?'), 'Boutique professionnelle : 20 USD / mois. Vitrine, stock, commandes et livraison HAITIKET.', tr('Ouvrir ma boutique'), Icons.storefront, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen()))),
             SearchPill(onSubmit: (v) => Repo.search.value = v),
             const SizedBox(height: 14),
@@ -214,16 +214,8 @@ class _BazarState extends State<BazarScreen> {
           await f;
         },
         child: ListView(padding: const EdgeInsets.all(18), children: [
-          Row(children: [
-            const Expanded(child: Text('Bazar', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
-            Pressable(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen(kind: 'personal'))),
-              child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.map_outlined, color: C.ink)),
-            ),
-          ]),
-          const SizedBox(height: 6),
-          const Text('Achetez et vendez entre particuliers : paiement et livraison HAITIKET comme en boutique.', style: TextStyle(fontSize: 17, color: C.muted, height: 1.4)),
-          const SizedBox(height: 16),
+          MascotHeader(mascot: Mascot.bazar, title: 'Bazar', subtitle: 'Achetez et vendez entre particuliers : paiement et livraison HAITIKET comme en boutique.', action: _mapButton(context, 'personal')),
+          const SizedBox(height: 8),
           _promo(context, tr('Vous êtes particulier ?'), 'Publiez votre article : 2 USD pour 14 jours, sans boutique professionnelle.', tr('Publier une annonce'), Icons.local_offer, () => startBazarListing(context)),
           Align(alignment: Alignment.centerRight, child: FilterChip(avatar: const Icon(Icons.near_me, size: 18), label: Text(tr('Près de moi')), selected: nearby, onSelected: toggleNearby)),
           const SizedBox(height: 12),
@@ -269,7 +261,7 @@ class _NetworkState extends State<NetworkScreen> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _title('HAITIKET Network', 'Devenez livreur indépendant. Chaque mission affiche votre rémunération avant acceptation.'),
+        MascotHeader(mascot: Mascot.orders, title: 'HAITIKET Network', subtitle: 'Devenez livreur indépendant. Chaque mission affiche votre rémunération avant acceptation.'),
         Field(name, 'Nom complet'),
         Field(phone, 'Téléphone', type: TextInputType.phone),
         DropdownButtonFormField<String>(
@@ -296,7 +288,7 @@ class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _title('Favoris'),
+        MascotHeader(mascot: Mascot.badge, title: tr('Favoris'), subtitle: 'Vos coups de cœur, gardés pour plus tard.'),
         if (currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour retrouver vos favoris sur tous vos appareils.')
         else
@@ -321,7 +313,7 @@ class CartScreen extends StatelessWidget {
           final l = lines.values.toList();
           final total = CartStore.totalMinor;
           return ListView(padding: const EdgeInsets.all(18), children: [
-            _title(tr('Panier')),
+            MascotHeader(mascot: Mascot.cart, title: tr('Panier')),
             if (l.isEmpty)
               const EmptyState(title: 'Votre panier est vide', text: 'Ajoutez des produits depuis la Marketplace.')
             else ...[
@@ -360,7 +352,7 @@ class AccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final u = currentUser();
     return ListView(padding: const EdgeInsets.all(18), children: [
-      _title(u == null ? 'Bienvenue' : 'Mon compte', u == null ? 'Connectez-vous ou créez votre compte HAITIKET.' : null),
+      MascotHeader(mascot: u == null ? Mascot.welcome : Mascot.profile, title: u == null ? 'Bienvenue' : 'Mon compte', subtitle: u == null ? 'Connectez-vous ou créez votre compte HAITIKET.' : null),
       if (!Config.configured)
         _notConfigured()
       else if (u != null) ...[

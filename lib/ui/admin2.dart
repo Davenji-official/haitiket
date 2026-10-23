@@ -3,6 +3,7 @@ import '../data/repo.dart';
 import '../theme.dart';
 import 'screens5.dart';
 import 'widgets.dart';
+import 'mascot.dart';
 
 class AdminDashboardTab extends StatefulWidget {
   const AdminDashboardTab({super.key});
@@ -45,7 +46,7 @@ class _DashState extends State<AdminDashboardTab> {
             if (s.hasError) return ListView(padding: const EdgeInsets.all(18), children: [EmptyState(title: 'Accès refusé', text: Repo.err(s.error!))]);
             final d = s.data!;
             return ListView(padding: const EdgeInsets.all(14), children: [
-              const Text("Chiffres calculés à partir des données réelles (tirez vers le bas pour actualiser).", style: TextStyle(color: C.muted)),
+              const MascotHeader(mascot: Mascot.admin, title: 'Administration', subtitle: 'Chiffres calculés à partir des données réelles (tirez vers le bas pour actualiser).'),
               group('À traiter', [
                 tile('Litiges ouverts', d['disputes_open'], alert: true),
                 tile('Remboursements à exécuter', d['refunds_to_execute'], alert: true),

@@ -9,6 +9,7 @@ import 'screens8.dart';
 import 'screens5.dart';
 import 'auth_screens.dart';
 import 'widgets.dart';
+import 'mascot.dart';
 
 Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
 
@@ -48,6 +49,7 @@ class _ShopRequestState extends State<ShopRequestScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Boutique professionnelle', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
+          const MascotHeader(mascot: Mascot.boutiques, title: 'Ouvrir ma boutique'),
           _info("Abonnement : 20 USD par mois. Vitrine dans la Marketplace, gestion du stock, commandes et livraison HAITIKET. Votre boutique est vérifiée avant activation. Le paiement de l'abonnement est indisponible pour le moment (prestataire en attente de configuration)."),
           Field(name, 'Nom de la boutique'),
           Field(city, 'Ville'),
@@ -149,7 +151,7 @@ class _ProfileState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Mon profil'),
+        MascotHeader(mascot: Mascot.profile, title: tr('Mon profil')),
         if (currentUser() == null || !Config.configured)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour gérer votre profil.')
         else if (loading)
@@ -315,7 +317,7 @@ class _SupportState extends State<SupportScreen> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Support'),
+        MascotHeader(mascot: Mascot.support, title: tr('Support'), subtitle: 'Une question ? Notre équipe vous répond.'),
         const ExpansionTile(title: Text('Comment fonctionne le paiement ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Le paiement en ligne sera activé dès qu'un prestataire sera connecté. Jusqu'là, les commandes restent en attente de paiement."))]),
         const ExpansionTile(title: Text('Combien coûte vendre ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Bazar : 2 USD pour 14 jours. Boutique professionnelle : 20 USD par mois. Commission de 2 % sur les ventes."))]),
         const ExpansionTile(title: Text('Comment devenir livreur ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Déposez votre candidature dans HAITIKET Network. Elle est vérifiée avant l'accès aux missions."))]),

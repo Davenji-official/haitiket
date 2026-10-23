@@ -6,6 +6,7 @@ import '../theme.dart';
 import 'fx.dart';
 import 'screens5.dart';
 import 'widgets.dart';
+import 'mascot.dart';
 
 /// Ouvre la page de paiement MonCash (Bazik) pour une commande, une annonce Bazar ou un abonnement boutique.
 Future<void> payAndOpen(BuildContext context, String purpose, String target) async {
@@ -195,7 +196,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget card(String title, String value) => Container(margin: const EdgeInsets.only(bottom: 12),padding: const EdgeInsets.all(18),decoration: BoxDecoration(color: Colors.white,borderRadius: BorderRadius.circular(20),border: Border.all(color:C.line)),child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.w800,color:C.ink)),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:C.green))]));
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-    const Padding(padding: EdgeInsets.only(bottom:18),child:Text('Portefeuille HAITIKET',style:TextStyle(fontSize:32,fontWeight:FontWeight.w800,color:C.ink,letterSpacing:-1))),
+    const MascotHeader(mascot: Mascot.wallet, title: 'Portefeuille HAITIKET', subtitle: 'Ajoutez, gardez et retirez votre argent en sécurité.'),
     if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
       FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};String bal(String c)=>money(((balances[c] as num?)??0),c);return Column(children:[card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);}),
       const SizedBox(height:8), const Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'shell.dart';
+import 'mascot.dart';
 
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
@@ -58,7 +59,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                 opacity: logoFade,
                 child: Transform.rotate(
                   angle: (1 - logoScale) * -.35,
-                  child: Transform.scale(scale: logoScale.clamp(0.0, 1.3), child: Image.asset('assets/logo_t.png', height: 190)),
+                  child: Transform.scale(scale: logoScale.clamp(0.0, 1.3), child: Image.asset(Mascot.badge.path, height: 200, errorBuilder: (_, __, ___) => const SizedBox(height: 200))),
                 ),
               ),
               const SizedBox(height: 26),

@@ -7,6 +7,7 @@ import '../theme.dart';
 import 'fx.dart';
 import 'screens8.dart';
 import 'widgets.dart';
+import 'mascot.dart';
 
 double distKm(double lat1, double lng1, double lat2, double lng2) {
   const r = 6371.0;
@@ -144,7 +145,7 @@ class _NotificationsState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(tr('Notifications'), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1))),
+        MascotHeader(mascot: Mascot.notifications, title: tr('Notifications'), subtitle: 'Commandes, messages et missions en un coup d\'œil.'),
         if (currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour voir vos notifications.')
         else

@@ -15,6 +15,8 @@ import 'screens7.dart';
 import 'screens8.dart';
 import 'screens9.dart';
 import 'widgets.dart';
+import 'mascot.dart';
+import '../i18n.dart';
 
 int _jsonListCount(String value) { try { final x = jsonDecode(value.isEmpty ? '[]' : value); return x is List ? x.length : 0; } catch (_) { return 0; } }
 
@@ -35,7 +37,6 @@ String statusFr(String s) =>
     }[s] ??
     s;
 
-Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -336,7 +337,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Mes commandes'),
+        MascotHeader(mascot: Mascot.orders, title: tr('Mes commandes'), subtitle: 'Suivez chaque étape, de la préparation à la livraison.'),
         if (currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour voir vos commandes.')
         else
@@ -434,7 +435,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Espace vendeur'),
+        MascotHeader(mascot: Mascot.seller, title: tr('Espace vendeur'), subtitle: 'Boutique, produits, commandes et stock au même endroit.'),
         if (!Config.configured || currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour gérer votre boutique.')
         else

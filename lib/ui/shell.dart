@@ -15,6 +15,7 @@ import 'screens4.dart';
 import 'screens5.dart';
 import 'screens6.dart';
 import '../i18n.dart';
+import 'mascot.dart';
 
 enum Sec { home, marketplace, bazar, network, favorites, cart, account, orders, dashboard, admin, messages, courier, profile, settings, support, notifications, wallet }
 
@@ -62,6 +63,16 @@ class _ShellState extends State<Shell> {
   void dispose() {
     authSub?.cancel();
     super.dispose();
+  }
+
+  bool _precached = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_precached) return;
+    _precached = true;
+    Mascot.precacheAll(context);
   }
 
   void go(Sec s) => setState(() => sec = s);
@@ -163,7 +174,7 @@ class _ShellState extends State<Shell> {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 12, 8, 18),
             child: Row(children: [
-              Image.asset('assets/logo_t.png', height: 54),
+              Image.asset(Mascot.badge.path, height: 58, errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: C.ink)),
@@ -207,7 +218,7 @@ class _ShellState extends State<Shell> {
             onTap: logoTap,
             scale: .9,
             child: Row(children: [
-              Image.asset('assets/logo_t.png', height: 44),
+              Image.asset(Mascot.badge.path, height: 46, errorBuilder: (_, __, ___) => const SizedBox(width: 46, height: 46)),
               const SizedBox(width: 8),
               const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: C.ink)),
             ]),

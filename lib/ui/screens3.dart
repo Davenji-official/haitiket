@@ -6,6 +6,8 @@ import '../data/repo.dart';
 import '../theme.dart';
 import 'screens5.dart';
 import 'widgets.dart';
+import 'mascot.dart';
+import '../i18n.dart';
 
 Future<void> openChat(BuildContext context, String kind, String ref) async {
   if (currentUser() == null) return toast(context, 'Connectez-vous pour envoyer un message.');
@@ -17,13 +19,12 @@ Future<void> openChat(BuildContext context, String kind, String ref) async {
   }
 }
 
-Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
 
 class ConversationsScreen extends StatelessWidget {
   const ConversationsScreen({super.key});
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Messages'),
+        MascotHeader(mascot: Mascot.messages, title: tr('Messages'), subtitle: 'Vendeurs, clients et livreurs, tout est ici.'),
         if (currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour voir vos conversations.')
         else
@@ -283,7 +284,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        _h('Espace livreur'),
+        MascotHeader(mascot: Mascot.orders, title: tr('Espace livreur'), subtitle: 'Vos missions et votre position de livraison.'),
         if (!Config.configured || currentUser() == null)
           const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour accéder à vos missions.')
         else
