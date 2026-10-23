@@ -13,6 +13,7 @@ import 'screens2.dart';
 import 'screens3.dart';
 import 'screens4.dart';
 import 'screens5.dart';
+import 'product_detail.dart';
 import 'screens6.dart';
 import '../i18n.dart';
 import 'mascot.dart';
@@ -29,7 +30,8 @@ List<NavItem> _bottomItems() => [
     ];
 
 class Shell extends StatefulWidget {
-  const Shell({super.key});
+  final String? initialProductId;
+  const Shell({super.key, this.initialProductId});
   @override
   State<Shell> createState() => _ShellState();
 }
@@ -38,6 +40,7 @@ class _ShellState extends State<Shell> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   Sec sec = Sec.home;
   Stream<List<Map<String, dynamic>>> notifs = const Stream.empty();
+  late Stream<List<Map<String, dynamic>>> announcements;
   String? streamUser;
   StreamSubscription<AuthState>? authSub;
   int logoTaps = 0;
@@ -46,6 +49,20 @@ class _ShellState extends State<Shell> {
   @override
   void initState() {
     super.initState();
+    announcements = Config.configured ? Repo.globalAnnouncementStream() : const Stream.empty();
+    final sharedProductId = widget.initialProductId;
+    if (sharedProductId != null && sharedProductId.isNotEmpty && Config.configured) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        try {
+          final product = await Repo.productById(sharedProductId);
+          if (!mounted) return;
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailScreen(product)));
+        } catch (_) {
+          if (mounted) toast(context, 'Ce produit n’est plus disponible ou le lien est invalide.');
+        }
+      });
+    }
     // Retour de la page de paiement (web) : on ouvre directement « Mes commandes ».
     if (Uri.base.queryParameters['pay'] != null) sec = Sec.orders;
     if (Config.configured) {
@@ -253,6 +270,36 @@ class _ShellState extends State<Shell> {
         ]),
       );
 
+  Widget globalAnnouncement() => StreamBuilder<List<Map<String, dynamic>>>(
+        stream: announcements,
+        builder: (context, snapshot) {
+          final now = DateTime.now().toUtc();
+          final visible = (snapshot.data ?? const <Map<String, dynamic>>[]).where((a) {
+            final starts = DateTime.tryParse('${a['starts_at'] ?? ''}')?.toUtc();
+            final ends = DateTime.tryParse('${a['ends_at'] ?? ''}')?.toUtc();
+            return a['active'] == true && (starts == null || !starts.isAfter(now)) && (ends == null || ends.isAfter(now));
+          }).toList();
+          if (visible.isEmpty) return const SizedBox.shrink();
+          final a = visible.first;
+          final sev = '${a['severity'] ?? 'info'}';
+          final bg = sev == 'urgent' || sev == 'warning' ? const Color(0xFFFFE9DF) : C.mint;
+          final icon = sev == 'urgent' ? Icons.warning_amber_rounded : sev == 'success' ? Icons.check_circle_outline : Icons.campaign_outlined;
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: sev == 'urgent' ? C.terracotta : C.line)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(icon, color: C.ink), const SizedBox(width: 9),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${a['title']}', style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
+                const SizedBox(height: 3), Text('${a['body']}', style: const TextStyle(color: C.ink, height: 1.35)),
+              ])),
+            ]),
+          );
+        },
+      );
+
   @override
   Widget build(BuildContext context) {
     final bi = _bottom.indexOf(sec);
@@ -275,6 +322,7 @@ class _ShellState extends State<Shell> {
             constraints: const BoxConstraints(maxWidth: 720),
             child: Column(children: [
               header(),
+              globalAnnouncement(),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 380),
@@ -282,6 +330,10 @@ class _ShellState extends State<Shell> {
                   transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(anim), child: child)),
                   child: KeyedSubtree(key: ValueKey('${sec.name}-${appLang.value}'), child: body()),
                 ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4, bottom: 5),
+                child: Text('Powered by FIBRAXA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: .7, color: C.muted)),
               ),
             ]),
           ),

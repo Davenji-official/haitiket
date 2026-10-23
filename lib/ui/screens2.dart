@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import '../data/repo.dart';
@@ -111,9 +112,17 @@ class _CheckoutState extends State<CheckoutScreen> {
       }
       CartStore.lines.value = {};
       if (!mounted) return;
-      Navigator.of(context).pop();
-      final gpsMessage = mode == 'delivery' && deliveryLat != null && coordinatesMatchAddress ? (locationSaved ? ' Destination GPS enregistrée.' : ' Attention : la commande existe, mais les coordonnées GPS n’ont pas toutes été enregistrées. Contactez le support avant de recommander.') : ''; 
-      toast(context, '${orders.length} commande(s) enregistrée(s). Stock réservé 30 min — paiement indisponible pour le moment.$gpsMessage');
+      final gpsMessage = mode == 'delivery' && deliveryLat != null && coordinatesMatchAddress
+          ? (locationSaved
+              ? ' Destination GPS enregistrée.'
+              : ' Attention : la commande existe, mais les coordonnées GPS n’ont pas toutes été enregistrées. Contactez le support avant de recommander.')
+          : '';
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => const OrdersScreen()));
+      messenger.showSnackBar(SnackBar(content: Text(
+        '${orders.length} commande(s) créée(s). Payez chaque commande depuis votre portefeuille de même devise.$gpsMessage',
+      )));
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
@@ -213,7 +222,7 @@ class _CheckoutState extends State<CheckoutScreen> {
           const SizedBox(height: 16),
           FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Enregistrement…' : 'Réserver et commander')),
           const SizedBox(height: 10),
-          const Text("Le paiement n'est pas encore disponible : la commande reste « en attente de paiement » et le stock est libéré à l'expiration de la réservation.", style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+          const Text('Après la réservation, vous pourrez payer chaque commande depuis « Mes commandes », avec le portefeuille HTG ou USD correspondant exactement à la devise affichée. Aucun change automatique ne sera appliqué.', style: TextStyle(color: C.muted, fontWeight: FontWeight.w600)),
         ],
       ]),
     );
@@ -305,15 +314,11 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
   late Future<List<Map<String, dynamic>>> f = Repo.myOrders();
+  final Set<String> payingOrders = <String>{};
   void reload() => setState(() => f = Repo.myOrders());
 
   Future<void> checkPending() async {
-    try {
-      final l = await Repo.myOrders();
-      for (final o in l) {
-        if (o['status'] == 'PENDING_PAYMENT') await Repo.checkPayment('order', o['id'] as String);
-      }
-    } catch (_) {}
+    // Les commandes internes ne sont plus vérifiées auprès d'un prestataire externe.
     if (mounted) reload();
   }
 
@@ -364,14 +369,27 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
                         if (o['status'] == 'PENDING_PAYMENT') ...[
                           const SizedBox(height: 6),
-                          PrimaryButton(label: 'Payer avec MonCash', icon: Icons.payments_outlined, onPressed: () => payAndOpen(context, 'order', o['id'] as String)),
-                          TextButton(
-                            onPressed: () async {
-                              await Repo.checkPayment('order', o['id'] as String);
-                              reload();
+                          PrimaryButton(
+                            label: payingOrders.contains(o['id'])
+                                ? 'Vérification du paiement…'
+                                : 'Payer avec mon portefeuille ${o['currency']}',
+                            icon: Icons.account_balance_wallet_outlined,
+                            onPressed: payingOrders.contains(o['id']) ? null : () async {
+                              final orderId = o['id'] as String;
+                              setState(() => payingOrders.add(orderId));
+                              try {
+                                final result = await Repo.payOrderFromWallet(orderId);
+                                if (!mounted) return;
+                                toast(context, result['already_paid'] == true ? 'Cette commande est déjà payée.' : 'Paiement confirmé par HAITIKET.');
+                                reload();
+                              } catch (e) {
+                                if (mounted) toast(context, Repo.err(e));
+                              } finally {
+                                if (mounted) setState(() => payingOrders.remove(orderId));
+                              }
                             },
-                            child: const Text("J'ai payé : vérifier mon paiement"),
                           ),
+                          const Text('Le paiement est vérifié côté serveur. Le solde utilisé doit être dans la même devise que la commande.'),
                         ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
                         if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].contains(o['status']))
@@ -465,6 +483,7 @@ class _ShopPanelState extends State<ShopPanel> {
   int imgKey = 0;
   late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
   bool get personal => widget.shop['kind'] == 'personal';
+  bool get official => widget.shop['is_official'] == true;
 
   bool paidOk(Map<String, dynamic> p) {
     final pu = p['paid_until'] as String?;
@@ -504,6 +523,33 @@ class _ShopPanelState extends State<ShopPanel> {
     }
   }
 
+  Future<void> configureWholesale(Map<String, dynamic> p) async {
+    final enabled = p['wholesale_enabled'] == true;
+    final priceCtl = TextEditingController(text: p['wholesale_price_minor'] == null ? '' : (((p['wholesale_price_minor'] as num).toInt()) / 100).toStringAsFixed(2));
+    final minCtl = TextEditingController(text: '${p['wholesale_min_qty'] ?? 2}');
+    var turnOn = enabled;
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+      title: const Text('Offre de gros'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        SwitchListTile(value: turnOn, onChanged: (v) => setD(() => turnOn = v), title: const Text('Proposer ce produit aux revendeurs')),
+        TextField(controller: priceCtl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Prix de gros par unité (${p['currency'] ?? 'HTG'})')),
+        TextField(controller: minCtl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantité minimale (au moins 2)')),
+        const SizedBox(height: 8),
+        const Text('Une demande ne débite aucun portefeuille. L’acceptation réserve le stock; la validation de remise décompte le stock. Le paiement reste séparé.', style: TextStyle(fontSize: 12)),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer'))],
+    )));
+    if (ok != true || !mounted) return;
+    final amount = double.tryParse(priceCtl.text.replaceAll(',', '.'));
+    final minQty = int.tryParse(minCtl.text);
+    if (turnOn && (amount == null || amount <= 0 || minQty == null || minQty < 2)) { toast(context, 'Saisis un prix positif et une quantité minimale valide.'); return; }
+    try {
+      await Repo.setWholesaleOffer(p['id'] as String, enabled: turnOn, priceMinor: turnOn ? (amount! * 100).round() : 0, minQty: minQty ?? 2);
+      reload();
+      if (mounted) toast(context, turnOn ? 'Offre de gros enregistrée.' : 'Offre de gros désactivée.');
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
   Future<void> editProduct(Map<String, dynamic> p) async {
     final n = TextEditingController(text: '${p['name'] ?? ''}');
     final price = TextEditingController(text: (((p['price_minor'] as num?) ?? 0) / 100).toStringAsFixed(2));
@@ -518,8 +564,10 @@ class _ShopPanelState extends State<ShopPanel> {
     String productStatus = statusOptions.contains(p['status']) ? p['status'] as String : 'published';
     String? editCategory = p['category_id'] as String?;
     final categories = await Repo.categories();
-    final audienceOptions = ['Tout public', 'Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'];
-    String audience = audienceOptions.contains(p['audience']) ? p['audience'] as String : 'Tout public';
+    final audienceOptions = ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'];
+    final initialAudiences = (p['audiences'] as List?)?.map((x) => '$x').toSet() ?? <String>{};
+    if (initialAudiences.isEmpty && p['audience'] != null) initialAudiences.add('${p['audience']}');
+    final selectedAudiences = <String>{...initialAudiences.where(audienceOptions.contains)};
     List<Map<String, String>> media = [];
     try {
       final existing = await Repo.productMedia(p['id'] as String);
@@ -546,12 +594,12 @@ class _ShopPanelState extends State<ShopPanel> {
             TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix (HTG)')),
             TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock total')),
             TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unité de vente (ex. unité, paire, lot, kg)')),
-            DropdownButtonFormField<String>(
-              value: audience,
-              decoration: const InputDecoration(labelText: 'Public concerné'),
-              items: [for (final a in audienceOptions) DropdownMenuItem(value: a, child: Text(a))],
-              onChanged: (v) { if (v != null) setDialogState(() => audience = v); },
-            ),
+            const Padding(padding: EdgeInsets.only(top: 10, bottom: 4), child: Text('Publics concernés (plusieurs choix possibles)', style: TextStyle(fontWeight: FontWeight.w800))),
+            Wrap(spacing: 6, runSpacing: 2, children: [
+              for (final a in audienceOptions)
+                FilterChip(label: Text(a), selected: selectedAudiences.contains(a), onSelected: (yes) => setDialogState(() { if (yes) { selectedAudiences.add(a); } else { selectedAudiences.remove(a); } })),
+            ]),
+            TextButton(onPressed: () => setDialogState(() => selectedAudiences.clear()), child: const Text('Effacer les publics ciblés (tout public)')),
             TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
             DropdownButtonFormField<String?>(value: editCategory, decoration: const InputDecoration(labelText: 'Catégorie'), items: [const DropdownMenuItem<String?>(value: null, child: Text('Aucune catégorie')), for (final c in categories) DropdownMenuItem<String?>(value: c['id'] as String, child: Text('${c['name']}'))], onChanged: (v) { setDialogState(() => editCategory = v); }),
             DropdownButtonFormField<String>(value: currency, decoration: const InputDecoration(labelText: 'Devise du prix'), items: const [DropdownMenuItem(value: 'HTG', child: Text('Gourdes (HTG)')), DropdownMenuItem(value: 'USD', child: Text('Dollars (USD)'))], onChanged: (v) { if (v != null) setDialogState(() => currency = v); }),
@@ -604,7 +652,8 @@ class _ShopPanelState extends State<ShopPanel> {
         'stock': q,
         'description': desc.text.trim(),
         'unit_label': unit.text.trim(),
-        'audience': audience == 'Tout public' ? null : audience,
+        'audiences': selectedAudiences.toList()..sort(),
+        'audience': selectedAudiences.length == 1 ? selectedAudiences.first : null,
         'category_id': editCategory,
         'status': productStatus,
         'attributes': jsonDecode(attrs.text.isEmpty ? '{}' : attrs.text) as Map<String, dynamic>,
@@ -633,6 +682,34 @@ class _ShopPanelState extends State<ShopPanel> {
     if (ok != true) return;
     try { await Repo.deleteProduct(p['id'] as String); reload(); if (mounted) toast(context, 'Produit retiré du catalogue.'); }
     catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  Future<void> manageShop(String action) async {
+    final currentName = '${widget.shop['name'] ?? ''}';
+    final ctl = TextEditingController(text: currentName);
+    if (action == 'rename') {
+      final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+        title: const Text('Modifier le nom de la boutique'),
+        content: TextField(controller: ctl, maxLength: 80, decoration: const InputDecoration(labelText: 'Nom public', helperText: 'Le nom doit être disponible et comporte 2 à 80 caractères.')),
+        actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Vérifier et enregistrer'))],
+      ));
+      if (ok != true) return;
+      if (ctl.text.trim().length < 2) return toast(context, 'Le nom doit contenir au moins 2 caractères.');
+    } else {
+      final close = action == 'close';
+      final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+        title: Text(close ? 'Demander la suppression de la boutique ?' : 'Suspendre la boutique ?'),
+        content: Text(close ? 'La boutique sera suspendue immédiatement, les commandes non terminées seront traitées et les remboursements nécessaires mis en file. La suppression définitive exige une validation administrative et un délai minimal de 30 jours. L’historique sera conservé.' : 'La boutique sera suspendue immédiatement. Les commandes non terminées seront annulées ou mises en traitement de remboursement. Contactez le support pour demander sa réactivation.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: Text(close ? 'Envoyer la demande' : 'Suspendre'))],
+      ));
+      if (ok != true) return;
+    }
+    try {
+      final result = await Repo.manageOwnShop(widget.shop['id'] as String, action: action, name: ctl.text.trim());
+      if (!mounted) return;
+      setState(() { widget.shop['name'] = result['name']; widget.shop['status'] = result['status']; });
+      toast(context, action == 'rename' ? 'Nom de boutique mis à jour.' : action == 'close' ? 'Demande envoyée : délai de 30 jours et validation administrative requis.' : 'Boutique suspendue; remboursements éventuels mis en file.');
+    } catch (e) { if (mounted) toast(context, 'Opération refusée : ${Repo.err(e)}'); }
   }
 
   Future<void> orderAction(Map<String, dynamic> o, String v) async {
@@ -669,6 +746,89 @@ class _ShopPanelState extends State<ShopPanel> {
     }
   }
 
+  Widget _officialShopDashboard() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: products,
+      builder: (context, productSnapshot) {
+        final productRows = productSnapshot.data ?? const <Map<String, dynamic>>[];
+        final published = productRows.where((p) => p['status'] == 'published').length;
+        final lowStock = productRows.where((p) => p['status'] == 'published' && ((p['stock'] as num?)?.toInt() ?? 0) <= 3).toList();
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: orders,
+          builder: (context, orderSnapshot) {
+            final orderRows = orderSnapshot.data ?? const <Map<String, dynamic>>[];
+            final statusCounts = <String, int>{};
+            final totals = <String, int>{'HTG': 0, 'USD': 0};
+            for (final order in orderRows) {
+              final status = '${order['status'] ?? 'UNKNOWN'}';
+              statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+              final currency = '${order['currency'] ?? ''}';
+              if (totals.containsKey(currency)) {
+                totals[currency] = totals[currency]! + ((order['total_minor'] as num?)?.toInt() ?? 0);
+              }
+            }
+            Widget metric(String label, String value, IconData icon) => Container(
+              constraints: const BoxConstraints(minWidth: 135),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 20, color: C.green),
+                const SizedBox(width: 8),
+                Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                  Text(label, style: const TextStyle(fontSize: 11, color: C.muted)),
+                ])),
+              ]),
+            );
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(border: Border.all(color: C.line), borderRadius: BorderRadius.circular(14)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(official ? 'Vue d’ensemble — boutique officielle' : 'Vue d’ensemble — boutique professionnelle', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                const SizedBox(height: 4),
+                const Text('Les commandes affichées sont les 50 plus récentes au maximum. Les montants sont séparés par devise et ne représentent pas un relevé comptable.', style: TextStyle(fontSize: 12, color: C.muted)),
+                const SizedBox(height: 12),
+                if (productSnapshot.connectionState != ConnectionState.done || orderSnapshot.connectionState != ConnectionState.done)
+                  const LinearProgressIndicator(),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  metric('Produits au catalogue', '${productRows.length}', Icons.inventory_2_outlined),
+                  metric('Produits publiés', '$published', Icons.storefront_outlined),
+                  metric('Stock faible (≤ 3)', '${lowStock.length}', Icons.warning_amber_outlined),
+                  metric('Commandes chargées', '${orderRows.length}', Icons.receipt_long_outlined),
+                ]),
+                const SizedBox(height: 12),
+                const Text('Volume des commandes chargées par devise', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  metric('Total HTG', money(totals['HTG']!, 'HTG'), Icons.payments_outlined),
+                  metric('Total USD', money(totals['USD']!, 'USD'), Icons.attach_money),
+                ]),
+                if (statusCounts.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('État des commandes', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    for (final entry in statusCounts.entries)
+                      Chip(label: Text('${statusFr(entry.key)} : ${entry.value}')),
+                  ]),
+                ],
+                if (lowStock.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('À réapprovisionner', style: TextStyle(fontWeight: FontWeight.w700, color: C.terracotta)),
+                  for (final product in lowStock.take(5))
+                    Padding(padding: const EdgeInsets.only(top: 4), child: Text('• ${product['name']} — stock ${product['stock']}', style: const TextStyle(fontSize: 13))),
+                  if (lowStock.length > 5) Text('Et ${lowStock.length - 5} autre(s) produit(s).', style: const TextStyle(fontSize: 12, color: C.muted)),
+                ],
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = widget.shop['status'] == 'active';
@@ -678,9 +838,19 @@ class _ShopPanelState extends State<ShopPanel> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
-          Text(active ? 'Boutique active' : 'En attente de vérification — vous pourrez publier après activation.', style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700)),
-          if (!personal) PlanCard(shop: widget.shop),
+          Row(children: [Flexible(child: Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink))), if (widget.shop['verified_at'] != null) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(avatar: Icon(Icons.verified, size: 16, color: Colors.blue), label: Text('Boutique vérifiée'), visualDensity: VisualDensity.compact))]),
+          Text(
+            {'active': 'Boutique active', 'pending': 'En attente de vérification', 'draft': 'Brouillon', 'suspended': 'Boutique suspendue — contactez le support pour demander sa réactivation.', 'closed': 'Boutique fermée définitivement'}[widget.shop['status']] ?? 'Statut : ${widget.shop['status']}',
+            style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700),
+          ),
+          if (!official && widget.shop['status'] != 'closed') Wrap(spacing: 8, runSpacing: 4, children: [
+            OutlinedButton.icon(onPressed: () => manageShop('rename'), icon: const Icon(Icons.edit_outlined), label: const Text('Modifier le nom')),
+            if (widget.shop['status'] == 'active') OutlinedButton.icon(onPressed: () => manageShop('suspend'), icon: const Icon(Icons.pause_circle_outline), label: const Text('Suspendre')),
+            if (widget.shop['status'] != 'closed') TextButton.icon(onPressed: () => manageShop('close'), icon: const Icon(Icons.store_mall_directory_outlined), label: const Text('Fermer définitivement')),
+          ]),
+          if (widget.shop['status'] == 'closed') const Text('Boutique fermée définitivement — historique conservé.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+          if (!personal && !official) PlanCard(shop: widget.shop),
+          if (official) const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.verified, color: C.green), title: Text('Boutique officielle HAITIKET', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Abonnement vendeur non requis.')),
           if (!personal && active) BrandingEditor(shop: widget.shop),
           if (active)
             Padding(
@@ -718,7 +888,14 @@ class _ShopPanelState extends State<ShopPanel> {
               icon: const Icon(Icons.local_offer_outlined),
               label: const Text('Promotions et coupons'),
             ),
+            if (!personal && !official) OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WholesaleCenterScreen())),
+              icon: const Icon(Icons.storefront_outlined),
+              label: const Text('Fournisseurs et achats en gros'),
+            ),
             const SizedBox(height: 16),
+            if (official) _officialShopDashboard(),
+            if (!personal && !official) _officialShopDashboard(),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: products,
               builder: (_, s) {
@@ -731,6 +908,25 @@ class _ShopPanelState extends State<ShopPanel> {
                       title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text(sub(p)),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (official)
+                          IconButton(
+                            tooltip: p['is_featured'] == true ? 'Retirer des produits mis en avant' : 'Mettre en avant dans la boutique',
+                            onPressed: () async {
+                              try {
+                                await Repo.adminSetOfficialProductFeatured(p['id'] as String, p['is_featured'] != true);
+                                reload();
+                                if (mounted) toast(context, p['is_featured'] == true ? 'Produit retiré de la sélection mise en avant.' : 'Produit mis en avant dans le catalogue.');
+                              } catch (e) {
+                                if (mounted) toast(context, Repo.err(e));
+                              }
+                            },
+                            icon: Icon(p['is_featured'] == true ? Icons.star : Icons.star_border, color: p['is_featured'] == true ? C.yellow : C.muted),
+                          ),
+                        if (!personal && !official) IconButton(
+                          tooltip: p['wholesale_enabled'] == true ? 'Modifier l’offre de gros' : 'Proposer un prix de gros',
+                          onPressed: () => configureWholesale(p),
+                          icon: Icon(Icons.inventory_2_outlined, color: p['wholesale_enabled'] == true ? C.green : C.muted),
+                        ),
                         IconButton(
                           tooltip: 'Modifier les informations principales',
                           onPressed: () => editProduct(p),
@@ -754,7 +950,7 @@ class _ShopPanelState extends State<ShopPanel> {
                           IconButton(onPressed: (p['stock'] as int) > 0 ? () => patch(p['id'] as String, {'stock': (p['stock'] as int) - 1}) : null, icon: const Icon(Icons.remove_circle_outline)),
                           IconButton(onPressed: () => patch(p['id'] as String, {'stock': (p['stock'] as int) + 1}), icon: const Icon(Icons.add_circle_outline)),
                         ],
-                        if (p['source'] == 'bazar' && !paidOk(p)) TextButton(onPressed: () => payAndOpen(context, 'bazar_listing', p['id'] as String), child: const Text('Payer'))
+                        if (p['source'] == 'bazar' && !paidOk(p)) TextButton(onPressed: () async { await payBazarFromWallet(context, p['id'] as String); reload(); }, child: const Text('Payer avec portefeuille USD'))
                         else Switch(value: p['status'] == 'published', onChanged: (v) => patch(p['id'] as String, {'status': v ? 'published' : 'paused'})),
                       ]),
                     ),
@@ -802,6 +998,317 @@ class _ShopPanelState extends State<ShopPanel> {
 }
 
 
+class StockLedgerScreen extends StatefulWidget {
+  const StockLedgerScreen({super.key});
+  @override
+  State<StockLedgerScreen> createState() => _StockLedgerScreenState();
+}
+
+class _StockLedgerScreenState extends State<StockLedgerScreen> {
+  late Future<List<Map<String, dynamic>>> productsFuture = _loadProducts();
+  late Future<List<Map<String, dynamic>>> movementsFuture = Repo.stockMovements();
+  String? selectedProductId;
+
+  Future<List<Map<String, dynamic>>> _loadProducts() async {
+    final shops = await Repo.myShops();
+    final result = <Map<String, dynamic>>[];
+    for (final shop in shops.where((s) => s['status'] == 'active' && s['kind'] != 'personal' && s['is_official'] != true)) {
+      final products = await Repo.shopProducts(shop['id'] as String);
+      for (final product in products) {
+        if (product['status'] == 'removed') continue;
+        result.add({...product, 'ledger_shop_name': shop['name']});
+      }
+    }
+    return result;
+  }
+
+  void refresh() => setState(() {
+    productsFuture = _loadProducts();
+    movementsFuture = Repo.stockMovements();
+  });
+
+  Future<void> _adjust(Map<String, dynamic> product) async {
+    final deltaCtl = TextEditingController();
+    final reasonCtl = TextEditingController();
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Ajuster le stock — ${product['name']}'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Stock actuel : ${product['stock'] ?? 0}'),
+        TextField(controller: deltaCtl, keyboardType: const TextInputType.numberWithOptions(signed: true), decoration: const InputDecoration(labelText: 'Variation (+ entrée / − sortie)', hintText: 'Ex. 12 ou -3')),
+        TextField(controller: reasonCtl, maxLength: 240, decoration: const InputDecoration(labelText: 'Motif obligatoire', hintText: 'Ex. inventaire physique, casse, réception')),
+        const SizedBox(height: 8),
+        const Text('Le serveur refuse un stock négatif et inscrit chaque variation au journal.', style: TextStyle(fontSize: 12)),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(ctx, {'delta': deltaCtl.text, 'reason': reasonCtl.text}), child: const Text('Enregistrer'))],
+    ));
+    if (result == null || !mounted) return;
+    final delta = int.tryParse(result['delta'] ?? '');
+    final reason = (result['reason'] ?? '').trim();
+    if (delta == null || delta == 0 || reason.length < 3) { toast(context, 'Saisis une variation non nulle et un motif de 3 caractères minimum.'); return; }
+    try {
+      await Repo.adjustProductStock(product['id'] as String, delta, reason);
+      refresh();
+      if (mounted) toast(context, 'Stock ajusté et mouvement enregistré.');
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  Future<void> _adjustVariant(Map<String, dynamic> product, Map<String, dynamic> variant) async {
+    final deltaCtl = TextEditingController();
+    final reasonCtl = TextEditingController();
+    final label = [variant['size'], variant['color_name']].where((v) => v != null && '$v'.trim().isNotEmpty).join(' · ');
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Ajuster la variante — ${label.isEmpty ? 'Variante' : label}'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Produit : ${product['name']} · stock variante : ${variant['stock'] ?? 0}'),
+        TextField(controller: deltaCtl, keyboardType: const TextInputType.numberWithOptions(signed: true), decoration: const InputDecoration(labelText: 'Variation (+ / −)', hintText: 'Ex. 5 ou -2')),
+        TextField(controller: reasonCtl, maxLength: 240, decoration: const InputDecoration(labelText: 'Motif obligatoire', hintText: 'Réception, inventaire, casse…')),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(ctx, {'delta': deltaCtl.text, 'reason': reasonCtl.text}), child: const Text('Enregistrer'))],
+    ));
+    if (result == null || !mounted) return;
+    final delta = int.tryParse(result['delta'] ?? '');
+    final reason = (result['reason'] ?? '').trim();
+    if (delta == null || delta == 0 || reason.length < 3) { toast(context, 'Saisis une variation non nulle et un motif de 3 caractères minimum.'); return; }
+    try {
+      await Repo.adjustVariantStock(variant['id'] as String, delta, reason);
+      refresh();
+      if (mounted) toast(context, 'Stock de variante ajusté et tracé.');
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Inventaire et mouvements de stock')),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      const Text('Ajustements sécurisés', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      const Text('Les quantités sont modifiées côté serveur. Chaque changement est conservé dans un journal consultable par le propriétaire de la boutique.'),
+      FutureBuilder<List<Map<String, dynamic>>>(future: productsFuture, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
+        if (snap.hasError) return Text('Produits indisponibles : ${Repo.err(snap.error!)}');
+        final products = snap.data ?? [];
+        if (products.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Aucun produit trouvé dans tes boutiques professionnelles actives.'));
+        if (selectedProductId == null || !products.any((p) => p['id'] == selectedProductId)) selectedProductId = products.first['id'] as String;
+        final selected = products.firstWhere((p) => p['id'] == selectedProductId);
+        return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          DropdownButtonFormField<String>(value: selectedProductId, isExpanded: true, decoration: const InputDecoration(labelText: 'Produit'), items: [for (final p in products) DropdownMenuItem(value: p['id'] as String, child: Text('${p['name']} · ${p['ledger_shop_name']} · stock ${p['stock'] ?? 0}', overflow: TextOverflow.ellipsis))], onChanged: (v) => setState(() => selectedProductId = v)),
+          const SizedBox(height: 8),
+          Text('Stock actuel : ${selected['stock'] ?? 0}'),
+          const SizedBox(height: 8),
+          FilledButton.icon(onPressed: () => _adjust(selected), icon: const Icon(Icons.tune), label: const Text('Ajuster le stock global')),
+          if (((selected['product_variants'] as List?) ?? const []).isNotEmpty) ...[
+            const Divider(height: 24),
+            const Text('Variantes (taille / couleur)', style: TextStyle(fontWeight: FontWeight.w700)),
+            for (final rawVariant in (selected['product_variants'] as List))
+              if (rawVariant is Map) Builder(builder: (context) {
+                final v = Map<String, dynamic>.from(rawVariant);
+                final variantLabel = [v['size'], v['color_name']].where((x) => x != null && '$x'.trim().isNotEmpty).join(' · ');
+                return ListTile(contentPadding: EdgeInsets.zero, title: Text(variantLabel.isEmpty ? 'Variante' : variantLabel), subtitle: Text('Stock : ${v['stock'] ?? 0}'), trailing: IconButton(tooltip: 'Ajuster la variante', onPressed: () => _adjustVariant(selected, v), icon: const Icon(Icons.tune)));
+              }),
+          ],
+        ])));
+      }),
+      const SizedBox(height: 20),
+      const Text('Journal des mouvements', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      const Text('Affiche les 200 mouvements les plus récents accessibles. Le journal est une trace de stock, pas une preuve de paiement.'),
+      FutureBuilder<List<Map<String, dynamic>>>(future: movementsFuture, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
+        if (snap.hasError) return Text('Journal indisponible : ${Repo.err(snap.error!)}');
+        final rows = snap.data ?? [];
+        if (rows.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('Aucun mouvement enregistré pour le moment.'));
+        return Column(children: [for (final row in rows) Card(child: ListTile(
+          leading: Icon((row['quantity_delta'] as num? ?? 0) >= 0 ? Icons.add_box_outlined : Icons.indeterminate_check_box_outlined),
+          title: Text('${(row['quantity_delta'] as num? ?? 0) > 0 ? '+' : ''}${row['quantity_delta']} unités · ${row['movement_type'] == 'initial_stock' ? 'Stock initial' : row['movement_type'] == 'manual_adjustment' ? 'Ajustement manuel' : 'Variation de stock'}'),
+          subtitle: Text('${row['reason'] ?? ''}\n${row['created_at'] ?? ''} · ${row['old_stock'] ?? '—'} → ${row['new_stock']}'),
+          isThreeLine: true,
+        ))]);
+      }),
+    ]),
+  );
+}
+
+class WholesaleCenterScreen extends StatefulWidget {
+  const WholesaleCenterScreen({super.key});
+  @override
+  State<WholesaleCenterScreen> createState() => _WholesaleCenterScreenState();
+}
+
+class _WholesaleCenterScreenState extends State<WholesaleCenterScreen> {
+  final searchCtl = TextEditingController();
+  late Future<List<Map<String, dynamic>>> shopsFuture = Repo.myShops();
+  late Future<List<Map<String, dynamic>>> offersFuture = Repo.wholesaleOffers();
+  late Future<List<Map<String, dynamic>>> requestsFuture = Repo.wholesaleRequests();
+  late Future<List<Map<String, dynamic>>> eventsFuture = Repo.wholesaleRequestEvents();
+  String? buyerShopId;
+  int historyDays = 30;
+  String historyType = 'all';
+  void refresh() => setState(() { shopsFuture = Repo.myShops(); offersFuture = Repo.wholesaleOffers(query: searchCtl.text); requestsFuture = Repo.wholesaleRequests(); eventsFuture = Repo.wholesaleRequestEvents(); });
+
+  Future<void> requestOffer(Map<String, dynamic> offer, String shopId) async {
+    final qtyCtl = TextEditingController(text: '${offer['wholesale_min_qty'] ?? 2}');
+    final noteCtl = TextEditingController();
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Demander ${offer['name']}'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Prix proposé : ${money(offer['wholesale_price_minor'] as num, offer['currency'] as String)} · minimum ${offer['wholesale_min_qty']}'),
+        TextField(controller: qtyCtl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantité demandée')),
+        TextField(controller: noteCtl, decoration: const InputDecoration(labelText: 'Note au fournisseur (facultatif)')),
+        const SizedBox(height: 8),
+        const Text('Cette action envoie une demande, sans paiement automatique. Le stock n’est réservé qu’après acceptation du fournisseur.', style: TextStyle(fontSize: 12)),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(ctx, {'qty': qtyCtl.text, 'note': noteCtl.text}), child: const Text('Envoyer la demande'))],
+    ));
+    if (result == null || !mounted) return;
+    final qty = int.tryParse(result['qty'] ?? '');
+    if (qty == null || qty < 2) { toast(context, 'La quantité doit être au moins égale à 2.'); return; }
+    try { await Repo.createWholesaleRequest(offer['id'] as String, shopId, qty, note: result['note']); refresh(); if (mounted) toast(context, 'Demande fournisseur envoyée. Aucun paiement n’a été effectué.'); }
+    catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  Future<void> act(Map<String, dynamic> request, String action) async {
+    try { await Repo.updateWholesaleRequest(request['id'] as String, action); refresh(); if (mounted) toast(context, 'Demande mise à jour.'); }
+    catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
+
+  String _supplierCsvCell(Object? value) {
+    var raw = '${value ?? ''}'.replaceAll('\r', ' ').replaceAll('\n', ' ');
+    final trimmed = raw.trimLeft();
+    if (trimmed.isNotEmpty && '=+-@'.contains(trimmed[0])) raw = "'$raw";
+    return '\"${raw.replaceAll('\"', '\"\"')}\"';
+  }
+
+  List<Map<String, dynamic>> _filterSupplierEvents(List<Map<String, dynamic>> events) {
+    final cutoff = DateTime.now().toUtc().subtract(Duration(days: historyDays));
+    return events.where((event) {
+      final at = DateTime.tryParse('${event['created_at'] ?? ''}')?.toUtc();
+      final inPeriod = at != null && !at.isBefore(cutoff);
+      final typeMatches = historyType == 'all' || event['event_type'] == historyType;
+      return inPeriod && typeMatches;
+    }).toList();
+  }
+
+  Future<void> _exportSupplierEvents(List<Map<String, dynamic>> events) async {
+    final rows = <List<Object?>>[
+      ['Rapport', 'Historique des achats fournisseurs HAITIKET'],
+      ['Exporté le (UTC)', DateTime.now().toUtc().toIso8601String()],
+      ['Période', 'Derniers $historyDays jours'],
+      ['Type', historyType == 'all' ? 'Tous les événements' : historyType],
+      ['Note', 'Historique visible pour les boutiques participantes; maximum 200 événements chargés. Les demandes ne prouvent pas un paiement.'],
+      ['Date UTC', 'ID demande', 'Événement', 'Ancien statut', 'Nouveau statut', 'Acheteur (ID boutique)', 'Vendeur (ID boutique)', 'Quantité', 'Prix unitaire en unités mineures', 'Total en unités mineures', 'Devise', 'Expiration', 'Acteur'],
+      ...events.map((e) => <Object?>[
+        e['created_at'], e['request_id'], e['event_type'], e['old_status'], e['new_status'],
+        e['buyer_shop_id'], e['seller_shop_id'], e['quantity'], e['unit_price_minor'],
+        e['total_minor'], e['currency'], e['expires_at'], e['actor_id'],
+      ]),
+    ];
+    final csv = rows.map((row) => row.map(_supplierCsvCell).join(',')).join('\r\n');
+    await Clipboard.setData(ClipboardData(text: '\uFEFF$csv'));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export CSV copié : ${events.length} événement(s). Collez dans un tableur puis enregistrez en .csv.')));
+  }
+
+  @override
+  void dispose() { searchCtl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Fournisseurs et achats en gros')),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      const Text('Catalogue de gros', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      const Text('Les demandes ne prélèvent pas d’argent. Confirme les conditions avec le fournisseur avant tout paiement.'),
+      Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StockLedgerScreen())), icon: const Icon(Icons.inventory_2_outlined), label: const Text('Ouvrir l’inventaire et le journal de stock'))),
+      FutureBuilder<List<Map<String, dynamic>>>(future: shopsFuture, builder: (context, snap) {
+        final shops = (snap.data ?? []).where((s) => s['status'] == 'active' && s['kind'] != 'personal' && s['is_official'] != true).toList();
+        if (shops.isNotEmpty && (buyerShopId == null || !shops.any((s) => s['id'] == buyerShopId))) buyerShopId = shops.first['id'] as String;
+        if (shops.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Une boutique professionnelle active est nécessaire pour envoyer une demande fournisseur.'));
+        return DropdownButtonFormField<String>(value: buyerShopId, decoration: const InputDecoration(labelText: 'Acheter pour ma boutique'), items: [for (final shop in shops) DropdownMenuItem(value: shop['id'] as String, child: Text('${shop['name']}'))], onChanged: (v) => setState(() => buyerShopId = v));
+      }),
+      const SizedBox(height: 10),
+      TextField(controller: searchCtl, decoration: InputDecoration(labelText: 'Rechercher un produit de gros', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: () => setState(() => offersFuture = Repo.wholesaleOffers(query: searchCtl.text)))), onSubmitted: (v) => setState(() => offersFuture = Repo.wholesaleOffers(query: v))),
+      FutureBuilder<List<Map<String, dynamic>>>(future: offersFuture, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+        final offers = snap.data ?? [];
+        if (offers.isEmpty) return const Padding(padding: EdgeInsets.all(12), child: Text('Aucune offre de gros disponible pour le moment.'));
+        return Column(children: [for (final offer in offers) Builder(builder: (context) {
+          final shop = offer['shops'] is Map ? Map<String, dynamic>.from(offer['shops'] as Map) : <String, dynamic>{};
+          return Card(child: ListTile(
+            leading: offer['image_url'] == null ? const Icon(Icons.inventory_2_outlined) : null,
+            title: Text('${offer['name']}'), subtitle: Text('${shop['name'] ?? 'Fournisseur'} · ${money(offer['wholesale_price_minor'] as num, offer['currency'] as String)} / unité · min. ${offer['wholesale_min_qty']} · stock ${offer['stock']}'),
+            trailing: FilledButton(onPressed: buyerShopId == null ? null : () => requestOffer(offer, buyerShopId!), child: const Text('Demander')),
+          );
+        })]);
+      }),
+      const SizedBox(height: 24),
+      const Text('Mes demandes fournisseur', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      FutureBuilder<List<Map<String, dynamic>>>(future: requestsFuture, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
+        final rows = snap.data ?? [];
+        if (rows.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('Aucune demande fournisseur.'));
+        return FutureBuilder<List<Map<String, dynamic>>>(future: shopsFuture, builder: (context, ownedSnap) {
+          final ownedIds = (ownedSnap.data ?? []).map((shop) => shop['id'].toString()).toSet();
+          return Column(children: [for (final req in rows) Builder(builder: (context) {
+            final isSeller = ownedIds.contains(req['seller_shop_id'].toString());
+            final isBuyer = ownedIds.contains(req['buyer_shop_id'].toString());
+            return Card(child: ListTile(
+              title: Text('${req['quantity']} × ${req['product_name']}'),
+              subtitle: Text('${req['buyer_shop_name']} → ${req['seller_shop_name']} · ${money(req['total_minor'] as num, req['currency'] as String)} · ${req['status']}${req['status'] == 'accepted' && req['expires_at'] != null ? ' · réservation jusqu’au ${req['expires_at']}' : ''}'),
+              trailing: Wrap(spacing: 2, children: [
+                if (isSeller && req['status'] == 'pending') IconButton(tooltip: 'Accepter', onPressed: () => act(req, 'accept'), icon: const Icon(Icons.check_circle_outline)),
+                if (isSeller && req['status'] == 'pending') IconButton(tooltip: 'Refuser', onPressed: () => act(req, 'reject'), icon: const Icon(Icons.cancel_outlined)),
+                if (isSeller && req['status'] == 'accepted') IconButton(tooltip: 'Confirmer la remise et décompter le stock', onPressed: () => act(req, 'fulfill'), icon: const Icon(Icons.inventory_outlined)),
+                if (isBuyer && (req['status'] == 'pending' || req['status'] == 'accepted')) IconButton(tooltip: 'Annuler ma demande et libérer la réservation si elle est acceptée', onPressed: () => act(req, 'cancel'), icon: const Icon(Icons.undo)),
+              ]),
+            ));
+          })]);
+        });
+      }),
+      const SizedBox(height: 24),
+      const Text('Historique des opérations fournisseurs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      const Text('Journal des créations, décisions, expirations et remises. Les montants conservent leur devise d’origine. Les statistiques ne représentent pas des paiements encaissés.'),
+      Row(children: [
+        Expanded(child: DropdownButtonFormField<int>(value: historyDays, decoration: const InputDecoration(labelText: 'Période'), items: const [DropdownMenuItem(value: 7, child: Text('7 jours')), DropdownMenuItem(value: 30, child: Text('30 jours')), DropdownMenuItem(value: 90, child: Text('90 jours'))], onChanged: (v) => setState(() => historyDays = v ?? 30))),
+        const SizedBox(width: 10),
+        Expanded(child: DropdownButtonFormField<String>(value: historyType, decoration: const InputDecoration(labelText: 'Événement'), items: const [DropdownMenuItem(value: 'all', child: Text('Tous')), DropdownMenuItem(value: 'request_created', child: Text('Créations')), DropdownMenuItem(value: 'request_accepted', child: Text('Acceptations')), DropdownMenuItem(value: 'request_rejected', child: Text('Refus')), DropdownMenuItem(value: 'request_cancelled', child: Text('Annulations')), DropdownMenuItem(value: 'reservation_expired', child: Text('Expirations')), DropdownMenuItem(value: 'goods_handed_over', child: Text('Remises'))], onChanged: (v) => setState(() => historyType = v ?? 'all'))),
+      ]),
+      FutureBuilder<List<Map<String, dynamic>>>(future: eventsFuture, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
+        if (snap.hasError) return Padding(padding: const EdgeInsets.all(8), child: Text('Historique indisponible : ${Repo.err(snap.error!)}'));
+        final allEvents = snap.data ?? [];
+        final events = _filterSupplierEvents(allEvents);
+        String label(String type) => switch (type) {
+          'request_created' => 'Demande créée',
+          'request_accepted' => 'Demande acceptée',
+          'request_rejected' => 'Demande refusée',
+          'request_cancelled' => 'Demande annulée',
+          'reservation_expired' => 'Réservation expirée',
+          'goods_handed_over' => 'Remise confirmée',
+          'reservation_deadline_set' => 'Échéance de réservation mise à jour',
+          _ => 'Demande mise à jour',
+        };
+        final totals = <String, int>{'HTG': 0, 'USD': 0};
+        for (final e in events) { final currency = '${e['currency'] ?? ''}'; final amount = int.tryParse('${e['total_minor'] ?? 0}') ?? 0; if (totals.containsKey(currency)) totals[currency] = totals[currency]! + amount; }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Rapport sur ${events.length} événement(s) filtré(s) · ${historyDays} jours', style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text('Totaux des événements : ${money(totals['HTG']!, 'HTG')} · ${money(totals['USD']!, 'USD')}'),
+            const SizedBox(height: 4),
+            const Text('Totaux indicatifs des événements, pas un chiffre d’affaires ni une preuve de paiement.', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(onPressed: events.isEmpty ? null : () => _exportSupplierEvents(events), icon: const Icon(Icons.download_outlined), label: Text('Exporter ${events.length} événement(s) en CSV')),
+          ]))),
+          if (events.isEmpty) const Padding(padding: EdgeInsets.all(8), child: Text('Aucun événement pour ces filtres.')),
+          for (final event in events) Card(child: ListTile(
+            leading: Icon(event['event_type'] == 'goods_handed_over' ? Icons.inventory_2_outlined : event['event_type'] == 'reservation_expired' ? Icons.timer_off_outlined : Icons.history),
+            title: Text(label(event['event_type']?.toString() ?? '')),
+            subtitle: Text('Demande ${event['request_id']}\n${event['old_status'] == null ? 'État initial : ${event['new_status']}' : '${event['old_status']} → ${event['new_status']}'} · ${event['quantity']} unités · ${money(event['total_minor'] as num, event['currency'] as String)} · ${event['created_at']}'),
+            isThreeLine: true,
+          )),
+        ]);
+      }),
+    ]),
+  );
+}
+
 /// Suivi client de la position du coursier affecté.
 /// La position est lue via une RPC sécurisée côté serveur; aucune lecture directe de courier_status.
 class OrderTrackingScreen extends StatefulWidget {
@@ -822,6 +1329,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
   String? _error;
   DateTime? _lastUpdate;
   DateTime? _courierPositionAt;
+  List<Map<String, dynamic>> _offers = [];
+  bool _offersLoading = false;
+  String? _offersError;
+  Map<String, dynamic>? _trafficDelay;
 
   double? get _destinationLat => double.tryParse('${_courier?['destination_lat'] ?? ''}');
   double? get _destinationLng => double.tryParse('${_courier?['destination_lng'] ?? ''}');
@@ -841,8 +1352,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refresh();
+    _refreshOffers();
     _poller = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) _refresh();
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) { _refresh(); _refreshOffers(); }
     });
   }
 
@@ -856,14 +1368,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refresh();
+    if (state == AppLifecycleState.resumed) { _refresh(); _refreshOffers(); }
   }
 
   Future<void> _refresh() async {
     try {
       final row = await Repo.activeCourierLocation(widget.orderId);
+      final delay = await Repo.deliveryTrafficDelay(widget.orderId);
       if (!mounted) return;
       setState(() {
+        _trafficDelay = delay;
         _courier = row;
         _error = null;
         _loading = false;
@@ -880,6 +1394,37 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
         _error = Repo.err(e);
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _refreshOffers() async {
+    if (!mounted || _offersLoading) return;
+    setState(() { _offersLoading = true; _offersError = null; });
+    try {
+      final offers = await Repo.deliveryOffersForOrder(widget.orderId);
+      if (!mounted) return;
+      setState(() { _offers = offers; _offersLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _offersError = Repo.err(e); _offersLoading = false; });
+    }
+  }
+
+  Future<void> _chooseOffer(Map<String, dynamic> offer) async {
+    final accepted = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Choisir ce coursier ?'),
+      content: Text('Prix proposé : ${money(offer['amount_minor'] as num, offer['currency'] as String)}\nDélai annoncé : ${offer['eta_minutes']} min\n\nHAITIKET ajustera les frais dans la devise de la commande : un supplément sera débité du portefeuille correspondant, ou la différence sera remboursée dans ce portefeuille.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Retour')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Choisir'))],
+    ));
+    if (accepted != true || !mounted) return;
+    try {
+      await Repo.selectDeliveryPriceOffer(offer['offer_id'].toString());
+      if (!mounted) return;
+      toast(context, 'Coursier sélectionné. Les frais ont été ajustés via le portefeuille de la commande.');
+      await _refreshOffers();
+      await _refresh();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
     }
   }
 
@@ -907,6 +1452,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
               const Text('La carte affiche uniquement la position du coursier autorisée par le serveur.'),
               const SizedBox(height: 8),
               if (_loading) const LinearProgressIndicator(),
+              const SizedBox(height: 8),
+              if (_trafficDelay != null) ...[
+                Card(
+                  color: const Color(0xFFFFF1EC),
+                  child: ListTile(
+                    leading: const Icon(Icons.traffic, color: C.terracotta),
+                    title: Text('Retard signalé : +${((_trafficDelay!['extension_minutes'] as num?) ?? 0) ~/ 60} h', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text('${_trafficDelay!['reason'] ?? 'Motif non précisé'}\nSignalé le ${_trafficDelay!['reported_at'] ?? ''}'),
+                  ),
+                ),
+              ],
+              const Text('Offres des coursiers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              if (_offersLoading && _offers.isEmpty) const LinearProgressIndicator(),
+              if (_offersError != null) Text('Offres indisponibles : $_offersError', style: const TextStyle(color: C.terracotta)),
+              if (!_offersLoading && _offers.isEmpty && _offersError == null)
+                const Text('Aucune offre active pour le moment. Les coursiers disponibles peuvent proposer leur tarif.', style: TextStyle(color: C.muted)),
+              for (final offer in _offers)
+                Card(
+                  child: ListTile(
+                    title: Text('${offer['courier_name']} · ${money(offer['amount_minor'] as num, offer['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text('${offer['eta_minutes']} min${(offer['note'] ?? '').toString().trim().isEmpty ? '' : ' · ${offer['note']}'}'),
+                    trailing: FilledButton(onPressed: () => _chooseOffer(offer), child: const Text('Choisir')),
+                  ),
+                ),
+              Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: _refreshOffers, icon: const Icon(Icons.refresh), label: const Text('Actualiser les offres'))),
               if (_error != null) Text('Impossible de récupérer la position : $_error', style: const TextStyle(color: C.terracotta)),
               if (!_loading && _error == null && !_hasPosition)
                 const Text('POSITION INDISPONIBLE : aucune coordonnée valide reçue. Vérifie que le coursier est affecté, autorisé à partager sa position et connecté.'),

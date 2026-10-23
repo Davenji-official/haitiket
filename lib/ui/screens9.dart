@@ -290,13 +290,47 @@ class _ShopCouponsState extends State<ShopCouponsScreen> {
             if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
             final l = s.data ?? [];
             if (l.isEmpty) return const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Aucune promotion', text: "Créez un code de réduction : sur toute la boutique ou sur certains produits, pour la durée de votre choix. La réduction est à votre charge."));
+            final now = DateTime.now();
+            bool expired(Map<String, dynamic> c) {
+              final raw = c['expires_at'];
+              if (raw == null) return false;
+              final parsed = DateTime.tryParse('$raw');
+              return parsed != null && parsed.isBefore(now);
+            }
+            bool exhausted(Map<String, dynamic> c) {
+              final maxUses = (c['max_uses'] as num?)?.toInt();
+              final used = (c['used_count'] as num?)?.toInt() ?? 0;
+              return maxUses != null && used >= maxUses;
+            }
+            bool effective(Map<String, dynamic> c) => c['active'] == true && !expired(c) && !exhausted(c);
+            final activeCount = l.where(effective).length;
+            final expiredCount = l.where(expired).length;
+            final exhaustedCount = l.where(exhausted).length;
+            final visibleCount = l.where((c) => c['visible'] == true).length;
             return ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 100), children: [
+              Card(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Résumé des promotions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      Chip(avatar: const Icon(Icons.check_circle_outline, size: 18), label: Text('Valides : $activeCount')),
+                      Chip(avatar: const Icon(Icons.visibility_outlined, size: 18), label: Text('Visibles : $visibleCount')),
+                      Chip(avatar: const Icon(Icons.event_busy_outlined, size: 18), label: Text('Expirées : $expiredCount')),
+                      Chip(avatar: const Icon(Icons.block_outlined, size: 18), label: Text('Quota atteint : $exhaustedCount')),
+                    ]),
+                    const Text('Le statut « valide » tient compte de l’activation, de la date d’expiration et du quota. Vérifie les conditions avant de promouvoir un code.', style: TextStyle(fontSize: 12, color: C.muted)),
+                  ]),
+                ),
+              ),
               for (final c in l)
                 Card(
                   color: Colors.white,
                   child: ListTile(
                     title: Text('${c['code']} · ${c['kind'] == 'percent' ? '${c['value']} %' : money(c['value'] as num, 'HTG')}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('Utilisé ${c['used_count']}${c['max_uses'] == null ? '' : ' / ${c['max_uses']}'} fois · ${c['product_ids'] == null ? 'toute la boutique' : '${(c['product_ids'] as List).length} produit(s)'}${c['expires_at'] == null ? '' : '\nJusqu\'au ${(c['expires_at'] as String).substring(0, 10)}'}'),
+                    subtitle: Text('Utilisé ${c['used_count']}${c['max_uses'] == null ? '' : ' / ${c['max_uses']}'} fois · ${c['product_ids'] == null ? 'toute la boutique' : '${(c['product_ids'] as List).length} produit(s)'}${c['expires_at'] == null ? '' : '\nExpire le ${DateTime.tryParse('${c['expires_at']}')?.toIso8601String().substring(0, 10) ?? c['expires_at']}'}\n${effective(c) ? 'VALIDE' : expired(c) ? 'EXPIRÉE' : exhausted(c) ? 'QUOTA ATTEINT' : 'DÉSACTIVÉE'} · ${c['visible'] == true ? 'visible sur les produits' : 'non affichée publiquement'}'),
                     trailing: Switch(
                       value: c['active'] == true,
                       onChanged: (v) async {

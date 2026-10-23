@@ -20,13 +20,13 @@ class MediaPickerField extends StatefulWidget {
 
 class _MediaPickerState extends State<MediaPickerField> {
   bool busy = false;
-  static const imgMime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'};
+  static const imgMime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'};
   static const vidMime = {'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime'};
 
   Future<void> add(XFile x, bool video) async {
     final ext = x.name.contains('.') ? x.name.split('.').last.toLowerCase() : (video ? 'mp4' : 'jpg');
     final mime = (video ? vidMime : imgMime)[ext];
-    if (mime == null) throw video ? 'Format vidéo non pris en charge (MP4, WebM ou MOV).' : 'Format non pris en charge (JPEG, PNG ou WebP).';
+    if (mime == null) throw video ? 'Format vidéo non pris en charge (MP4, WebM ou MOV).' : 'Format non pris en charge (JPEG, PNG, WebP ou GIF).';
     final bytes = await x.readAsBytes();
     final limit = video ? 20 * 1024 * 1024 : 3 * 1024 * 1024;
     if (bytes.length > limit) throw video ? 'Vidéo trop lourde (20 Mo maximum).' : 'Photo trop lourde (3 Mo maximum).';
@@ -43,7 +43,8 @@ class _MediaPickerState extends State<MediaPickerField> {
         final x = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 60));
         if (x != null) await add(x, true);
       } else {
-        final xs = await picker.pickMultiImage(maxWidth: 1600, imageQuality: 80);
+        // Garder les octets d’origine pour préserver les animations GIF. La limite de taille est vérifiée avant l’envoi.
+        final xs = await picker.pickMultiImage();
         for (final x in xs.take(8 - widget.items.length)) {
           await add(x, false);
         }
@@ -211,7 +212,7 @@ class _NewProductState extends State<NewProductScreen> {
   late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
   Map<String, dynamic>? cat;
   String unit = 'unité';
-  String audience = 'Tout public';
+  final Set<String> audiences = <String>{};
   final specs = <String, dynamic>{};
   final media = <Map<String, String>>[];
   final variants = <Map<String, dynamic>>[];
@@ -235,7 +236,7 @@ class _NewProductState extends State<NewProductScreen> {
       attrs.removeWhere((k, v) => v == null || (v is List && v.isEmpty) || (v is String && v.isEmpty));
       final cover = media.where((m) => m['kind'] == 'image').map((m) => m['url']).firstOrNull;
       final id = await Repo.addProduct(widget.shopId, name.text.trim(), (p * 100).round(), st, cover, !widget.bazar,
-          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audience == 'Tout public' ? null : audience);
+          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audiences.length == 1 ? audiences.first : null, audiences: audiences.toList()..sort());
       if (media.isNotEmpty) await Repo.addProductMedia(id, media);
       await Repo.addVariants(id, variants);
       await Repo.addTiers(id, tiers);
@@ -282,15 +283,12 @@ class _NewProductState extends State<NewProductScreen> {
               ),
             ),
           ]),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: DropdownButtonFormField<String>(
-              initialValue: audience,
-              decoration: const InputDecoration(labelText: 'Public cible'),
-              items: [for (final a in ['Tout public', 'Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe']) DropdownMenuItem(value: a, child: Text(a))],
-              onChanged: (v) => setState(() => audience = v ?? 'Tout public'),
-            ),
-          ),
+          const Padding(padding: EdgeInsets.only(bottom: 4), child: Text('Publics concernés (choix multiples)', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+          Wrap(spacing: 6, runSpacing: 2, children: [
+            for (final a in ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'])
+              FilterChip(label: Text(a), selected: audiences.contains(a), onSelected: (yes) => setState(() { if (yes) { audiences.add(a); } else { audiences.remove(a); } })),
+          ]),
+          Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: () => setState(() => audiences.clear()), child: const Text('Tout public / effacer la sélection'))),
           if (variants.isEmpty) Field(stock, 'Quantité disponible', type: TextInputType.number),
           const Text('Photos et vidéos', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
           const SizedBox(height: 8),
@@ -319,6 +317,8 @@ class _NewProductState extends State<NewProductScreen> {
 Future<void> startBazarListing(BuildContext context) async {
   if (currentUser() == null) return toast(context, 'Connectez-vous pour publier une annonce.');
   try {
+    await Repo.requireApprovedIdentityForBazar();
+    if (!context.mounted) return;
     final shops = await Repo.myShops();
     final mine = shops.where((s) => s['kind'] == 'personal');
     String shopId;
@@ -349,20 +349,20 @@ Future<void> startBazarListing(BuildContext context) async {
     if (!context.mounted) return;
     final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => NewProductScreen(shopId: shopId, bazar: true)));
     if (id == null || !context.mounted) return;
-    final fq = await Repo.quoteFee('bazar_listing');
+    final fq = await Repo.quoteWalletFeeUsd('bazar_listing');
     if (!context.mounted) return;
     final pay = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
         title: const Text('Annonce enregistrée'),
-        content: Text('Pour la publier pendant 14 jours : ${feeText(fq, '2')}.\nVous pouvez aussi payer plus tard depuis « Espace vendeur ».'),
+        content: Text('Pour la publier pendant 14 jours : ${usdFeeText(fq, '2')}, débité du portefeuille USD.\nVous pouvez aussi payer plus tard depuis « Espace vendeur ».'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Plus tard')),
           if (fq != null) FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Payer maintenant')),
         ],
       ),
     );
-    if (pay == true && context.mounted) await payAndOpen(context, 'bazar_listing', id);
+    if (pay == true && context.mounted) { await payBazarFromWallet(context, id); if (mounted) setState(() {}); }
   } catch (e) {
     if (context.mounted) toast(context, Repo.err(e));
   }

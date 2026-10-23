@@ -10,29 +10,29 @@ import 'shell.dart';
 import 'widgets.dart';
 import 'mascot.dart';
 
-class SearchPill extends StatelessWidget {
+class SearchPill extends StatefulWidget {
   final void Function(String) onSubmit;
-  const SearchPill({super.key, required this.onSubmit});
+  final void Function(String)? onChanged;
+  const SearchPill({super.key, required this.onSubmit, this.onChanged});
   @override
-  Widget build(BuildContext context) {
-    final c = TextEditingController();
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), border: Border.all(color: C.line), boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 3))]),
-      child: Row(children: [
-        const Icon(Icons.search, color: C.muted, size: 30),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: c,
-            onSubmitted: onSubmit,
-            decoration: InputDecoration(hintText: tr("Que recherchez-vous aujourd'hui ?"), border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true),
-          ),
-        ),
-        PrimaryButton(label: tr('Rechercher'), onPressed: () => onSubmit(c.text)),
-      ]),
-    );
-  }
+  State<SearchPill> createState() => _SearchPillState();
+}
+
+class _SearchPillState extends State<SearchPill> {
+  final c = TextEditingController();
+  @override
+  void dispose() { c.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), border: Border.all(color: C.line), boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 3))]),
+    child: Row(children: [
+      const Icon(Icons.search, color: C.muted, size: 30),
+      const SizedBox(width: 12),
+      Expanded(child: TextField(controller: c, onChanged: widget.onChanged, onSubmitted: widget.onSubmit, decoration: InputDecoration(hintText: tr("Que recherchez-vous aujourd'hui ?"), border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true))),
+      PrimaryButton(label: tr('Rechercher'), onPressed: () => widget.onSubmit(c.text)),
+    ]),
+  );
 }
 
 class HomeScreen extends StatefulWidget {

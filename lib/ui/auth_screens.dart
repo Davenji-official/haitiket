@@ -25,7 +25,7 @@ class LegalScreen extends StatelessWidget {
           h('Tarifs'),
           p("Annonce Bazar : 2 USD pour 14 jours, renouvelable ; sans renouvellement l'annonce est bloquée puis supprimée après 30 jours. Boutique professionnelle : 20 USD par mois. Commission de 2 % sur les ventes. Les frais de livraison sont affichés avant la confirmation de la commande."),
           h('Paiements'),
-          p("Les paiements sont traités par un prestataire externe (MonCash via Bazik). Une commande n'est confirmée que lorsque le prestataire confirme le paiement. Les remboursements sont exécutés après examen et ne sont déclarés effectués qu'une fois réellement versés."),
+          p("Les achats de commandes utilisent le portefeuille interne HAITIKET dans la devise de la commande (HTG ou USD). Plop Plop est utilisé pour les opérations externes de recharge et de retrait. Les autres frais sont en cours de migration et ne doivent pas être considérés comme entièrement intégrés au portefeuille interne."),
           h('Litiges'),
           p("Vous pouvez annuler une commande payée tant que le vendeur ne l'a pas confirmée. Ensuite, utilisez « Signaler un problème » : un administrateur examine le dossier et motive sa décision."),
           h('Politique de confidentialité'),

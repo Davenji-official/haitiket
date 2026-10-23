@@ -121,6 +121,9 @@ class ProductCard extends StatelessWidget {
     final shop = (p['shops'] as Map?)?['name'] ?? '';
     final img = p['image_url'] as String?;
     final bazar = p['source'] == 'bazar';
+    final official = ((p['shops'] as Map?)?['is_official'] == true) && !bazar;
+    final verifiedShop = ((p['shops'] as Map?)?['verified_at'] != null) && !bazar && !official;
+    final officialLabel = '${(p['shops'] as Map?)?['official_badge_label'] ?? 'Boutique officielle HAITIKET'}';
     return Pressable(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailScreen(p))),
       child: Container(
@@ -133,6 +136,9 @@ class ProductCard extends StatelessWidget {
                   ? Container(color: C.mint, child: const Icon(Icons.shopping_basket_outlined, size: 40, color: C.green))
                   : Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: C.mint)),
               if (bazar) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(12)), child: const Text('Bazar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: C.ink)))),
+              if (verifiedShop) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.blue.shade700, borderRadius: BorderRadius.circular(12)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.verified, size: 13, color: Colors.white), SizedBox(width: 4), Text('Boutique vérifiée', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10, color: Colors.white))]))),
+              if (official) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: C.green, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.verified, size: 13, color: Colors.white), const SizedBox(width: 4), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 150), child: Text(officialLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10, color: Colors.white)))]))),
+              if (official && p['is_featured'] == true) Positioned(left: 8, bottom: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(10)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star, size: 13, color: C.ink), SizedBox(width: 4), Text('À la une', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: C.ink))]))),
               Positioned(right: 2, top: 2, child: HeartButton(p['id'] as String, onImage: true)),
             ]),
           ),

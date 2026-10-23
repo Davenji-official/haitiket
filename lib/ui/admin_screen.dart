@@ -4,19 +4,21 @@ import '../theme.dart';
 import 'admin2.dart';
 import 'screens5.dart';
 import 'widgets.dart';
+import 'screens2.dart';
+import 'admin_release_center_v63.dart';
 
 class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 12,
+        length: 18,
         child: Column(children: [
           const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             labelColor: C.ink,
             indicatorColor: C.terracotta,
-            tabs: [Tab(text: 'Tableau'), Tab(text: 'Litiges'), Tab(text: 'Remboursements'), Tab(text: 'Paiements'), Tab(text: 'Signalements'), Tab(text: 'Boutiques'), Tab(text: 'Annonces'), Tab(text: 'Livreurs'), Tab(text: 'Support'), Tab(text: 'Coupons'), Tab(text: 'Comptes'), Tab(text: 'Réglages')],
+            tabs: [Tab(text: 'Tableau'), Tab(text: 'Litiges'), Tab(text: 'Remboursements'), Tab(text: 'Paiements'), Tab(text: 'Signalements'), Tab(text: 'Boutiques'), Tab(text: 'Annonces'), Tab(text: 'Livreurs'), Tab(text: 'Support'), Tab(text: 'Coupons'), Tab(text: 'Comptes'), Tab(text: 'Réglages'), Tab(text: 'Message global'), Tab(text: 'Journal admin'), Tab(text: 'Boutique officielle'), Tab(text: 'KYC'), Tab(text: 'Suppressions'), Tab(text: 'Contrôle lancement')],
           ),
           const Expanded(
             child: TabBarView(children: [
@@ -32,6 +34,12 @@ class AdminScreen extends StatelessWidget {
               _CouponTab(),
               AdminUsersTab(),
               AdminSettingsTab(),
+              AdminAnnouncementsTab(),
+              AdminAuditLogTab(),
+              const OfficialShopAdminTab(),
+              const AdminIdentityVerificationTab(),
+              const AdminShopDeletionTab(),
+              const AdminReleaseCenterV63(),
             ]),
           ),
         ]),
@@ -107,6 +115,8 @@ class _AdminListState extends State<_AdminList> {
           await Repo.adminResolveDispute(id, 'refund', note);
         case 'dispute_no':
           await Repo.adminResolveDispute(id, 'no_refund', note);
+        case 'refund_wallet':
+          await Repo.adminExecuteWalletRefund(id, note);
         case 'refund_done':
           await Repo.adminMarkRefund(id, true, note);
         case 'refund_fail':
@@ -172,7 +182,8 @@ class _AdminListState extends State<_AdminList> {
         ];
       case 'refund':
         return r['status'] != 'to_execute' ? [] : [
-          TextButton(onPressed: () => custom('refund_done', r), child: const Text('Remboursement effectué')),
+          TextButton(onPressed: () => custom('refund_wallet', r), child: const Text('Créditer le portefeuille')),
+          TextButton(onPressed: () => custom('refund_done', r), child: const Text('Confirmer remboursement externe')),
           TextButton(onPressed: () => custom('refund_fail', r), child: const Text('Échec')),
         ];
       case 'report':
@@ -303,4 +314,74 @@ class _CouponTabState extends State<_CouponTab> {
           },
         ),
       ]);
+}
+
+
+/// Gestion de la boutique HAITIKET officielle : aucun abonnement vendeur n'est exigé.
+class OfficialShopAdminTab extends StatefulWidget {
+  const OfficialShopAdminTab({super.key});
+  @override
+  State<OfficialShopAdminTab> createState() => _OfficialShopAdminTabState();
+}
+
+class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
+  late Future<Map<String, dynamic>?> future = Repo.adminOfficialShop();
+  final name = TextEditingController(text: 'HAITIKET Official Store');
+  final city = TextEditingController(text: 'Port-au-Prince');
+  final slogan = TextEditingController(text: 'La boutique officielle HAITIKET');
+  bool busy = false;
+
+  void reload() => setState(() => future = Repo.adminOfficialShop());
+
+  Future<void> save() async {
+    if (name.text.trim().length < 2) return toast(context, 'Le nom de la boutique est requis.');
+    setState(() => busy = true);
+    try {
+      await Repo.adminSaveOfficialShop(name: name.text.trim(), city: city.text.trim(), slogan: slogan.text.trim());
+      if (mounted) toast(context, 'Boutique officielle enregistrée. Les produits seront publiés dans Marketplace.');
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  void dispose() { name.dispose(); city.dispose(); slogan.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>?>(
+    future: future,
+    builder: (context, snap) {
+      if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+      if (snap.hasError) return ListView(padding: const EdgeInsets.all(18), children: [ErrorState(snap.error)]);
+      final shop = snap.data;
+      if (shop != null) {
+        name.text = '${shop['name'] ?? ''}';
+        city.text = '${shop['city'] ?? ''}';
+        slogan.text = '${shop['slogan'] ?? ''}';
+      }
+      return ListView(padding: const EdgeInsets.all(18), children: [
+        const Text('Boutique officielle HAITIKET', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        const Text('Une boutique contrôlée par la plateforme, sans abonnement supplémentaire. Ses produits apparaissent dans Marketplace avec le badge officiel. Les produits Bazar restent dans leur section.', style: TextStyle(height: 1.45)),
+        const SizedBox(height: 14),
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(20)), child: Row(children: [const Icon(Icons.verified, color: C.green, size: 30), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Badge officiel HAITIKET', style: TextStyle(fontWeight: FontWeight.w900)), Text(shop == null ? 'Pas encore créée' : 'Active · ${shop['status']} · Abonnement exempté')]))])),
+        const SizedBox(height: 12),
+        TextField(controller: name, maxLength: 80, decoration: const InputDecoration(labelText: 'Nom public de la boutique')),
+        TextField(controller: city, decoration: const InputDecoration(labelText: 'Ville')),
+        TextField(controller: slogan, maxLength: 80, decoration: const InputDecoration(labelText: 'Slogan')),
+        const SizedBox(height: 8),
+        FilledButton.icon(onPressed: busy ? null : save, icon: const Icon(Icons.save_outlined), label: Text(busy ? 'Enregistrement…' : shop == null ? 'Créer la boutique officielle' : 'Enregistrer les paramètres')),
+        if (shop != null) ...[
+          const SizedBox(height: 20),
+          const Divider(),
+          const Text('Gestion complète de la boutique', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ShopPanel(shop, key: ValueKey('official-shop-${shop['id']}')),
+        ],
+      ]);
+    },
+  );
 }

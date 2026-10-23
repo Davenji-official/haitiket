@@ -312,7 +312,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         Text(stock <= 5 ? 'Stock faible : $stock disponible(s)' : 'En stock', style: TextStyle(color: stock <= 5 ? C.terracotta : C.muted, fontWeight: FontWeight.w700)),
         ...promosUi(),
         ...variantsUi(),
-        if ((p['audience'] as String?)?.isNotEmpty == true) chip(Icons.people_alt_outlined, 'Pour ${p['audience']}'),
+        if (((p['audiences'] as List?) ?? const []).isNotEmpty) chip(Icons.people_alt_outlined, 'Pour ${(p['audiences'] as List).join(', ')}') else if ((p['audience'] as String?)?.isNotEmpty == true) chip(Icons.people_alt_outlined, 'Pour ${p['audience']}'),
         ...tiersUi(),
         quantitySelector(),
         if (desc.isNotEmpty) ...[
@@ -337,6 +337,18 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(onPressed: () => openChat(context, 'product', p['id'] as String), icon: const Icon(Icons.chat_bubble_outline), label: const Text('Contacter le vendeur')),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.share_outlined),
+          label: const Text('Copier le lien du produit'),
+          onPressed: () {
+            final id = p['id'] as String;
+            final shopName = ((p['shops'] as Map?)?['name'] ?? 'Boutique HAITIKET').toString();
+            final link = kIsWeb ? Uri.base.replace(queryParameters: {...Uri.base.queryParameters, 'product': id}).toString() : 'HAITIKET · ${p['name']} · ${money(p['price_minor'] as num, (p['currency'] as String?) ?? 'HTG')} · $shopName · Référence produit : $id';
+            Clipboard.setData(ClipboardData(text: link));
+            toast(context, kIsWeb ? 'Lien direct copié. Vous pouvez le partager par message ou sur les réseaux.' : 'Informations du produit copiées. Le lien direct mobile nécessite la configuration des liens universels HAITIKET.');
+          },
+        ),
         const SizedBox(height: 30),
       ]),
     );

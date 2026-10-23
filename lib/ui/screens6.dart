@@ -8,19 +8,17 @@ import 'screens5.dart';
 import 'widgets.dart';
 import 'mascot.dart';
 
-/// Ouvre la page de paiement MonCash (Bazik) pour une commande, une annonce Bazar ou un abonnement boutique.
-Future<void> payAndOpen(BuildContext context, String purpose, String target) async {
+/// Paiement Bazar par portefeuille interne USD, sans redirection vers un prestataire externe.
+Future<void> payBazarFromWallet(BuildContext context, String productId) async {
   try {
-    toast(context, 'Ouverture du paiement MonCash…');
-    final url = await Repo.startPayment(purpose, target);
-    final ok = await launchUrl(Uri.parse(url), mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication, webOnlyWindowName: '_self');
-    if (!ok && context.mounted) toast(context, "Impossible d'ouvrir la page de paiement.");
+    await Repo.payBazarListingFromWallet(productId);
+    if (context.mounted) toast(context, 'Annonce payée en USD et publiée pour 14 jours.');
   } catch (e) {
     if (context.mounted) toast(context, Repo.err(e));
   }
 }
 
-String feeText(int? minor, String usd) => minor == null ? '$usd USD (taux de change non configuré : paiement indisponible)' : '$usd USD ≈ ${money(minor, 'HTG')}';
+String usdFeeText(double? amount, String fallback) => amount == null ? 'Tarif indisponible (paiement bloqué)' : '\$${amount.toStringAsFixed(2)} USD';
 
 class PlanCard extends StatelessWidget {
   final Map<String, dynamic> shop;
@@ -33,13 +31,45 @@ class PlanCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: valid ? C.mint : const Color(0xFFFFF1EC), borderRadius: BorderRadius.circular(18)),
-      child: FutureBuilder<int?>(
-        future: Repo.quoteFee('shop_plan'),
+      child: FutureBuilder<double?>(
+        future: Repo.quoteWalletFeeUsd('shop_plan'),
         builder: (_, s) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(valid ? 'Abonnement actif jusqu\'au ${until.substring(0, 10)}' : 'Abonnement boutique non payé', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
-          Text('Tarif mensuel : ${feeText(s.data, '20')}', style: const TextStyle(color: C.muted)),
+          Text(valid ? 'Abonnement actif jusqu'au ${until.substring(0, 10)}' : 'Abonnement boutique non payé', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Tarif mensuel : ${usdFeeText(s.data, '20')}', style: const TextStyle(color: C.muted)),
           const SizedBox(height: 8),
-          PrimaryButton(label: valid ? 'Prolonger de 30 jours' : "Payer l'abonnement", icon: Icons.payments_outlined, onPressed: s.data == null ? null : () => payAndOpen(context, 'shop_plan', shop['id'] as String)),
+          PrimaryButton(
+            label: valid ? 'Abonnement actif' : "Payer l'abonnement avec le portefeuille USD",
+            icon: Icons.account_balance_wallet_outlined,
+            onPressed: s.data == null || valid ? null : () async {
+              try {
+                await Repo.payShopPlanFromWallet(shop['id'] as String);
+                if (context.mounted) toast(context, 'Abonnement payé depuis le portefeuille USD.');
+              } catch (e) {
+                if (context.mounted) toast(context, Repo.err(e));
+              }
+            },
+          ),
+          const SizedBox(height: 10),
+          FutureBuilder<double?>(
+            future: Repo.quoteWalletFeeUsd('shop_plan_yearly'),
+            builder: (_, annual) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Tarif annuel : ${usdFeeText(annual.data, '200')} USD', style: const TextStyle(color: C.muted)),
+              const SizedBox(height: 6),
+              PrimaryButton(
+                label: valid ? 'Abonnement actif' : 'Payer l’abonnement annuel (365 jours)',
+                icon: Icons.calendar_month_outlined,
+                onPressed: annual.data == null || valid ? null : () async {
+                  try {
+                    await Repo.payShopPlanFromWallet(shop['id'] as String, period: 'yearly');
+                    if (context.mounted) toast(context, 'Abonnement annuel payé depuis le portefeuille USD.');
+                  } catch (e) {
+                    if (context.mounted) toast(context, Repo.err(e));
+                  }
+                },
+              ),
+            ]),
+          ),
+          const Text('Le débit est effectué côté serveur. Aucun change automatique depuis le portefeuille HTG. Le renouvellement anticipé est désactivé tant que l’abonnement est actif.', style: TextStyle(color: C.muted, fontSize: 12)),
         ]),
       ),
     );

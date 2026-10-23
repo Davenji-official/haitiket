@@ -261,6 +261,48 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
     setState(() => f = load());
   }
 
+  Future<void> proposePrice(Map<String, dynamic> job) async {
+    final currency = (job['currency'] ?? 'HTG').toString();
+    final amountText = await askText(context, 'Votre prix de livraison ($currency)', hint: 'Montant en $currency, ex. 250', type: TextInputType.numberWithOptions(decimal: true));
+    if (amountText == null || amountText.trim().isEmpty || !mounted) return;
+    final etaText = await askText(context, 'Délai estimé en minutes', hint: 'Ex. 35', type: TextInputType.number);
+    if (etaText == null || !mounted) return;
+    final note = await askText(context, 'Note au client (facultatif)', hint: 'Ex. circulation dense');
+    if (!mounted) return;
+    final amount = double.tryParse(amountText.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(etaText.trim());
+    if (amount == null || !amount.isFinite || amount <= 0 || eta == null || eta < 1 || eta > 1440) {
+      toast(context, 'Vérifiez le prix et le délai (1 à 1440 minutes).');
+      return;
+    }
+    await run(() async {
+      await Repo.proposeDeliveryPrice(job['id'].toString(), (amount * 100).round(), currency, eta, note: note);
+      if (mounted) toast(context, 'Offre envoyée. Le client pourra la comparer pendant la durée configurée.');
+    });
+  }
+
+  Future<void> reportTrafficDelay(Map<String, dynamic> job) async {
+    final choice = await showDialog<int>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Retard dû à la circulation'),
+      content: const Text('Choisissez une prolongation réaliste. Le client sera informé. Cette déclaration doit correspondre à la situation réelle.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Annuler')),
+        TextButton(onPressed: () => Navigator.pop(d, 120), child: const Text('+ 2 heures')),
+        FilledButton(onPressed: () => Navigator.pop(d, 240), child: const Text('+ 4 heures')),
+      ],
+    ));
+    if (choice == null || !mounted) return;
+    final reason = await askText(context, 'Expliquez le retard', hint: 'Ex. embouteillage important sur le trajet');
+    if (reason == null || reason.trim().length < 10 || !mounted) {
+      if (mounted && reason != null) toast(context, 'Le motif doit contenir au moins 10 caractères.');
+      return;
+    }
+    await run(() async {
+      await Repo.reportDeliveryTrafficDelay(job['id'].toString(), choice, reason.trim());
+      if (mounted) toast(context, 'Retard signalé. Le client peut maintenant voir le motif et la prolongation.');
+    });
+  }
+
   Future<void> confirm(Map<String, dynamic> j, bool pickup) async {
     final pin = await askText(context, pickup ? 'Code donné par le vendeur' : 'Code donné par le client', type: TextInputType.number);
     if (pin == null || pin.isEmpty) return;
@@ -271,6 +313,22 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
+  }
+
+  Future<void> withdrawCourierRole() async {
+    final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Arrêter définitivement les livraisons ?'),
+      content: const Text('Votre candidature sera marquée comme retirée et l’historique sera conservé. Vous pourrez contacter le support si vous souhaitez revenir plus tard.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Retirer ma candidature'))],
+    ));
+    if (ok != true) return;
+    try {
+      await _stopGps();
+      await Repo.withdrawCourier();
+      if (!mounted) return;
+      toast(context, 'Candidature livreur retirée.');
+      reload();
+    } catch (e) { if (mounted) toast(context, 'Impossible de retirer la candidature : ${Repo.err(e)}'); }
   }
 
   Future<void> run(Future<void> Function() a) async {
@@ -305,12 +363,14 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
               final open = List<Map<String, dynamic>>.from(d['open'] as List);
               final mine = List<Map<String, dynamic>>.from(d['mine'] as List);
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (app['verified_at'] != null) const Chip(avatar: Icon(Icons.verified, color: Colors.white, size: 16), label: Text('Livreur vérifié'), backgroundColor: C.green, labelStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(avail ? 'Disponible pour les livraisons' : 'Indisponible', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                   value: avail,
                   onChanged: (v) => run(() => _setAvailability(v)),
                 ),
+                Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: withdrawCourierRole, icon: const Icon(Icons.person_remove_alt_1_outlined), label: const Text('Je ne souhaite plus être livreur'))),
                 const SizedBox(height: 12),
                 const Text('Missions proposées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                 const SizedBox(height: 8),
@@ -324,8 +384,8 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                       color: Colors.white,
                       child: ListTile(
                         title: Text('Départ : ${j['pickup_area']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('Rémunération : ${money(j['pay_minor'] as num, j['currency'] as String)}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w800)),
-                        trailing: FilledButton(onPressed: () => run(() => Repo.acceptJob(j['id'] as String)), child: const Text('Accepter')),
+                        subtitle: Text('Proposez votre tarif · ${j['currency'] ?? 'HTG'}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w800)),
+                        trailing: FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
                       ),
                     ),
                 const SizedBox(height: 20),
@@ -340,11 +400,21 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                       child: ListTile(
                         title: Text('${j['pickup_area']} → ${j['dropoff_address']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text('${money(j['pay_minor'] as num, j['currency'] as String)} · ${j['status']}'),
-                        trailing: j['status'] == 'assigned'
-                            ? FilledButton(onPressed: () => confirm(j, true), child: const Text('Collecte'))
-                            : j['status'] == 'picked_up'
-                                ? FilledButton(onPressed: () => confirm(j, false), child: const Text('Remise'))
-                                : null,
+                        trailing: (j['status'] == 'assigned' || j['status'] == 'picked_up')
+                            ? PopupMenuButton<String>(
+                                onSelected: (action) {
+                                  if (action == 'traffic') reportTrafficDelay(j);
+                                  if (action == 'pickup') confirm(j, true);
+                                  if (action == 'delivery') confirm(j, false);
+                                },
+                                itemBuilder: (_) => [
+                                  if (j['status'] == 'assigned') const PopupMenuItem(value: 'pickup', child: Text('Confirmer la collecte')),
+                                  if (j['status'] == 'picked_up') const PopupMenuItem(value: 'delivery', child: Text('Confirmer la remise')),
+                                  const PopupMenuItem(value: 'traffic', child: Text('Signaler un retard de circulation')),
+                                ],
+                                child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.more_vert)),
+                              )
+                            : null,
                       ),
                     ),
               ]);

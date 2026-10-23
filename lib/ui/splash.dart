@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'shell.dart';
@@ -78,6 +79,11 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                 opacity: t(.65, .85, Curves.easeOut),
                 child: Transform.translate(offset: Offset(0, 12 * (1 - t(.65, .9, Curves.easeOut))), child: const Text('LE COMMERCE AVANCE, HAÏTI SE RAPPROCHE.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 2, color: C.terracotta))),
               ),
+              const SizedBox(height: 16),
+              Opacity(
+                opacity: t(.75, .95, Curves.easeOut),
+                child: const Text('Powered by FIBRAXA', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: C.muted)),
+              ),
             ]),
             Positioned(
               bottom: 60,
@@ -96,6 +102,6 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
         duration: const Duration(milliseconds: 800),
         switchInCurve: Curves.easeOutCubic,
         transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: ScaleTransition(scale: Tween<double>(begin: .96, end: 1).animate(anim), child: child)),
-        child: done ? const Shell(key: ValueKey('shell')) : splash(),
+        child: done ? Shell(key: const ValueKey('shell'), initialProductId: kIsWeb ? Uri.base.queryParameters['product'] : null) : splash(),
       );
 }

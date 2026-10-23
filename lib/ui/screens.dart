@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import '../config.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -54,11 +56,13 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   String? cat;
   String sort = 'recent';
   bool nearby = false;
+  String? audienceFilter;
   Position? me;
   final minC = TextEditingController(), maxC = TextEditingController();
   late final Future<List<Map<String, dynamic>>> cats = Repo.categories();
   Future<List<Map<String, dynamic>>>? f;
   String lastQ = '\u0000';
+  Timer? searchDebounce;
 
   int? minor(TextEditingController c) {
     final v = double.tryParse(c.text.replaceAll(',', '.'));
@@ -66,7 +70,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   }
 
   Future<List<Map<String, dynamic>>> load(String q) async {
-    final items = await Repo.products(source: 'marketplace', q: q, categoryId: cat, minMinor: minor(minC), maxMinor: minor(maxC), sort: sort, limit: 60);
+    final items = await Repo.products(source: 'marketplace', q: q, categoryId: cat, minMinor: minor(minC), maxMinor: minor(maxC), sort: sort, limit: 60, audience: audienceFilter);
     if (me != null) {
       for (final p in items) {
         final sh = p['shops'] as Map?;
@@ -79,6 +83,11 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   }
 
   void refresh() => setState(() => f = load(Repo.search.value));
+
+  void liveSearch(String value) {
+    searchDebounce?.cancel();
+    searchDebounce = Timer(const Duration(milliseconds: 350), () { if (mounted) Repo.search.value = value; });
+  }
 
   Widget chip(String label, bool sel, VoidCallback onTap) => Padding(
         padding: const EdgeInsets.only(right: 8),
@@ -96,6 +105,9 @@ class _MarketplaceState extends State<MarketplaceScreen> {
   }
 
   @override
+  void dispose() { searchDebounce?.cancel(); minC.dispose(); maxC.dispose(); super.dispose(); }
+
+  @override
   Widget build(BuildContext context) => ValueListenableBuilder<String>(
         valueListenable: Repo.search,
         builder: (_, q, __) {
@@ -107,7 +119,18 @@ class _MarketplaceState extends State<MarketplaceScreen> {
             MascotHeader(mascot: Mascot.boutiques, title: tr('Marketplace'), subtitle: 'Produits des boutiques professionnelles vérifiées.', action: _mapButton(context, 'pro')),
             const SizedBox(height: 8),
             _promo(context, tr('Vous êtes commerçant ?'), 'Boutique professionnelle : 20 USD / mois. Vitrine, stock, commandes et livraison HAITIKET.', tr('Ouvrir ma boutique'), Icons.storefront, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopRequestScreen()))),
-            SearchPill(onSubmit: (v) => Repo.search.value = v),
+            SearchPill(onChanged: liveSearch, onSubmit: (v) { searchDebounce?.cancel(); Repo.search.value = v; }),
+            if (q.trim().length >= 2) FutureBuilder<List<Map<String, dynamic>>>(
+              future: Repo.searchShops(q),
+              builder: (_, shopsState) {
+                final shops = shopsState.data ?? const <Map<String, dynamic>>[];
+                if (shops.isEmpty) return const SizedBox.shrink();
+                return Card(child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Boutiques correspondantes', style: TextStyle(fontWeight: FontWeight.w800)),
+                  for (final shop in shops) ListTile(dense: true, leading: const Icon(Icons.storefront_outlined, color: C.terracotta), title: Text('${shop['name']}'), subtitle: Text('${shop['city'] ?? 'Haïti'}${shop['is_official'] == true ? ' · Boutique officielle HAITIKET' : ''}'), trailing: const Icon(Icons.north_east), onTap: () { Repo.search.value = ''; Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopScreen(shop['id'] as String))); }),
+                ])));
+              },
+            ),
             const SizedBox(height: 14),
             SizedBox(
               height: 46,
@@ -126,6 +149,13 @@ class _MarketplaceState extends State<MarketplaceScreen> {
                 ]),
               ),
             ),
+            const SizedBox(height: 8),
+            const Text('Public concerné', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+            SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+              chip('Tous', audienceFilter == null, () { audienceFilter = null; refresh(); }),
+              for (final audience in const ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'])
+                chip(audience, audienceFilter == audience, () { audienceFilter = audience; refresh(); }),
+            ])),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(child: TextField(controller: minC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Prix min (HTG)', isDense: true))),
@@ -245,7 +275,54 @@ class NetworkScreen extends StatefulWidget {
 class _NetworkState extends State<NetworkScreen> {
   final name = TextEditingController(), phone = TextEditingController(), zone = TextEditingController();
   String transport = 'moto';
-  bool busy = false;
+  bool busy = false, kycBusy = false, kycSubmitted = false;
+  DateTime? birthDate, guardianBirthDate;
+  String documentType = 'cin_ninu';
+  String? identityPath, birthCertificatePath, guardianDocumentPath, recentPhotoPath;
+  final guardianName = TextEditingController();
+  int? get calculatedAge {
+    if (birthDate == null) return null;
+    final now = DateTime.now();
+    var age = now.year - birthDate!.year;
+    if (now.month < birthDate!.month || (now.month == birthDate!.month && now.day < birthDate!.day)) age--;
+    return age;
+  }
+
+  Future<String?> pickKycImage(String kind, {bool camera = false}) async {
+    final user = currentUser();
+    if (user == null) { toast(context, 'Connectez-vous pour téléverser les documents.'); return null; }
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: camera ? ImageSource.camera : ImageSource.gallery, imageQuality: 88, maxWidth: 2200);
+    if (file == null) return null;
+    final ext0 = file.name.contains('.') ? file.name.split('.').last.toLowerCase() : 'jpg';
+    final ext = ['jpg', 'jpeg', 'png', 'webp'].contains(ext0) ? ext0 : 'jpg';
+    final mime = ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg';
+    final path = '${user.id}/${DateTime.now().microsecondsSinceEpoch}_$kind.$ext';
+    await Supabase.instance.client.storage.from('kyc-private').uploadBinary(path, await file.readAsBytes(), fileOptions: FileOptions(contentType: mime, upsert: false));
+    return path;
+  }
+
+  Future<void> chooseBirthDate({required bool guardian}) async {
+    final initial = guardian ? (guardianBirthDate ?? DateTime(1980, 1, 1)) : (birthDate ?? DateTime(2000, 1, 1));
+    final value = await showDatePicker(context: context, initialDate: initial, firstDate: DateTime(1900), lastDate: DateTime.now());
+    if (value == null) return;
+    setState(() { if (guardian) { guardianBirthDate = value; } else { birthDate = value; if ((calculatedAge ?? 18) >= 18 && !['cin_ninu','passport','drivers_license'].contains(documentType)) documentType = 'cin_ninu'; } });
+  }
+
+  Future<void> submitKyc() async {
+    if (birthDate == null || recentPhotoPath == null) return toast(context, 'Date de naissance et photo récente obligatoires.');
+    final age = calculatedAge ?? -1;
+    if (age >= 18 && identityPath == null) return toast(context, 'Ajoutez une CIN/NINU, un passeport ou un permis.');
+    if (age < 18 && (birthCertificatePath == null || guardianDocumentPath == null || guardianName.text.trim().length < 3 || guardianBirthDate == null)) return toast(context, 'Pour un mineur : acte de naissance, responsable majeur, date de naissance et pièce du responsable sont obligatoires.');
+    setState(() => kycBusy = true);
+    try {
+      await Repo.submitIdentityVerification(dateOfBirth: birthDate!, documentType: age >= 18 ? documentType : 'minor_guardian',
+        identityDocumentPath: identityPath, birthCertificatePath: birthCertificatePath, guardianName: guardianName.text.trim(),
+        guardianDateOfBirth: guardianBirthDate, guardianDocumentPath: guardianDocumentPath, recentPhotoPath: recentPhotoPath!);
+      if (mounted) { setState(() => kycSubmitted = true); toast(context, 'Dossier KYC envoyé à l’administration pour vérification.'); }
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+    if (mounted) setState(() => kycBusy = false);
+  }
 
   Future<void> submit() async {
     if (name.text.trim().isEmpty || phone.text.trim().isEmpty || zone.text.trim().isEmpty) return toast(context, 'Remplissez tous les champs.');
@@ -278,6 +355,24 @@ class _NetworkState extends State<NetworkScreen> {
         ),
         const SizedBox(height: 12),
         Field(zone, "Zone d'activité (ex. Delmas)"),
+        const SizedBox(height: 20),
+        const Text('Vérification d’identité KYC', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+        const Text('Obligatoire avant l’approbation comme livreur et pour obtenir le badge de boutique vérifiée. Les documents sont privés et examinés par l’administration.'),
+        OutlinedButton.icon(onPressed: () => chooseBirthDate(guardian: false), icon: const Icon(Icons.cake_outlined), label: Text(birthDate == null ? 'Choisir ma date de naissance' : 'Date de naissance : ${birthDate!.year}-${birthDate!.month.toString().padLeft(2, '0')}-${birthDate!.day.toString().padLeft(2, '0')}')),
+        if (calculatedAge != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('Âge calculé : $calculatedAge ans${calculatedAge! < 18 ? ' · dossier mineur' : ' · dossier majeur'}', style: const TextStyle(fontWeight: FontWeight.w700))),
+        if (calculatedAge == null || calculatedAge! >= 18) ...[
+          DropdownButtonFormField<String>(initialValue: documentType, decoration: const InputDecoration(labelText: 'Type de pièce officielle'), items: const [DropdownMenuItem(value: 'cin_ninu', child: Text('CIN / NINU')), DropdownMenuItem(value: 'passport', child: Text('Passeport')), DropdownMenuItem(value: 'drivers_license', child: Text('Permis de conduire'))], onChanged: (v) => setState(() => documentType = v ?? 'cin_ninu')),
+          OutlinedButton.icon(onPressed: () async { try { final p = await pickKycImage('identite'); if (p != null) setState(() => identityPath = p); } catch (e) { if (mounted) toast(context, Repo.err(e)); } }, icon: const Icon(Icons.badge_outlined), label: Text(identityPath == null ? 'Photographier / choisir la pièce d’identité' : 'Pièce d’identité ajoutée ✓')),
+        ],
+        if (calculatedAge != null && calculatedAge! < 18) ...[
+          OutlinedButton.icon(onPressed: () async { try { final p = await pickKycImage('acte_naissance'); if (p != null) setState(() => birthCertificatePath = p); } catch (e) { if (mounted) toast(context, Repo.err(e)); } }, icon: const Icon(Icons.description_outlined), label: Text(birthCertificatePath == null ? 'Ajouter l’acte de naissance' : 'Acte de naissance ajouté ✓')),
+          Field(guardianName, 'Nom complet du responsable majeur'),
+          OutlinedButton.icon(onPressed: () => chooseBirthDate(guardian: true), icon: const Icon(Icons.cake), label: Text(guardianBirthDate == null ? 'Date de naissance du responsable' : 'Naissance responsable : ${guardianBirthDate!.year}-${guardianBirthDate!.month.toString().padLeft(2, '0')}-${guardianBirthDate!.day.toString().padLeft(2, '0')}')),
+          OutlinedButton.icon(onPressed: () async { try { final p = await pickKycImage('piece_responsable'); if (p != null) setState(() => guardianDocumentPath = p); } catch (e) { if (mounted) toast(context, Repo.err(e)); } }, icon: const Icon(Icons.family_restroom), label: Text(guardianDocumentPath == null ? 'Ajouter la pièce du responsable' : 'Pièce du responsable ajoutée ✓')),
+        ],
+        OutlinedButton.icon(onPressed: () async { try { final p = await pickKycImage('photo_recente', camera: true); if (p != null) setState(() => recentPhotoPath = p); } catch (e) { if (mounted) toast(context, Repo.err(e)); } }, icon: const Icon(Icons.camera_alt_outlined), label: Text(recentPhotoPath == null ? 'Prendre une photo récente de moi' : 'Photo récente ajoutée ✓')),
+        FilledButton.tonal(onPressed: kycBusy || kycSubmitted ? null : submitKyc, child: Text(kycSubmitted ? 'Dossier KYC envoyé' : kycBusy ? 'Envoi du dossier…' : 'Envoyer le dossier KYC à l’administration')),
+        const SizedBox(height: 12),
         FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Envoi…' : 'Envoyer ma candidature')),
         const SizedBox(height: 16),
         const EmptyState(title: 'Missions', text: "Les missions seront proposées après vérification de votre profil. Aucun livreur n'est affiché tant qu'il n'est pas réellement validé."),
