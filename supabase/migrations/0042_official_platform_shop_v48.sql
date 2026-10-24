@@ -97,17 +97,21 @@ create policy products_write on public.products for all
   );
 
 -- Lecture et gestion des commandes de la boutique officielle par tout admin déverrouillé.
+drop policy if exists orders_official_admin_read on public.orders;
 create policy orders_official_admin_read on public.orders for select using (
   exists (select 1 from public.shops s where s.id = shop_id and s.is_official and public.admin_unlocked())
 );
+drop policy if exists order_items_official_admin_read on public.order_items;
 create policy order_items_official_admin_read on public.order_items for select using (
   exists (select 1 from public.orders o join public.shops s on s.id = o.shop_id
           where o.id = order_id and s.is_official and public.admin_unlocked())
 );
+drop policy if exists order_events_official_admin_read on public.order_status_events;
 create policy order_events_official_admin_read on public.order_status_events for select using (
   exists (select 1 from public.orders o join public.shops s on s.id = o.shop_id
           where o.id = order_id and s.is_official and public.admin_unlocked())
 );
+drop policy if exists inventory_official_admin_read on public.inventory_movements;
 create policy inventory_official_admin_read on public.inventory_movements for select using (
   exists (select 1 from public.products p join public.shops s on s.id = p.shop_id
           where p.id = product_id and s.is_official and public.admin_unlocked())
