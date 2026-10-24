@@ -191,6 +191,7 @@ grant execute on function public.seller_manage_own_shop_v53(uuid,text,text) to a
 
 -- 2) Shop deletion request: 30-day cooling-off period and explicit admin approval.
 alter table public.shops add column if not exists verified_at timestamptz;
+alter table public.courier_applications add column if not exists verified_at timestamptz;
 alter table public.shops add column if not exists deletion_requested_at timestamptz;
 alter table public.shops add column if not exists deletion_scheduled_at timestamptz;
 alter table public.shops add column if not exists deletion_review_status text not null default 'none'
@@ -424,7 +425,7 @@ update public.courier_applications c set verified_at=coalesce(c.verified_at,now(
  and exists(select 1 from public.identity_verifications iv where iv.user_id=c.user_id and iv.status='approved');
 
 -- 4) Verified courier/shop badges and account moderation. Deletion is soft to preserve order/audit history.
-alter table public.courier_applications add column if not exists verified_at timestamptz;
+
 alter table public.profiles add column if not exists account_status text not null default 'active' check(account_status in ('active','banned','deleted'));
 alter table public.profiles add column if not exists account_status_reason text;
 alter table public.profiles add column if not exists account_status_updated_at timestamptz;
