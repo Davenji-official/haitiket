@@ -175,7 +175,7 @@ begin
     if v !~ '^[0-9]{1,9}$' then raise exception 'Nombre entier requis'; end if;
     if p_key in ('delivery_immediate_sla_minutes','reservation_minutes') and v::integer < 1 then raise exception 'Une durée positive est requise'; end if;
     if p_key='delivery_offer_expiry_minutes' and v::integer not between 1 and 60 then raise exception 'La durée des offres doit être comprise entre 1 et 60 minutes'; end if;
-    if p_key='commission_bps' and v::integer > 10000 then raise exception 'La commission ne peut dépasser 100 %'; end if;
+    if p_key='commission_bps' and v::integer > 10000 then raise exception 'La commission ne peut dépasser 100 %%'; end if;
   end if;
   insert into public.platform_settings(key,value) values(p_key,v)
   on conflict(key) do update set value=excluded.value,updated_at=now();
