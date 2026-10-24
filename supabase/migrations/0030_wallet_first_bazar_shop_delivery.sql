@@ -36,7 +36,7 @@ begin
   select * into sh from public.shops where id=p.shop_id and owner_id=uid for share;
   if sh.id is null then raise exception 'Cette annonce ne vous appartient pas'; end if;
   if p.status in ('blocked','removed') then raise exception 'Annonce bloquée ou supprimée'; end if;
-  if p.paid_until is not null and p.paid_until>now() then raise exception 'Cette annonce est déjà payée jusqu’au '||to_char(p.paid_until,'YYYY-MM-DD'); end if;
+  if p.paid_until is not null and p.paid_until>now() then raise exception 'Cette annonce est déjà payée jusqu’au %', to_char(p.paid_until,'YYYY-MM-DD'); end if;
   select value::numeric into fee from public.platform_settings where key='bazar_fee_usd';
   if fee is null or fee<=0 then raise exception 'Frais Bazar non configurés'; end if;
   amt:=round(fee*100)::bigint;
