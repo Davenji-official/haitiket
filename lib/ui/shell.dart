@@ -188,41 +188,61 @@ class _ShellState extends State<Shell> {
     return Drawer(
       backgroundColor: C.bg,
       child: SafeArea(
-        child: ListView(padding: const EdgeInsets.all(12), children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 12, 8, 18),
-            child: Row(children: [
-              Image.asset(Mascot.badge.path, height: 58, errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: C.ink)),
-                Text(u?.email ?? tr('Non connecté'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
-              ])),
-            ]),
-          ),
-          drawerItem(Icons.person_outline, tr('Mon profil'), Sec.profile),
-          drawerItem(Icons.receipt_long_outlined, tr('Mes commandes'), Sec.orders),
-          drawerItem(Icons.favorite_border, tr('Mes favoris'), Sec.favorites),
-          drawerItem(Icons.store_mall_directory_outlined, tr('Espace vendeur'), Sec.dashboard),
-          drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
-          drawerItem(Icons.account_balance_wallet_outlined, 'Portefeuille', Sec.wallet),
-          const Divider(height: 28),
-          drawerItem(Icons.support_agent_outlined, tr('Support'), Sec.support),
-          drawerItem(Icons.settings_outlined, tr('Paramètres'), Sec.settings),
-          const Divider(height: 28),
-          if (u == null)
-            drawerItem(Icons.login, tr('Se connecter'), Sec.account)
-          else
-            ListTile(
-              leading: const Icon(Icons.logout, color: C.terracotta),
-              title: Text(tr('Se déconnecter'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
-              onTap: () async {
-                Navigator.pop(context);
-                await Repo.signOut();
-                if (mounted) go(Sec.home);
-              },
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 18),
+                    child: Row(children: [
+                      Image.asset(Mascot.badge.path, height: 58, errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: C.ink)),
+                        Text(u?.email ?? tr('Non connecté'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
+                      ])),
+                    ]),
+                  ),
+                  drawerItem(Icons.person_outline, tr('Mon profil'), Sec.profile),
+                  drawerItem(Icons.receipt_long_outlined, tr('Mes commandes'), Sec.orders),
+                  drawerItem(Icons.favorite_border, tr('Mes favoris'), Sec.favorites),
+                  drawerItem(Icons.store_mall_directory_outlined, tr('Espace vendeur'), Sec.dashboard),
+                  drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
+                  drawerItem(Icons.account_balance_wallet_outlined, 'Portefeuille', Sec.wallet),
+                  const Divider(height: 28),
+                  drawerItem(Icons.support_agent_outlined, tr('Support'), Sec.support),
+                  drawerItem(Icons.settings_outlined, tr('Paramètres'), Sec.settings),
+                  const Divider(height: 28),
+                  if (u == null)
+                    drawerItem(Icons.login, tr('Se connecter'), Sec.account)
+                  else
+                    ListTile(
+                      leading: const Icon(Icons.logout, color: C.terracotta),
+                      title: Text(tr('Se déconnecter'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await Repo.signOut();
+                        if (mounted) go(Sec.home);
+                      },
+                    ),
+                ],
+              ),
             ),
-        ]),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Powered by FIBRAXA',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: .7, color: C.muted),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -331,10 +351,6 @@ class _ShellState extends State<Shell> {
                   transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(anim), child: child)),
                   child: KeyedSubtree(key: ValueKey('${sec.name}-${appLang.value}'), child: body()),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 4, bottom: 5),
-                child: Text('Powered by FIBRAXA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: .7, color: C.muted)),
               ),
             ]),
           ),

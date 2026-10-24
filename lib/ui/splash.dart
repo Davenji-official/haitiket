@@ -80,10 +80,6 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                 child: Transform.translate(offset: Offset(0, 12 * (1 - t(.65, .9, Curves.easeOut))), child: const Text('LE COMMERCE AVANCE, HAÏTI SE RAPPROCHE.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 2, color: C.terracotta))),
               ),
               const SizedBox(height: 16),
-              Opacity(
-                opacity: t(.75, .95, Curves.easeOut),
-                child: const Text('Powered by FIBRAXA', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: C.muted)),
-              ),
             ]),
             Positioned(
               bottom: 60,
