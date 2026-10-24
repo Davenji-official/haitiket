@@ -62,7 +62,7 @@ begin
   if p_period not in ('monthly','yearly') then raise exception 'Période d’abonnement invalide'; end if;
   select * into sh from public.shops where id=p_shop and owner_id=uid and kind='pro' for update;
   if sh.id is null then raise exception 'Boutique professionnelle introuvable'; end if;
-  if sh.plan_paid_until is not null and sh.plan_paid_until>now() then raise exception 'Abonnement déjà actif jusqu’au '||to_char(sh.plan_paid_until,'YYYY-MM-DD'); end if;
+  if sh.plan_paid_until is not null and sh.plan_paid_until>now() then raise exception 'Abonnement déjà actif jusqu’au %', to_char(sh.plan_paid_until,'YYYY-MM-DD'); end if;
   setting_key:=case when p_period='yearly' then 'shop_fee_yearly_usd' else 'shop_fee_usd' end;
   select value::numeric into fee from public.platform_settings where key=setting_key;
   if fee is null or fee<=0 then raise exception 'Tarif de l’abonnement non configuré'; end if;
