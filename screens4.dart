@@ -1,0 +1,356 @@
+import 'package:flutter/material.dart';
+import '../config.dart';
+import '../data/repo.dart';
+import '../theme.dart';
+import 'package:flutter/services.dart';
+import '../i18n.dart';
+import 'fx.dart';
+import 'screens8.dart';
+import 'screens5.dart';
+import 'auth_screens.dart';
+import 'widgets.dart';
+import 'mascot.dart';
+
+Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
+
+Widget _info(String t) => Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: C.mint.withValues(alpha: .6), borderRadius: BorderRadius.circular(20)),
+      child: Text(t, style: const TextStyle(color: C.ink, fontSize: 16, height: 1.4, fontWeight: FontWeight.w600)),
+    );
+
+/// Boutique professionnelle : 20 USD / mois (Marketplace).
+class ShopRequestScreen extends StatefulWidget {
+  const ShopRequestScreen({super.key});
+  @override
+  State<ShopRequestScreen> createState() => _ShopRequestState();
+}
+
+class _ShopRequestState extends State<ShopRequestScreen> {
+  final name = TextEditingController(), city = TextEditingController();
+  bool busy = false;
+
+  Future<void> submit() async {
+    if (name.text.trim().length < 2) return toast(context, 'Indiquez le nom de la boutique.');
+    setState(() => busy = true);
+    try {
+      await Repo.createShop(name.text.trim(), city.text.trim());
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      toast(context, 'Demande envoyée. Votre boutique sera activée après vérification.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Boutique professionnelle', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        body: ListView(padding: const EdgeInsets.all(18), children: [
+          const MascotHeader(mascot: Mascot.boutiques, title: 'Ouvrir ma boutique'),
+          _info("Abonnement : 20 USD par mois. Vitrine dans la Marketplace, gestion du stock, commandes et livraison HAITIKET. Votre boutique est vérifiée avant activation. Le paiement de l'abonnement est indisponible pour le moment (prestataire en attente de configuration)."),
+          Field(name, 'Nom de la boutique'),
+          Field(city, 'Ville'),
+          PrimaryButton(label: busy ? 'Envoi…' : "Demander l'ouverture", icon: Icons.storefront, onPressed: busy ? null : submit),
+        ]),
+      );
+}
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+  @override
+  State<ProfileScreen> createState() => _ProfileState();
+}
+
+class _ProfileState extends State<ProfileScreen> {
+  final name = TextEditingController(), phone = TextEditingController(), city = TextEditingController();
+  String? avatar;
+  bool loading = true, busy = false;
+  late final Future<Map<String, dynamic>> roles = currentUser() == null ? Future.value({}) : Repo.myRoles();
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    if (currentUser() == null) {
+      setState(() => loading = false);
+      return;
+    }
+    try {
+      final p = await Repo.getProfile();
+      name.text = (p?['display_name'] ?? '') as String;
+      phone.text = (p?['phone'] ?? '') as String;
+      city.text = (p?['city'] ?? '') as String;
+      avatar = p?['avatar_url'] as String?;
+    } catch (_) {}
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> save() async {
+    setState(() => busy = true);
+    try {
+      await Repo.saveProfile(name.text.trim(), phone.text.trim(), city.text.trim(), avatar);
+      if (mounted) toast(context, 'Profil enregistré.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  Future<void> changePassword() async {
+    final a = await askText(context, 'Nouveau mot de passe', hint: '8 caractères minimum', obscure: true);
+    if (a == null || a.isEmpty) return;
+    if (a.length < 8) return toast(context, '8 caractères minimum.');
+    if (!mounted) return;
+    final b = await askText(context, 'Confirmer le mot de passe', obscure: true);
+    if (b != a) return toast(context, 'Les deux mots de passe ne correspondent pas.');
+    try {
+      await Repo.updatePassword(a);
+      if (mounted) toast(context, 'Mot de passe modifié.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Supprimer mon compte ?'),
+        content: const Text("Vos données personnelles seront effacées (profil, adresses, favoris, messages liés). Vos boutiques seront fermées. Les commandes passées sont conservées sans données personnelles. Cette action est définitive.\n\nImpossible tant qu'une commande ou une livraison est en cours."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(d, true), child: const Text('Continuer')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final word = await askText(context, 'Tapez SUPPRIMER pour confirmer');
+    if (word != 'SUPPRIMER') {
+      if (mounted && word != null) toast(context, 'Confirmation incorrecte : compte conservé.');
+      return;
+    }
+    try {
+      await Repo.deleteAccount();
+      if (mounted) toast(context, 'Votre compte a été supprimé.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Widget badge(IconData i, String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: c), const SizedBox(width: 6), Text(t, style: TextStyle(fontWeight: FontWeight.w800, color: c))]),
+      );
+
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
+        MascotHeader(mascot: Mascot.profile, title: tr('Mon profil')),
+        if (currentUser() == null || !Config.configured)
+          const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour gérer votre profil.')
+        else if (loading)
+          const Center(child: CircularProgressIndicator())
+        else ...[
+          Center(child: CircleAvatar(radius: 48, backgroundColor: C.mint, backgroundImage: avatar == null ? null : NetworkImage(avatar!), child: avatar == null ? const Icon(Icons.person, size: 48, color: C.green) : null)),
+          const SizedBox(height: 10),
+          Center(child: Text(currentUser()!.email ?? '', style: const TextStyle(color: C.muted, fontSize: 16))),
+          const SizedBox(height: 10),
+          FutureBuilder<Map<String, dynamic>>(
+            future: roles,
+            builder: (_, s) {
+              final r = s.data ?? {};
+              return Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+                badge(Icons.shopping_bag_outlined, 'Acheteur', C.green),
+                if (((r['pro'] ?? 0) as int) > 0) badge(Icons.storefront, 'Boutique pro', C.terracotta),
+                if (r['personal'] == true) badge(Icons.local_offer_outlined, 'Vendeur Bazar', C.yellow.withValues(alpha: 1)),
+                if (r['courier'] == 'approved') badge(Icons.two_wheeler, 'Livreur', C.ink) else if (r['courier'] != null) badge(Icons.hourglass_top, 'Livreur : ${r['courier']}', C.muted),
+              ]);
+            },
+          ),
+          const SizedBox(height: 14),
+          ImageUploadField(onUrl: (u) => setState(() => avatar = u)),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.location_on_outlined, color: C.green),
+            title: const Text('Mes adresses de livraison', style: TextStyle(fontWeight: FontWeight.w700)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddressesScreen())),
+          ),
+          Field(name, 'Nom complet'),
+          Field(phone, 'Téléphone', type: TextInputType.phone),
+          Field(city, 'Commune ou ville'),
+          const Text("Votre téléphone n'est jamais public : il n'est partagé qu'avec les personnes d'une commande.", style: TextStyle(color: C.muted)),
+          const SizedBox(height: 16),
+          PrimaryButton(label: busy ? 'Enregistrement…' : 'Enregistrer', icon: Icons.check, onPressed: busy ? null : save),
+          const SizedBox(height: 28),
+          const ReferralCard(),
+          const SizedBox(height: 28),
+          const Text('Sécurité et données', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.lock_reset, color: C.green), title: const Text('Changer mon mot de passe', style: TextStyle(fontWeight: FontWeight.w700)), onTap: changePassword),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.description_outlined, color: C.green), title: const Text('Conditions et confidentialité', style: TextStyle(fontWeight: FontWeight.w700)), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen()))),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.logout, color: C.terracotta), title: const Text('Se déconnecter', style: TextStyle(fontWeight: FontWeight.w700)), onTap: () => Repo.signOut()),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('Supprimer mon compte', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red)), onTap: deleteAccount),
+          const SizedBox(height: 30),
+        ],
+      ]);
+}
+
+class ReferralCard extends StatefulWidget {
+  const ReferralCard({super.key});
+  @override
+  State<ReferralCard> createState() => _ReferralState();
+}
+
+class _ReferralState extends State<ReferralCard> {
+  late Future<Map<String, dynamic>> f = Repo.myReferral();
+  final code = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+        future: f,
+        builder: (_, s) {
+          if (s.connectionState != ConnectionState.done) return const SizedBox();
+          if (s.hasError) return const SizedBox();
+          final d = s.data!;
+          final pending = (d['pending'] as num).toInt(), valid = (d['validated'] as num).toInt();
+          return Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(24)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Parrainage', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Text('${d['code']}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 3, color: C.ink)),
+                IconButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: '${d['code']}'));
+                    toast(context, 'Code copié.');
+                  },
+                  icon: const Icon(Icons.copy, color: C.green),
+                ),
+              ]),
+              Text('${d['referred']} filleul(s)${pending > 0 ? ' · récompense en attente : ${money(pending, 'HTG')}' : ''}${valid > 0 ? ' · validée : ${money(valid, 'HTG')}' : ''}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text("La récompense est validée seulement après la première commande réellement livrée de votre filleul.", style: TextStyle(color: C.muted)),
+              const SizedBox(height: 14),
+              Field(code, "J'ai un code de parrainage"),
+              OutlinedButton(
+                onPressed: () async {
+                  try {
+                    await Repo.applyReferral(code.text);
+                    code.clear();
+                    if (mounted) toast(context, 'Code appliqué.');
+                  } catch (e) {
+                    if (mounted) toast(context, Repo.err(e));
+                  }
+                },
+                child: const Text('Appliquer le code'),
+              ),
+            ]),
+          );
+        },
+      );
+}
+
+class SettingsScreen extends StatelessWidget {
+  final VoidCallback onChanged;
+  const SettingsScreen({super.key, required this.onChanged});
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
+        _h(tr('Paramètres')),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.language, color: C.green),
+          title: Text(tr('Langue'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text("La navigation et l'accueil sont traduits ; les autres écrans le seront progressivement."),
+        ),
+        Wrap(spacing: 10, children: [
+          ChoiceChip(label: const Text('Français'), selected: appLang.value == 'fr', onSelected: (_) async { await setLang('fr'); onChanged(); }),
+          ChoiceChip(label: const Text('Kreyòl ayisyen'), selected: appLang.value == 'ht', onSelected: (_) async { await setLang('ht'); onChanged(); }),
+        ]),
+        const SizedBox(height: 8),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.shopping_bag_outlined, color: C.green),
+          title: const Text('Vider mon panier', style: TextStyle(fontWeight: FontWeight.w700)),
+          onTap: () {
+            CartStore.lines.value = {};
+            toast(context, 'Panier vidé.');
+          },
+        ),
+        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.lock_outline, color: C.green), title: Text('Confidentialité', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('Adresse et téléphone : visibles uniquement par les parties d\'une commande.')),
+        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.info_outline, color: C.green), title: Text('Version', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('HAITIKET 0.7')),
+      ]);
+}
+
+class SupportScreen extends StatefulWidget {
+  const SupportScreen({super.key});
+  @override
+  State<SupportScreen> createState() => _SupportState();
+}
+
+class _SupportState extends State<SupportScreen> {
+  final subject = TextEditingController(), message = TextEditingController();
+  late Future<List<Map<String, dynamic>>> f = Repo.myTickets();
+  bool busy = false;
+
+  Future<void> send() async {
+    if (subject.text.trim().length < 3 || message.text.trim().length < 5) return toast(context, 'Sujet et message trop courts.');
+    setState(() => busy = true);
+    try {
+      await Repo.createTicket(subject.text.trim(), message.text.trim());
+      subject.clear();
+      message.clear();
+      f = Repo.myTickets();
+      if (mounted) toast(context, 'Demande envoyée au support.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
+        MascotHeader(mascot: Mascot.support, title: tr('Support'), subtitle: 'Une question ? Notre équipe vous répond.'),
+        const ExpansionTile(title: Text('Comment fonctionne le paiement ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Le paiement en ligne sera activé dès qu'un prestataire sera connecté. Jusqu'là, les commandes restent en attente de paiement."))]),
+        const ExpansionTile(title: Text('Combien coûte vendre ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Bazar : 2 USD pour 14 jours. Boutique professionnelle : 20 USD par mois. Commission de 2 % sur les ventes."))]),
+        const ExpansionTile(title: Text('Comment devenir livreur ?', style: TextStyle(fontWeight: FontWeight.w700)), children: [Padding(padding: EdgeInsets.all(14), child: Text("Déposez votre candidature dans HAITIKET Network. Elle est vérifiée avant l'accès aux missions."))]),
+        const SizedBox(height: 18),
+        if (currentUser() == null || !Config.configured)
+          const EmptyState(title: 'Connexion requise', text: 'Connectez-vous pour contacter le support.')
+        else ...[
+          const Text('Contacter le support', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+          const SizedBox(height: 12),
+          Field(subject, 'Sujet'),
+          Field(message, 'Votre message'),
+          PrimaryButton(label: busy ? 'Envoi…' : 'Envoyer', icon: Icons.send, onPressed: busy ? null : send),
+          const SizedBox(height: 24),
+          const Text('Mes demandes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+          const SizedBox(height: 8),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: f,
+            builder: (_, s) {
+              final items = s.data ?? [];
+              if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+              if (items.isEmpty) return const Text('Aucune demande.', style: TextStyle(color: C.muted));
+              return Column(children: [
+                for (final t in items)
+                  Card(
+                    color: Colors.white,
+                    child: ListTile(
+                      title: Text('${t['subject']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text(t['admin_reply'] != null ? 'Réponse : ${t['admin_reply']}' : 'En attente de réponse · ${t['status']}'),
+                    ),
+                  ),
+              ]);
+            },
+          ),
+        ],
+      ]);
+}
