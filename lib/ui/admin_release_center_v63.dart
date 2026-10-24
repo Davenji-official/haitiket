@@ -44,7 +44,34 @@ class _AdminReleaseCenterV63State extends State<AdminReleaseCenterV63> {
           const SizedBox(height: 6),
           const Text('Vue opérationnelle en lecture seule. Vérifiez les files avant chaque mise en production.', style: TextStyle(color: C.muted)),
           const SizedBox(height: 12),
-          Card(color: total == 0 ? const Color(0xFFEAF7EF) : const Color(0xFFFFF1EC), child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [Icon(total == 0 ? Icons.verified_outlined : Icons.warning_amber_rounded, size: 32, color: total == 0 ? C.green : C.terracotta), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(total == 0 ? 'Aucun bloqueur recensé par cet audit' : '$total éléments signalés', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)), const Text('Ce résultat ne remplace pas les tests de staging ni la confirmation des prestataires.')]))])),
+          Card(
+            color: total == 0 ? const Color(0xFFEAF7EF) : const Color(0xFFFFF1EC),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(
+                    total == 0 ? Icons.verified_outlined : Icons.warning_amber_rounded,
+                    size: 32,
+                    color: total == 0 ? C.green : C.terracotta,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          total == 0 ? 'Aucun bloqueur recensé par cet audit' : '$total éléments signalés',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                        ),
+                        const Text('Ce résultat ne remplace pas les tests de staging ni la confirmation des prestataires.'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           for (final key in keys)
             Card(
