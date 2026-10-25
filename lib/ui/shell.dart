@@ -46,7 +46,6 @@ class _ShellState extends State<Shell> {
   StreamSubscription<AuthState>? authSub;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
-  bool hideDrawerBalances = false;
 
   @override
   void initState() {
@@ -198,61 +197,13 @@ class _ShellState extends State<Shell> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 12, 8, 18),
                     child: Row(children: [
-                      if (u == null)
-                        const CircleAvatar(radius: 29, child: Icon(Icons.person_outline, size: 30))
-                      else
-                        FutureBuilder<Map<String, dynamic>?>(
-                          future: Repo.getProfile(),
-                          builder: (_, snap) {
-                            final url = snap.data?['avatar_url'] as String?;
-                            return CircleAvatar(radius: 29, backgroundColor: C.mint,
-                              backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
-                              child: url == null || url.isEmpty ? const Icon(Icons.person_outline, size: 30, color: C.green) : null);
-                          },
-                        ),
+                      Image.asset(Mascot.badge.path, height: 58, errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58)),
                       const SizedBox(width: 12),
-                      Expanded(child: FutureBuilder<Map<String, dynamic>?>(
-                        future: u == null ? Future.value(null) : Repo.getProfile(),
-                        builder: (_, snap) {
-                          final display = (snap.data?['display_name'] as String?)?.trim();
-                          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(display == null || display.isEmpty ? (u?.email ?? tr('Non connecté')) : display,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
-                            if (u != null) Text(u.email ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 12)),
-                          ]);
-                        },
-                      )),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: C.ink)),
+                        Text(u?.email ?? tr('Non connecté'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
+                      ])),
                     ]),
-                  ),
-                  if (u != null) Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
-                    child: FutureBuilder<Map<String, dynamic>>(
-                      future: Repo.myWalletV2(),
-                      builder: (_, snap) {
-                        final balances = (snap.data?['balances'] as Map?) ?? const {};
-                        String value(String currency) {
-                          if (hideDrawerBalances) return '••••••';
-                          final raw = (balances[currency] as num?)?.toDouble() ?? 0;
-                          return '${raw.toStringAsFixed(2)} $currency';
-                        }
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Row(children: [const Icon(Icons.account_balance_wallet_outlined, color: C.green, size: 18), const SizedBox(width: 7), const Expanded(child: Text('Mes soldes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-                              IconButton(visualDensity: VisualDensity.compact, constraints: const BoxConstraints(), padding: EdgeInsets.zero,
-                                onPressed: () => setState(() => hideDrawerBalances = !hideDrawerBalances),
-                                icon: Icon(hideDrawerBalances ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 19, color: C.green)),
-                            ]),
-                            if (snap.connectionState != ConnectionState.done) const LinearProgressIndicator(minHeight: 2)
-                            else if (snap.hasError) const Text('Solde indisponible', style: TextStyle(color: C.muted, fontSize: 12))
-                            else Row(children: [Expanded(child: Text(value('HTG'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green))), Expanded(child: Text(value('USD'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)))]),
-                            Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () { Navigator.pop(context); go(Sec.wallet); }, child: const Text('Ouvrir le portefeuille'))),
-                          ]),
-                        );
-                      },
-                    ),
                   ),
                   drawerItem(Icons.person_outline, tr('Mon profil'), Sec.profile),
                   drawerItem(Icons.receipt_long_outlined, tr('Mes commandes'), Sec.orders),

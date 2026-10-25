@@ -432,7 +432,7 @@ class CartScreen extends StatelessWidget {
               const SizedBox(height: 16),
               PrimaryButton(label: tr('Passer commande'), icon: Icons.lock_outline, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()))),
               const SizedBox(height: 8),
-              const Text('Paiement indisponible — en attente de configuration du prestataire.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+              const Text('Le paiement se fait après la réservation, depuis « Mes commandes », avec votre portefeuille HTG ou USD. Les paiements externes (MonCash/carte) ne sont pas activés tant que leur prestataire n’est pas configuré.', style: TextStyle(color: C.muted, fontWeight: FontWeight.w600)),
             ],
           ]);
         },

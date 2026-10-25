@@ -371,7 +371,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                           const SizedBox(height: 6),
                           PrimaryButton(
                             label: payingOrders.contains(o['id'])
-                                ? 'Vérification du paiement…'
+                                ? 'Paiement en cours…'
                                 : 'Payer avec mon portefeuille ${o['currency']}',
                             icon: Icons.account_balance_wallet_outlined,
                             onPressed: payingOrders.contains(o['id']) ? null : () async {
