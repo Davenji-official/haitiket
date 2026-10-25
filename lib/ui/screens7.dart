@@ -8,6 +8,7 @@ import 'screens6.dart';
 import 'screens9.dart';
 import 'specs.dart';
 import 'widgets.dart';
+import 'screens.dart';
 
 /// Photos et vidéos d'un produit (jusqu'à 8, la première sert de couverture).
 class MediaPickerField extends StatefulWidget {
@@ -364,6 +365,20 @@ Future<void> startBazarListing(BuildContext context) async {
     );
     if (pay == true && context.mounted) { await payBazarFromWallet(context, id); }
   } catch (e) {
-    if (context.mounted) toast(context, Repo.err(e));
+    if (!context.mounted) return;
+    final message = Repo.err(e);
+    if (message.toLowerCase().contains('kyc') || message.toLowerCase().contains('vérification')) {
+      final openKyc = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+        title: const Text('Vérification d’identité requise'),
+        content: Text('$message\n\nVous pouvez ouvrir le formulaire KYC maintenant. La publication restera bloquée jusqu’à l’approbation par l’administration.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Plus tard')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Ouvrir le formulaire'))],
+      ));
+      if (openKyc == true && context.mounted) {
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkScreen()));
+      }
+    } else {
+      toast(context, message);
+    }
   }
 }

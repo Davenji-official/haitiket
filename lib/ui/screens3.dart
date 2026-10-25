@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import '../data/repo.dart';
@@ -109,14 +110,46 @@ class _ChatState extends State<ChatScreen> {
                 itemBuilder: (_, i) {
                   final m = msgs[i];
                   final mine = m['sender_id'] == me;
+                  final senderId = m['sender_id']?.toString();
                   return Align(
                     alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      constraints: const BoxConstraints(maxWidth: 300),
-                      decoration: BoxDecoration(color: mine ? C.ink : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
-                      child: Text('${m['body']}', style: TextStyle(color: mine ? Colors.white : C.ink, fontSize: 16)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (!mine) ...[
+                          FutureBuilder<Map<String, dynamic>?>(
+                            future: senderId == null ? Future.value(null) : Supabase.instance.client.from('profiles').select('avatar_url').eq('id', senderId).maybeSingle(),
+                            builder: (_, profile) {
+                              final url = profile.data?['avatar_url'] as String?;
+                              return Padding(padding: const EdgeInsets.only(right: 7, bottom: 5), child: CircleAvatar(radius: 15,
+                                backgroundColor: C.mint,
+                                backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
+                                child: url == null || url.isEmpty ? const Icon(Icons.person, size: 17, color: C.green) : null));
+                            },
+                          ),
+                        ],
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          constraints: const BoxConstraints(maxWidth: 300),
+                          decoration: BoxDecoration(color: mine ? C.ink : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+                          child: Text('${m['body']}', style: TextStyle(color: mine ? Colors.white : C.ink, fontSize: 16)),
+                        ),
+                        if (mine) ...[
+                          FutureBuilder<Map<String, dynamic>?>(
+                            future: senderId == null ? Future.value(null) : Supabase.instance.client.from('profiles').select('avatar_url').eq('id', senderId).maybeSingle(),
+                            builder: (_, profile) {
+                              final url = profile.data?['avatar_url'] as String?;
+                              return Padding(padding: const EdgeInsets.only(left: 7, bottom: 5), child: CircleAvatar(radius: 15,
+                                backgroundColor: C.mint,
+                                backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
+                                child: url == null || url.isEmpty ? const Icon(Icons.person, size: 17, color: C.green) : null));
+                            },
+                          ),
+                        ],
+                      ],
                     ),
                   );
                 },
