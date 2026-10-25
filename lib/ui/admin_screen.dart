@@ -330,8 +330,13 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
   final city = TextEditingController(text: 'Port-au-Prince');
   final slogan = TextEditingController(text: 'La boutique officielle HAITIKET');
   bool busy = false;
+  int panelRevision = 0;
 
-  void reload() => setState(() => future = Repo.adminOfficialShop());
+  // Recrée le panneau de gestion après l'enregistrement pour recharger ses listes.
+  void reload() => setState(() {
+        future = Repo.adminOfficialShop();
+        panelRevision++;
+      });
 
   Future<void> save() async {
     if (name.text.trim().length < 2) return toast(context, 'Le nom de la boutique est requis.');
@@ -379,7 +384,7 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
           const Divider(),
           const Text('Gestion complète de la boutique', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          ShopPanel(shop, key: ValueKey('official-shop-${shop['id']}')),
+          ShopPanel(shop, key: ValueKey('official-shop-${shop['id']}-$panelRevision')),
         ],
       ]);
     },
