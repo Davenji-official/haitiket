@@ -86,7 +86,12 @@ String friendlyError(Object? e) {
       return "La base de données n'est pas à jour : une colonne ou une relation est manquante. Exécutez les fichiers SQL de migration manquants. Détail : $m";
     }
     if (e.code == '42501' || m.toLowerCase().contains('permission denied') || m.toLowerCase().contains('row-level security')) {
-      return 'Accès refusé par les règles de sécurité de la base.';
+      // Keep the database's real message visible: the previous generic text hid
+      // whether the denial came from RLS, a trigger, or a SECURITY DEFINER guard.
+      final detail = m.trim();
+      return detail.isEmpty
+          ? 'Accès refusé par les règles de sécurité de la base (code ${e.code}).'
+          : 'Accès refusé par la base (code ${e.code}) : $detail';
     }
     return m;
   }
