@@ -598,12 +598,17 @@ class Repo {
     final safe = Map<String, dynamic>.fromEntries(patch.entries.where((e) => allowed.contains(e.key)));
     if (safe.isEmpty) throw ArgumentError('Aucune modification valide.');
     safe['updated_at'] = DateTime.now().toUtc().toIso8601String();
-    await _c.from('products').update(safe).eq('id', id);
+    // .select() permet de détecter un refus silencieux de la base (0 ligne modifiée).
+    final updated = await _c.from('products').update(safe).eq('id', id).select('id');
+    if ((updated as List).isEmpty) {
+      throw StateError('Modification refusée par la base : produit introuvable ou droits insuffisants (administrateur : re-saisissez le code secret).');
+    }
   }
 
   /// Suppression logique : le produit disparaît du catalogue sans casser l'historique des commandes.
   static Future<void> deleteProduct(String id) async {
-    await _c.from('products').update({'status': 'removed', 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+    // Fonction serveur (0057) : vérifie le droit, supprime vraiment (statut « removed ») et échoue avec un message clair sinon.
+    await _c.rpc('remove_product_v57', params: {'p_product': id});
   }
 
   static Future<void> deleteNotification(String id) async {
