@@ -685,7 +685,7 @@ class _AdminOrderHistoryPanelState extends State<AdminOrderHistoryPanel> {
       ]),
       FutureBuilder<List<Map<String, dynamic>>>(future: future, builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(18), child: Center(child: CircularProgressIndicator()));
-        if (snapshot.hasError) return Padding(padding: const EdgeInsets.all(8), child: Text('Historique indisponible. Vérifiez que la migration V47 a été appliquée : ${Repo.err(snapshot.error!)}', style: const TextStyle(color: C.terracotta)));
+        if (snapshot.hasError) return Padding(padding: const EdgeInsets.all(8), child: Text('Historique indisponible : ${Repo.err(snapshot.error!)} — si le code secret a expiré, re-saisissez-le ; sinon exécutez la migration 0057.', style: const TextStyle(color: C.terracotta)));
         final all = snapshot.data ?? const <Map<String, dynamic>>[];
         if (all.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('Aucune donnée pour cette période.'));
         final currencies = currency == 'ALL' ? const ['HTG', 'USD'] : [currency];
