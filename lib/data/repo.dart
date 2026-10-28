@@ -93,6 +93,29 @@ String friendlyError(Object? e) {
           ? 'Accès refusé par les règles de sécurité de la base (code ${e.code}).'
           : 'Accès refusé par la base (code ${e.code}) : $detail';
     }
+    const known = {
+      'authentication_required': 'Connexion requise : reconnectez-vous.',
+      'shop_name_taken': 'Ce nom de boutique est déjà utilisé. Choisissez un autre nom (majuscules et espaces en trop sont ignorés).',
+      'shop_name_length_invalid': 'Le nom de la boutique doit contenir entre 2 et 80 caractères.',
+      'shop_not_found_or_not_owned': "Boutique introuvable, ou vous n'en êtes pas le propriétaire.",
+      'official_shop_managed_by_admin': "La boutique officielle est gérée par l'administration.",
+      'shop_permanently_closed': 'Cette boutique est fermée définitivement.',
+      'invalid_shop_action': 'Action impossible sur cette boutique.',
+      'deletion_already_requested': 'Une demande de suppression est déjà en cours pour cette boutique.',
+      'deletion_reason_invalid': 'Indiquez un motif de 5 à 500 caractères.',
+      'shop_must_have_rejected_deletion_request': "Cette boutique ne peut pas être réactivée ici : contactez le support.",
+      'approved_kyc_required_before_shop_reactivation': "Vérification d'identité (KYC) approuvée requise avant la réactivation.",
+      'shop_has_unresolved_refunds': 'Des remboursements sont encore en cours : réessayez quand ils seront terminés.',
+    };
+    final hit = known[m.trim()];
+    if (hit != null) return hit;
+    if (e.code == '23505') {
+      final low = '${e.message} ${e.details}'.toLowerCase();
+      if (low.contains('shops_name_normalized_unique')) {
+        return "Ce nom de boutique est déjà utilisé par une boutique active, suspendue ou en cours de suppression. Choisissez un autre nom (majuscules et espaces en trop sont ignorés).";
+      }
+      return 'Cet élément existe déjà (doublon) : modifiez la valeur et réessayez.';
+    }
     return m;
   }
   if (e is AuthException) return e.message;
@@ -266,6 +289,20 @@ class Repo {
     now.add(productId);
     favIds.value = now;
     return true;
+  }
+
+  /// Vérifie qu'un nom de boutique est libre (les boutiques fermées définitivement ne le réservent plus).
+  static Future<bool?> shopNameAvailable(String name) async {
+    try {
+      final r = await _c.rpc('shop_name_available_v68', params: {'p_name': name});
+      return (r as Map)['available'] == true;
+    } catch (_) {
+      return null; // migration 0059 non exécutée : on laisse la base trancher à l'enregistrement
+    }
+  }
+
+  static Future<void> resumeShop(String shopId) async {
+    await _c.rpc('seller_resume_shop_v68', params: {'p_shop': shopId});
   }
 
   static Future<void> createShop(String name, String city) async {
