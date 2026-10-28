@@ -15,6 +15,7 @@ import 'screens6.dart';
 import 'screens7.dart';
 import 'screens8.dart';
 import 'screens9.dart';
+import 'specs.dart';
 import 'widgets.dart';
 import 'mascot.dart';
 import '../i18n.dart';
@@ -89,6 +90,70 @@ class _CheckoutState extends State<CheckoutScreen> {
     }
   }
 
+  /// Étape de paiement juste après la création : solde du portefeuille, paiement en un geste ou recharge.
+  Future<bool> offerPayment(List<Map<String, dynamic>> orders) async {
+    if (!mounted || orders.isEmpty) return false;
+    final balances = <String, num>{};
+    try {
+      final w = await Repo.myWalletV2();
+      ((w['balances'] as Map?) ?? const {}).forEach((k, v) => balances['$k'] = (v as num?) ?? 0);
+    } catch (_) {}
+    final totals = <String, int>{};
+    for (final o in orders) {
+      final cur = '${o['currency']}';
+      totals[cur] = (totals[cur] ?? 0) + ((o['total_minor'] as num?)?.toInt() ?? 0);
+    }
+    final lacking = totals.entries.where((e) => (balances[e.key] ?? 0) < e.value).toList();
+    if (!mounted) return false;
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (d) => AlertDialog(
+        title: Text('${orders.length} commande(s) à payer'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final e in totals.entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('Total ${e.key} : ${money(e.value, e.key)}\nVotre solde ${e.key} : ${money(balances[e.key] ?? 0, e.key)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            const SizedBox(height: 6),
+            Text(
+              lacking.isEmpty
+                  ? 'Vous pouvez payer maintenant avec votre portefeuille. Le vendeur est prévenu dès le paiement ; votre argent reste protégé par HAITIKET jusqu\'à la livraison.'
+                  : 'Solde insuffisant en ${lacking.map((e) => e.key).join(' et ')}. Rechargez votre portefeuille (MonCash / NatCash), puis payez depuis « Mes commandes ». La réservation du stock est limitée dans le temps.',
+              style: const TextStyle(color: C.muted),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, 'later'), child: const Text('Plus tard')),
+          if (lacking.isNotEmpty) TextButton(onPressed: () => Navigator.pop(d, 'topup'), child: const Text('Recharger')),
+          if (lacking.isEmpty) FilledButton(onPressed: () => Navigator.pop(d, 'pay'), child: const Text('Payer maintenant')),
+        ],
+      ),
+    );
+    if (!mounted) return false;
+    if (choice == 'topup') {
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Portefeuille')), body: const WalletScreen())));
+      return false;
+    }
+    if (choice != 'pay') return false;
+    var ok = 0;
+    String? error;
+    for (final o in orders) {
+      try {
+        await Repo.payOrderFromWallet('${o['id']}');
+        ok++;
+      } catch (e) {
+        error = Repo.err(e);
+      }
+    }
+    if (!mounted) return ok == orders.length;
+    if (error != null) toast(context, 'Paiement partiel ou refusé : $error');
+    return ok == orders.length;
+  }
+
   Future<void> submit() async {
     final lines = CartStore.lines.value.values.toList();
     if (lines.isEmpty) return;
@@ -112,6 +177,8 @@ class _CheckoutState extends State<CheckoutScreen> {
       }
       CartStore.lines.value = {};
       if (!mounted) return;
+      final paidNow = await offerPayment(orders);
+      if (!mounted) return;
       final gpsMessage = mode == 'delivery' && deliveryLat != null && coordinatesMatchAddress
           ? (locationSaved
               ? ' Destination GPS enregistrée.'
@@ -121,7 +188,9 @@ class _CheckoutState extends State<CheckoutScreen> {
       final messenger = ScaffoldMessenger.of(context);
       navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => const OrdersScreen()));
       messenger.showSnackBar(SnackBar(content: Text(
-        '${orders.length} commande(s) créée(s). Payez chaque commande depuis votre portefeuille de même devise.$gpsMessage',
+        paidNow
+            ? '${orders.length} commande(s) payée(s). Le vendeur est prévenu.$gpsMessage'
+            : '${orders.length} commande(s) créée(s) : payez-les vite depuis « Mes commandes », la réservation du stock est limitée dans le temps.$gpsMessage',
       )));
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -556,7 +625,7 @@ class _ShopPanelState extends State<ShopPanel> {
     final stock = TextEditingController(text: '${p['stock'] ?? 0}');
     final desc = TextEditingController(text: '${p['description'] ?? ''}');
     final unit = TextEditingController(text: '${p['unit_label'] ?? 'unité'}');
-    final attrs = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(p['attributes'] is Map ? p['attributes'] : <String, dynamic>{}));
+    final specs = <String, dynamic>{...(p['attributes'] is Map ? Map<String, dynamic>.from(p['attributes'] as Map) : <String, dynamic>{})};
     String currency = (p['currency'] as String?) ?? 'HTG';
     final variantsCtl = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(await Repo.productVariants(p['id'] as String)));
     final tiersCtl = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(await Repo.productTiers(p['id'] as String)));
@@ -628,7 +697,11 @@ class _ShopPanelState extends State<ShopPanel> {
               },
             ),
             DropdownButtonFormField<String>(value: productStatus, decoration: const InputDecoration(labelText: 'Visibilité du produit'), items: [for (final st in statusOptions) DropdownMenuItem(value: st, child: Text({'published':'Publié','paused':'Masqué / en pause','draft':'Brouillon'}[st]!))], onChanged: (v) { if (v != null) setDialogState(() => productStatus = v); }),
-            TextField(controller: attrs, maxLines: 5, decoration: const InputDecoration(labelText: 'Caractéristiques supplémentaires (JSON)', helperText: 'Ex. marque, matière, modèle, dimensions, état, garantie…')),
+            const Padding(padding: EdgeInsets.only(top: 14), child: Text('Caractéristiques du produit', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+            if (editCategory != null)
+              SpecsForm(key: ValueKey('specs-$editCategory'), fields: specsFor(categories.where((c) => c['id'] == editCategory).map((c) => '${c['name']}').firstOrNull), values: specs)
+            else
+              const Padding(padding: EdgeInsets.only(top: 6), child: Text('Choisissez une catégorie ci-dessus pour afficher ses champs (tailles, couleurs, marque, état, garantie…).', style: TextStyle(color: C.muted))),
             const SizedBox(height: 8),
             const Text('Retire un média avec ✕. Le premier média image disponible devient la photo de couverture.', style: TextStyle(fontSize: 12, color: C.muted)),
           ])),
@@ -646,6 +719,15 @@ class _ShopPanelState extends State<ShopPanel> {
       return toast(context, 'Vérifie le nom, le prix, le stock et l’unité.');
     }
     try {
+      final attrsOut = Map<String, dynamic>.from(specs);
+      final extraColors = (attrsOut.remove('_colors_extra') ?? '').toString();
+      final colorList = List<Map<String, dynamic>>.from(((attrsOut['colors'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
+      for (final nm in extraColors.split(',')) {
+        final t = nm.trim();
+        if (t.isNotEmpty && !colorList.any((c) => '${c['name']}'.toLowerCase() == t.toLowerCase())) colorList.add({'name': t, 'hex': null});
+      }
+      if (colorList.isNotEmpty) attrsOut['colors'] = colorList;
+      attrsOut.removeWhere((k, v) => v == null || (v is List && v.isEmpty) || (v is String && v.isEmpty));
       await Repo.updateProduct(p['id'] as String, {
         'name': n.text.trim(),
         'price_minor': (v * 100).round(),
@@ -656,7 +738,7 @@ class _ShopPanelState extends State<ShopPanel> {
         'audience': selectedAudiences.length == 1 ? selectedAudiences.first : null,
         'category_id': editCategory,
         'status': productStatus,
-        'attributes': jsonDecode(attrs.text.isEmpty ? '{}' : attrs.text) as Map<String, dynamic>,
+        'attributes': attrsOut,
         'currency': currency,
       });
       final variantsJson = jsonDecode(variantsCtl.text.isEmpty ? '[]' : variantsCtl.text);

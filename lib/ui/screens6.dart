@@ -169,7 +169,22 @@ class _WalletScreenState extends State<WalletScreen> {
   String withdrawCurrency = 'HTG';
   bool busy = false;
   @override
-  void initState() { super.initState(); amount.addListener(_amountChanged); }
+  void initState() {
+    super.initState();
+    amount.addListener(_amountChanged);
+    // Retour de la page de paiement : vérification automatique des recharges en attente.
+    if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) {
+      _afterPaymentReturn();
+    }
+  }
+  Future<void> _afterPaymentReturn() async {
+    try {
+      final n = await Repo.checkPendingTopups();
+      if (!mounted) return;
+      reload();
+      toast(context, n > 0 ? 'Recharge confirmée : votre solde est à jour.' : 'Paiement en cours de confirmation par Plop Plop. Le solde sera mis à jour dès réception.');
+    } catch (_) {}
+  }
   void _amountChanged() { if (mounted) setState(() {}); }
   @override
   void dispose() { amount.removeListener(_amountChanged); amount.dispose(); phone.dispose(); withdrawAmount.dispose(); withdrawPhone.dispose(); super.dispose(); }

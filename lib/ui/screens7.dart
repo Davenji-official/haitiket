@@ -218,12 +218,20 @@ class _NewProductState extends State<NewProductScreen> {
   final media = <Map<String, String>>[];
   final variants = <Map<String, dynamic>>[];
   final tiers = <Map<String, dynamic>>[];
+  final zone = TextEditingController();
+  String currency = 'HTG';
+  late final Future<double?> bazarFee = Repo.quoteWalletFeeUsd('bazar_listing');
   bool busy = false;
 
   Future<void> save() async {
     final p = double.tryParse(price.text.replaceAll(',', '.'));
     final st = variants.isNotEmpty ? variants.fold<int>(0, (a, v) => a + (v['stock'] as int)) : int.tryParse(stock.text);
     if (name.text.trim().length < 2 || p == null || p < 0 || st == null || st < 0) return toast(context, 'Nom, prix et stock valides requis.');
+    if (cat == null) return toast(context, 'Choisissez une catégorie : elle détermine les champs à remplir et la recherche.');
+    if (widget.bazar) {
+      if (media.where((m) => m['kind'] == 'image').isEmpty) return toast(context, 'Ajoutez au moins une photo : les annonces avec photos se vendent beaucoup mieux.');
+      if (specs['condition'] == null) return toast(context, "Indiquez l'état de l'article (neuf, bon état…).");
+    }
     if (tiers.any((t) => (t['unit_price_minor'] as int) >= (p * 100).round())) return toast(context, "Chaque tarif par quantité doit être inférieur au prix normal.");
     setState(() => busy = true);
     try {
@@ -235,9 +243,10 @@ class _NewProductState extends State<NewProductScreen> {
       }
       if (colors.isNotEmpty) attrs['colors'] = colors;
       attrs.removeWhere((k, v) => v == null || (v is List && v.isEmpty) || (v is String && v.isEmpty));
+      if (widget.bazar && zone.text.trim().isNotEmpty) attrs['zone'] = zone.text.trim();
       final cover = media.where((m) => m['kind'] == 'image').map((m) => m['url']).firstOrNull;
       final id = await Repo.addProduct(widget.shopId, name.text.trim(), (p * 100).round(), st, cover, !widget.bazar,
-          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audiences.length == 1 ? audiences.first : null, audiences: audiences.toList()..sort());
+          description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audiences.length == 1 ? audiences.first : null, audiences: audiences.toList()..sort(), currency: currency);
       if (media.isNotEmpty) await Repo.addProductMedia(id, media);
       await Repo.addVariants(id, variants);
       await Repo.addTiers(id, tiers);
@@ -248,11 +257,44 @@ class _NewProductState extends State<NewProductScreen> {
     if (mounted) setState(() => busy = false);
   }
 
+  Widget section(String title, IconData icon, List<Widget> children, {String? hint}) => Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: C.line)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, color: C.green, size: 22),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink))),
+          ]),
+          if (hint != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(hint, style: const TextStyle(color: C.muted, fontSize: 13))),
+          const SizedBox(height: 12),
+          ...children,
+        ]),
+      );
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.bazar ? 'Nouvelle annonce' : 'Nouveau produit', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          Field(name, 'Nom du produit'),
+  Widget build(BuildContext context) {
+    final fields = specsFor(cat?['name'] as String?);
+    final hasCondition = fields.any((f) => f.key == 'condition');
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.bazar ? 'Nouvelle annonce' : 'Nouveau produit', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        if (widget.bazar)
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: C.mint.withValues(alpha: .6), borderRadius: BorderRadius.circular(18)),
+            child: FutureBuilder<double?>(
+              future: bazarFee,
+              builder: (_, f) => Text(
+                'Annonce Bazar${f.data == null ? '' : ' : ${f.data!.toStringAsFixed(2)} USD'} pour 14 jours. Remplissez le formulaire, puis payez avec votre portefeuille : l\'annonce devient visible après paiement. Une annonce non renouvelée est bloquée à l\'expiration.',
+                style: const TextStyle(color: C.ink, fontWeight: FontWeight.w600, height: 1.35),
+              ),
+            ),
+          ),
+        section('Informations', Icons.info_outline, [
+          Field(name, widget.bazar ? "Titre de l'annonce" : 'Nom du produit'),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: cats,
             builder: (_, cs) => Padding(
@@ -267,9 +309,20 @@ class _NewProductState extends State<NewProductScreen> {
               ),
             ),
           ),
-          Field(desc, 'Description'),
+          Field(desc, 'Description détaillée (état, particularités, ce qui est inclus)'),
+        ]),
+        section('Photos et vidéos', Icons.photo_library_outlined, [
+          MediaPickerField(items: media, onChanged: () => setState(() {})),
+        ], hint: widget.bazar ? 'Au moins une photo est obligatoire pour une annonce.' : 'La première image sert de couverture. Ajoutez plusieurs angles et, si possible, une vidéo.'),
+        section('Prix et quantité', Icons.payments_outlined, [
+          SegmentedButton<String>(
+            segments: const [ButtonSegment(value: 'HTG', label: Text('Gourdes (HTG)')), ButtonSegment(value: 'USD', label: Text('Dollars (USD)'))],
+            selected: {currency},
+            onSelectionChanged: (v) => setState(() => currency = v.first),
+          ),
+          const SizedBox(height: 12),
           Row(children: [
-            Expanded(flex: 3, child: Field(price, 'Prix en HTG', type: TextInputType.number)),
+            Expanded(flex: 3, child: Field(price, currency == 'USD' ? 'Prix en USD' : 'Prix en HTG', type: TextInputType.number)),
             const SizedBox(width: 10),
             Expanded(
               flex: 2,
@@ -284,34 +337,50 @@ class _NewProductState extends State<NewProductScreen> {
               ),
             ),
           ]),
-          const Padding(padding: EdgeInsets.only(bottom: 4), child: Text('Publics concernés (choix multiples)', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+          if (variants.isEmpty) Field(stock, widget.bazar ? 'Quantité disponible' : 'Quantité en stock', type: TextInputType.number),
+          if (variants.isNotEmpty) const Text('Le stock est géré par variante (voir plus bas).', style: TextStyle(color: C.muted)),
+        ]),
+        if (widget.bazar)
+          section('État et lieu', Icons.place_outlined, [
+            if (!hasCondition) ...[
+              const Text('État de l\'article', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                for (final c in ['Neuf', 'Comme neuf', 'Bon état', 'À réparer'])
+                  ChoiceChip(label: Text(c), selected: specs['condition'] == c, onSelected: (_) => setState(() => specs['condition'] = c)),
+              ]),
+              const SizedBox(height: 12),
+            ],
+            Field(zone, 'Quartier / zone de remise (ex. Delmas 33, Pétion-Ville)'),
+          ], hint: 'Ces informations rassurent les acheteurs et accélèrent la vente.'),
+        section('Public concerné', Icons.groups_outlined, [
           Wrap(spacing: 6, runSpacing: 2, children: [
             for (final a in ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'])
               FilterChip(label: Text(a), selected: audiences.contains(a), onSelected: (yes) => setState(() { if (yes) { audiences.add(a); } else { audiences.remove(a); } })),
           ]),
           Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: () => setState(() => audiences.clear()), child: const Text('Tout public / effacer la sélection'))),
-          if (variants.isEmpty) Field(stock, 'Quantité disponible', type: TextInputType.number),
-          const Text('Photos et vidéos', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
-          const SizedBox(height: 8),
-          MediaPickerField(items: media, onChanged: () => setState(() {})),
-          if (cat != null) ...[
-            const SizedBox(height: 18),
-            Text('Caractéristiques : ${cat!['name']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
-            SpecsForm(key: ValueKey(cat!['id']), fields: specsFor(cat!['name'] as String), values: specs),
-          ],
-          const SizedBox(height: 18),
+        ]),
+        if (cat != null)
+          section('Caractéristiques : ${cat!['name']}', Icons.tune, [
+            SpecsForm(key: ValueKey(cat!['id']), fields: fields, values: specs),
+          ], hint: 'Plus la fiche est précise, plus le produit est trouvé et acheté.'),
+        section('Variantes (tailles, couleurs, pointures)', Icons.palette_outlined, [
           VariantsEditor(
             items: variants,
-            sizeOptions: [for (final f in specsFor(cat?['name'] as String?)) if (f.type == 'sizes') ...f.options],
+            sizeOptions: [for (final f in fields) if (f.type == 'sizes') ...f.options],
             onChanged: () => setState(() {}),
           ),
-          const SizedBox(height: 14),
+        ], hint: 'Chaque variante a son propre stock. Laissez vide pour un produit simple.'),
+        section('Tarifs par quantité', Icons.local_offer_outlined, [
           TiersEditor(items: tiers, basePriceMinor: double.tryParse(price.text.replaceAll(',', '.')) == null ? null : (double.parse(price.text.replaceAll(',', '.')) * 100).round(), onChanged: () => setState(() {})),
-          const SizedBox(height: 24),
-          PrimaryButton(label: busy ? 'Enregistrement…' : (widget.bazar ? "Enregistrer l'annonce" : 'Publier le produit'), icon: Icons.check, onPressed: busy ? null : save),
-          const SizedBox(height: 30),
-        ]),
-      );
+        ], hint: 'Lots de 3, 6, 12… : vous fixez vous-même les prix dégressifs.'),
+        const SizedBox(height: 4),
+        PrimaryButton(label: busy ? 'Enregistrement…' : (widget.bazar ? "Enregistrer l'annonce" : 'Publier le produit'), icon: Icons.check, onPressed: busy ? null : save),
+        const SizedBox(height: 30),
+      ]),
+    );
+  }
+
 }
 
 /// Parcours « publier au Bazar » : boutique personnelle, formulaire riche, puis paiement des 2 USD.

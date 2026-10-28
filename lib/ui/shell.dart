@@ -67,6 +67,8 @@ class _ShellState extends State<Shell> {
     }
     // Retour de la page de paiement (web) : on ouvre directement « Mes commandes ».
     if (Uri.base.queryParameters['pay'] != null) sec = Sec.orders;
+    // Retour de la page Plop Plop (recharge) : on ouvre le portefeuille, qui vérifie la recharge automatiquement.
+    if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) sec = Sec.wallet;
     if (Config.configured) {
       authSub = Supabase.instance.client.auth.onAuthStateChange.listen((st) {
         if (!mounted) return;
