@@ -186,7 +186,7 @@ class _CheckoutState extends State<CheckoutScreen> {
           : '';
       final navigator = Navigator.of(context);
       final messenger = ScaffoldMessenger.of(context);
-      navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => const OrdersScreen()));
+      navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Mes commandes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const OrdersScreen())));
       messenger.showSnackBar(SnackBar(content: Text(
         paidNow
             ? '${orders.length} commande(s) payée(s). Le vendeur est prévenu.$gpsMessage'
