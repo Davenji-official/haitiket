@@ -766,6 +766,22 @@ class _ShopPanelState extends State<ShopPanel> {
     catch (e) { if (mounted) toast(context, Repo.err(e)); }
   }
 
+  Future<void> resumeShopNow() async {
+    final id = widget.shop['id'] as String;
+    try {
+      if (widget.shop['deletion_review_status'] == 'rejected') {
+        await Repo.reactivateShopAfterDeletionRejection(id);
+      } else {
+        await Repo.resumeShop(id);
+      }
+      if (!mounted) return;
+      setState(() { widget.shop['status'] = 'active'; widget.shop['deletion_review_status'] = 'none'; });
+      toast(context, 'Boutique réactivée.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
   Future<void> manageShop(String action) async {
     final currentName = '${widget.shop['name'] ?? ''}';
     final ctl = TextEditingController(text: currentName);
@@ -922,7 +938,7 @@ class _ShopPanelState extends State<ShopPanel> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [Flexible(child: Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink))), if (widget.shop['verified_at'] != null) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(avatar: Icon(Icons.verified, size: 16, color: Colors.blue), label: Text('Boutique vérifiée'), visualDensity: VisualDensity.compact))]),
           Text(
-            {'active': 'Boutique active', 'pending': 'En attente de vérification', 'draft': 'Brouillon', 'suspended': 'Boutique suspendue — contactez le support pour demander sa réactivation.', 'closed': 'Boutique fermée définitivement'}[widget.shop['status']] ?? 'Statut : ${widget.shop['status']}',
+            {'active': 'Boutique active', 'pending': 'En attente de vérification', 'draft': 'Brouillon', 'suspended': widget.shop['deletion_review_status'] == 'pending_admin' || widget.shop['deletion_review_status'] == 'approved' ? 'Suppression demandée : en examen par l’administration (délai minimal de 30 jours). Votre boutique reste suspendue.' : 'Boutique suspendue.', 'closed': 'Boutique fermée définitivement'}[widget.shop['status']] ?? 'Statut : ${widget.shop['status']}',
             style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700),
           ),
           if (!official && widget.shop['status'] != 'closed') Wrap(spacing: 8, runSpacing: 4, children: [
@@ -930,6 +946,14 @@ class _ShopPanelState extends State<ShopPanel> {
             if (widget.shop['status'] == 'active') OutlinedButton.icon(onPressed: () => manageShop('suspend'), icon: const Icon(Icons.pause_circle_outline), label: const Text('Suspendre')),
             if (widget.shop['status'] != 'closed') TextButton.icon(onPressed: () => manageShop('close'), icon: const Icon(Icons.store_mall_directory_outlined), label: const Text('Fermer définitivement')),
           ]),
+          if (!official && widget.shop['status'] == 'suspended' && widget.shop['deletion_review_status'] != 'pending_admin' && widget.shop['deletion_review_status'] != 'approved')
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(spacing: 8, children: [
+                FilledButton.icon(onPressed: resumeShopNow, icon: const Icon(Icons.play_circle_outline), label: const Text('Réactiver ma boutique')),
+                const Text('Si la suspension vient de l’administration, contactez le support.', style: TextStyle(color: C.muted, fontSize: 12)),
+              ]),
+            ),
           if (widget.shop['status'] == 'closed') const Text('Boutique fermée définitivement — historique conservé.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
           if (!personal && !official) PlanCard(shop: widget.shop),
           if (official) const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.verified, color: C.green), title: Text('Boutique officielle HAITIKET', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Abonnement vendeur non requis.')),

@@ -444,7 +444,7 @@ Future<void> startBazarListing(BuildContext context) async {
           FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Ouvrir le formulaire'))],
       ));
       if (openKyc == true && context.mounted) {
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: const Text('HAITIKET Network', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen())));
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Vérification d’identité', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
       }
     } else {
       toast(context, message);

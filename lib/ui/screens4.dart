@@ -10,6 +10,7 @@ import 'screens5.dart';
 import 'auth_screens.dart';
 import 'widgets.dart';
 import 'mascot.dart';
+import 'screens.dart';
 
 Widget _h(String t) => Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(t, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)));
 
@@ -33,12 +34,33 @@ class _ShopRequestState extends State<ShopRequestScreen> {
 
   Future<void> submit() async {
     if (name.text.trim().length < 2) return toast(context, 'Indiquez le nom de la boutique.');
+    if (busy) return;
     setState(() => busy = true);
     try {
+      final free = await Repo.shopNameAvailable(name.text.trim());
+      if (free == false) {
+        if (mounted) toast(context, 'Ce nom de boutique est déjà utilisé. Choisissez-en un autre.');
+        if (mounted) setState(() => busy = false);
+        return;
+      }
       await Repo.createShop(name.text.trim(), city.text.trim());
       if (!mounted) return;
-      Navigator.of(context).pop();
-      toast(context, 'Demande envoyée. Votre boutique sera activée après vérification.');
+      final nav = Navigator.of(context);
+      final wantKyc = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('Demande envoyée'),
+          content: const Text("Votre boutique sera activée après vérification de votre identité (KYC) et validation par l'administration. Vous pouvez envoyer vos documents maintenant : c'est la même vérification que pour le Bazar, une seule fois."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Plus tard')),
+            FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text("Vérifier mon identité")),
+          ],
+        ),
+      );
+      if (wantKyc == true && mounted) {
+        await nav.push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text("Vérification d'identité", style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
+      }
+      if (mounted) nav.pop();
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
     }
@@ -50,7 +72,7 @@ class _ShopRequestState extends State<ShopRequestScreen> {
         appBar: AppBar(title: const Text('Boutique professionnelle', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           const MascotHeader(mascot: Mascot.boutiques, title: 'Ouvrir ma boutique'),
-          _info("Abonnement : 20 USD par mois. Vitrine dans la Marketplace, gestion du stock, commandes et livraison HAITIKET. Votre boutique est vérifiée avant activation. Le paiement de l'abonnement est indisponible pour le moment (prestataire en attente de configuration)."),
+          _info("Abonnement : 20 USD par mois. Vitrine dans la Marketplace, gestion du stock, commandes et livraison HAITIKET. Votre boutique est vérifiée avant activation. L'abonnement (20 USD par mois ou 200 USD par an) se paie depuis votre portefeuille USD une fois la boutique activée ; il est obligatoire pour publier des produits."),
           Field(name, 'Nom de la boutique'),
           Field(city, 'Ville'),
           PrimaryButton(label: busy ? 'Envoi…' : "Demander l'ouverture", icon: Icons.storefront, onPressed: busy ? null : submit),

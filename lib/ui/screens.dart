@@ -267,7 +267,9 @@ class _BazarState extends State<BazarScreen> {
 }
 
 class NetworkScreen extends StatefulWidget {
-  const NetworkScreen({super.key});
+  /// true : uniquement la vérification d'identité (vendeurs : boutique ou Bazar). false : candidature livreur + vérification.
+  final bool kycOnly;
+  const NetworkScreen({super.key, this.kycOnly = false});
   @override
   State<NetworkScreen> createState() => _NetworkState();
 }
@@ -338,7 +340,8 @@ class _NetworkState extends State<NetworkScreen> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
-        MascotHeader(mascot: Mascot.orders, title: 'HAITIKET Network', subtitle: 'Devenez livreur indépendant. Chaque mission affiche votre rémunération avant acceptation.'),
+        MascotHeader(mascot: widget.kycOnly ? Mascot.profile : Mascot.orders, title: widget.kycOnly ? 'Vérification d’identité' : 'HAITIKET Network', subtitle: widget.kycOnly ? 'Une seule fois : elle débloque la vente (boutique ou Bazar) et protège acheteurs et vendeurs.' : 'Devenez livreur indépendant. Chaque mission affiche votre rémunération avant acceptation.'),
+        if (!widget.kycOnly) ...[
         Field(name, 'Nom complet'),
         Field(phone, 'Téléphone', type: TextInputType.phone),
         DropdownButtonFormField<String>(
@@ -355,9 +358,10 @@ class _NetworkState extends State<NetworkScreen> {
         ),
         const SizedBox(height: 12),
         Field(zone, "Zone d'activité (ex. Delmas)"),
+        ],
         const SizedBox(height: 20),
         const Text('Vérification d’identité KYC', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
-        const Text('Obligatoire avant l’approbation comme livreur et pour obtenir le badge de boutique vérifiée. Les documents sont privés et examinés par l’administration.'),
+        Text(widget.kycOnly ? 'Obligatoire pour ouvrir une boutique ou publier au Bazar. Les documents sont privés et examinés par l’administration.' : 'Obligatoire avant l’approbation comme livreur et pour obtenir le badge de boutique vérifiée. Les documents sont privés et examinés par l’administration.'),
         OutlinedButton.icon(onPressed: () => chooseBirthDate(guardian: false), icon: const Icon(Icons.cake_outlined), label: Text(birthDate == null ? 'Choisir ma date de naissance' : 'Date de naissance : ${birthDate!.year}-${birthDate!.month.toString().padLeft(2, '0')}-${birthDate!.day.toString().padLeft(2, '0')}')),
         if (calculatedAge != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('Âge calculé : $calculatedAge ans${calculatedAge! < 18 ? ' · dossier mineur' : ' · dossier majeur'}', style: const TextStyle(fontWeight: FontWeight.w700))),
         if (calculatedAge == null || calculatedAge! >= 18) ...[
@@ -372,10 +376,12 @@ class _NetworkState extends State<NetworkScreen> {
         ],
         OutlinedButton.icon(onPressed: () async { try { final p = await pickKycImage('photo_recente', camera: true); if (p != null) setState(() => recentPhotoPath = p); } catch (e) { if (mounted) toast(context, Repo.err(e)); } }, icon: const Icon(Icons.camera_alt_outlined), label: Text(recentPhotoPath == null ? 'Prendre une photo récente de moi' : 'Photo récente ajoutée ✓')),
         FilledButton.tonal(onPressed: kycBusy || kycSubmitted ? null : submitKyc, child: Text(kycSubmitted ? 'Dossier KYC envoyé' : kycBusy ? 'Envoi du dossier…' : 'Envoyer le dossier KYC à l’administration')),
-        const SizedBox(height: 12),
-        FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Envoi…' : 'Envoyer ma candidature')),
-        const SizedBox(height: 16),
-        const EmptyState(title: 'Missions', text: "Les missions seront proposées après vérification de votre profil. Aucun livreur n'est affiché tant qu'il n'est pas réellement validé."),
+        if (!widget.kycOnly) ...[
+          const SizedBox(height: 12),
+          FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Envoi…' : 'Envoyer ma candidature')),
+          const SizedBox(height: 16),
+          const EmptyState(title: 'Missions', text: "Les missions seront proposées après vérification de votre profil. Aucun livreur n'est affiché tant qu'il n'est pas réellement validé."),
+        ],
       ]);
 }
 
