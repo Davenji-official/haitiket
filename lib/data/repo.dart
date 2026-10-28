@@ -1341,11 +1341,9 @@ class Repo {
   static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
   static Future<void> signOut() => _c.auth.signOut();
-}
 
-// V61: explicit reactivation after an admin rejects a shop-deletion request.
-// The server verifies ownership, approved KYC, and resolved refunds.
-extension ShopReactivationV61 on Repo {
+  // V61: reactivation explicite après le rejet d'une demande de suppression de boutique.
+  // Le serveur vérifie le propriétaire, le KYC approuvé et les remboursements résolus.
   static Future<Map<String, dynamic>> reactivateShopAfterDeletionRejection(String shopId) async {
     final u = currentUser();
     if (u == null) throw StateError('Connectez-vous pour réactiver votre boutique.');
