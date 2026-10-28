@@ -50,6 +50,9 @@ jobs:
           flutter build web --release --base-href "/${{ github.event.repository.name }}/" \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          # Retour de paiement Plop Plop (…/payment/plopplop/success) : GitHub Pages renvoie 404.html pour une adresse inconnue.
+          # En y copiant l'application, la page de retour ouvre l'application au lieu d'une erreur 404.
+          cp build/web/index.html build/web/404.html
       - uses: actions/upload-pages-artifact@v3
         with: { path: "${{ env.APP }}/build/web" }
   deploy:
