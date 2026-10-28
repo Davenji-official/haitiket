@@ -484,10 +484,11 @@ class Repo {
   }
 
   static Future<String> addProduct(String shopId, String name, int priceMinor, int stock, String? imageUrl, bool publish,
-      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité', String? audience, List<String>? audiences}) async {
+      {String? description, String? categoryId, String source = 'marketplace', Map<String, dynamic>? attributes, String unitLabel = 'unité', String? audience, List<String>? audiences, String currency = 'HTG'}) async {
     final r = await _c.from('products').insert({
       'shop_id': shopId,
       'source': source,
+      'currency': currency,
       'category_id': categoryId,
       'description': (description ?? '').trim().isEmpty ? null : description!.trim(),
       'name': name,
@@ -794,6 +795,79 @@ class Repo {
     final u = currentUser();
     if (u == null) throw 'Connexion requise';
     await _c.from('messages').insert({'conversation_id': cid, 'sender_id': u.id, 'body': body});
+  }
+
+  // ===== Messagerie V67 : interlocuteurs avec photo, suppression pour soi / pour tous =====
+  static Future<List<Map<String, dynamic>>> myConversationsV67() async {
+    try {
+      final r = await _c.rpc('my_conversations_v67');
+      return [for (final e in (r as List)) Map<String, dynamic>.from(e as Map)];
+    } catch (_) {
+      // Repli si la migration 0058 n'est pas encore exécutée : ancienne liste sans photos.
+      final rows = await myConversations();
+      return [
+        for (final c in rows)
+          {
+            'id': c['id'],
+            'subject': c['subject'],
+            'other_name': c['subject'],
+            'other_avatar': null,
+            'other_is_shop': false,
+            'last_body': () {
+              final m = List<Map<String, dynamic>>.from((c['messages'] as List?) ?? const []);
+              if (m.isEmpty) return null;
+              m.sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
+              return m.last['body'];
+            }(),
+            'last_at': c['created_at'],
+          }
+      ];
+    }
+  }
+
+  static Future<Map<String, Map<String, dynamic>>> conversationPeople(String cid) async {
+    try {
+      final r = await _c.rpc('conversation_people_v67', params: {'p_conv': cid});
+      return {for (final e in (r as List)) '${(e as Map)['user_id']}': Map<String, dynamic>.from(e)};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<Set<String>> hiddenMessageIds(String cid) async {
+    try {
+      final r = await _c.rpc('hidden_message_ids_v67', params: {'p_conv': cid});
+      return {for (final e in (r as List)) '$e'};
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  static Future<void> hideConversation(String cid) async {
+    await _c.rpc('hide_conversation_v67', params: {'p_conv': cid});
+  }
+
+  static Future<void> hideMessage(String id) async {
+    await _c.rpc('hide_message_v67', params: {'p_message': id});
+  }
+
+  static Future<void> deleteMessageForAll(String id) async {
+    await _c.rpc('delete_message_for_all_v67', params: {'p_message': id});
+  }
+
+  /// Après le retour de la page de paiement : vérifie auprès du serveur les recharges encore en attente.
+  static Future<int> checkPendingTopups() async {
+    final w = await myWalletV2();
+    final txs = (w['transactions'] as List?) ?? const [];
+    var confirmed = 0;
+    for (final t in txs) {
+      if (t is Map && t['kind'] == 'topup' && t['status'] == 'pending') {
+        try {
+          if (await checkWalletTopup('${t['reference']}') == 'successful') confirmed++;
+        } catch (_) {}
+      }
+    }
+    return confirmed;
   }
 
   static Future<Map<String, dynamic>?> myCourierApplication() async {
