@@ -75,14 +75,14 @@ class _DashState extends State<AdminDashboardTab> {
     return '${List.filled(depth, '  ').join()}${value ?? '—'}';
   }
 
-  Widget tile(String label, Object? v, {bool money_ = false, bool alert = false}) {
+  Widget tile(String label, Object? v, {bool money_ = false, bool alert = false, String cur = 'HTG'}) {
     final n = (v as num?) ?? 0;
     return Container(
       width: 160,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: alert && n > 0 ? const Color(0xFFFFF1EC) : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: alert && n > 0 ? C.terracotta : C.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(money_ ? money(n, 'HTG') : '$n', style: TextStyle(fontSize: money_ ? 18 : 28, fontWeight: FontWeight.w900, color: alert && n > 0 ? C.terracotta : C.ink)),
+        Text(money_ ? money(n, cur) : '$n', style: TextStyle(fontSize: money_ ? 18 : 28, fontWeight: FontWeight.w900, color: alert && n > 0 ? C.terracotta : C.ink)),
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(color: C.muted, fontSize: 13)),
       ]),
@@ -278,7 +278,10 @@ class _DashState extends State<AdminDashboardTab> {
               group('À traiter', [
                 tile('Litiges ouverts', d['disputes_open'], alert: true),
                 tile('Remboursements à exécuter', d['refunds_to_execute'], alert: true),
-                tile('Paiements tardifs sans stock', d['payments_refund_required'], alert: true),
+                tile('Transactions portefeuille en revue', d['payments_refund_required'], alert: true),
+                tile('Dossiers KYC à traiter', d['kyc_pending'], alert: true),
+                tile('Suppressions de boutique à décider', d['shop_deletions_pending'], alert: true),
+                tile('Retraits à suivre', d['withdrawals_pending'], alert: true),
                 tile('Signalements ouverts', d['reports_open'], alert: true),
                 tile('Tickets support', d['tickets_open'], alert: true),
                 tile('Boutiques à vérifier', d['shops_pending'], alert: true),
@@ -297,11 +300,15 @@ class _DashState extends State<AdminDashboardTab> {
                 MapEntry('Annulées / remboursées', (d['orders_cancelled'] as num?) ?? 0),
               ]),
               group('Argent', [
-                tile('Volume encaissé', d['gmv_minor'], money_: true),
-                tile('Commissions (net)', d['commission_minor'], money_: true),
-                tile('Frais Bazar et abonnements', d['fees_minor'], money_: true),
-                tile('Paiements en cours', d['payments_pending']),
-                tile('Paiements échoués', d['payments_failed']),
+                tile('Ventes payées (HTG)', d['gmv_minor'], money_: true),
+                tile('Ventes payées (USD)', d['gmv_usd_minor'], money_: true, cur: 'USD'),
+                tile('Commissions (HTG)', d['commission_minor'], money_: true),
+                tile('Commissions (USD)', d['commission_usd_minor'], money_: true, cur: 'USD'),
+                tile('Abonnements et Bazar (HTG)', d['fees_minor'], money_: true),
+                tile('Abonnements et Bazar (USD)', d['fees_usd_minor'], money_: true, cur: 'USD'),
+                tile('Transactions en cours', d['payments_pending']),
+                tile('Recharges en attente', d['topups_pending']),
+                tile('Transactions échouées', d['payments_failed']),
               ]),
               group('Boutiques et Bazar', [
                 tile('Boutiques pro actives', d['shops_active']),

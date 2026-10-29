@@ -145,6 +145,14 @@ class _AdminListState extends State<_AdminList> {
     }
   }
 
+  String kycLabel(String k) => switch (k) {
+        'approved' => 'approuvée',
+        'pending' => 'dossier envoyé, en attente de décision',
+        'needs_changes' => 'à corriger par le vendeur',
+        'rejected' => 'refusée',
+        _ => 'non envoyée',
+      };
+
   String short(Object? id) => '${id ?? ''}'.length >= 8 ? '${id}'.substring(0, 8) : '${id ?? ''}';
 
   String title(Map<String, dynamic> r) => switch (widget.kind) {
@@ -154,7 +162,7 @@ class _AdminListState extends State<_AdminList> {
         'shop' => '${r['name']} · ${r['city'] ?? ''}',
         'courier' => '${r['full_name']} · ${r['transport']} · ${r['zone']}',
         'ticket' => '${r['subject']} — ${r['message']}',
-        'payment' => '${r['purpose']} · ${money(r['amount_minor'] as num, 'HTG')}',
+        'payment' => '${r['kind'] ?? r['purpose']} · ${money(r['amount_minor'] as num, '${r['currency'] ?? 'HTG'}')} · ${r['user_name'] ?? ''}',
         _ => '${r['name']} · ${money(r['price_minor'] as num, r['currency'] as String)}',
       };
 
@@ -162,9 +170,22 @@ class _AdminListState extends State<_AdminList> {
     final id = r['id'] as String;
     switch (widget.kind) {
       case 'shop':
+        final st = '${r['status']}';
+        final kyc = '${r['kyc_status'] ?? 'approved'}';
         return [
-          TextButton(onPressed: () => act(id, 'active'), child: const Text('Activer')),
-          TextButton(onPressed: () => act(id, 'suspended', needReason: true), child: const Text('Suspendre')),
+          if (st != 'active')
+            TextButton(
+              onPressed: () {
+                if (kyc != 'approved') {
+                  toast(context, "Impossible d'approuver : l'identité du vendeur n'est pas approuvée (statut : ${kycLabel(kyc)}). Ouvrez l'onglet KYC, traitez son dossier, puis revenez.");
+                  return;
+                }
+                act(id, 'active');
+              },
+              child: Text(st == 'pending' ? 'Approuver la demande' : 'Réactiver'),
+            ),
+          if (st == 'pending') TextButton(onPressed: () => act(id, 'closed', needReason: true), child: const Text('Rejeter la demande')),
+          if (st == 'active') TextButton(onPressed: () => act(id, 'suspended', needReason: true), child: const Text('Suspendre')),
         ];
       case 'courier':
         return [
@@ -205,7 +226,13 @@ class _AdminListState extends State<_AdminList> {
         future: f,
         builder: (_, s) {
           if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-          if (s.hasError) return const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Accès refusé', text: "Ce compte n'a pas le rôle admin."));
+          if (s.hasError) {
+            return ListView(padding: const EdgeInsets.all(18), children: [
+              EmptyState(title: 'Chargement impossible', text: Repo.err(s.error!)),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(onPressed: reload, icon: const Icon(Icons.refresh), label: const Text('Réessayer')),
+            ]);
+          }
           final items = s.data ?? [];
           if (items.isEmpty) return const Padding(padding: EdgeInsets.all(18), child: EmptyState(title: 'Rien à traiter', text: 'Aucun élément pour le moment.'));
           return ListView(padding: const EdgeInsets.all(14), children: [
@@ -217,6 +244,11 @@ class _AdminListState extends State<_AdminList> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(title(r), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
                     Text('Statut : ${r['status']}', style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+                    if (widget.kind == 'shop') ...[
+                      Text('Propriétaire : ${r['owner_name'] ?? '—'}${r['owner_phone'] == null ? '' : ' · ${r['owner_phone']}'}', style: const TextStyle(color: C.muted)),
+                      Text('Identité (KYC) : ${kycLabel('${r['kyc_status'] ?? 'none'}')}', style: TextStyle(fontWeight: FontWeight.w700, color: '${r['kyc_status']}' == 'approved' ? C.green : C.terracotta)),
+                    ],
+                    if (widget.kind == 'payment') Text('Statut : ${r['status']} · ${r['provider'] ?? ''} · ${r['reference'] ?? ''}', style: const TextStyle(color: C.muted, fontSize: 12)),
                     Wrap(children: actions(r)),
                   ]),
                 ),

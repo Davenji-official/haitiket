@@ -31,12 +31,42 @@ class ShopRequestScreen extends StatefulWidget {
 class _ShopRequestState extends State<ShopRequestScreen> {
   final name = TextEditingController(), city = TextEditingController();
   bool busy = false;
+  late Future<String?> kycF = Repo.myIdentityStatus();
+
+  Future<void> openKyc() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text("Vérification d'identité", style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
+    if (mounted) setState(() => kycF = Repo.myIdentityStatus());
+  }
 
   Future<void> submit() async {
     if (name.text.trim().length < 2) return toast(context, 'Indiquez le nom de la boutique.');
+    if (city.text.trim().length < 2) return toast(context, 'Indiquez la ville de la boutique.');
     if (busy) return;
     setState(() => busy = true);
     try {
+      // Étape 1 obligatoire : le dossier d'identité doit être envoyé (ou déjà approuvé) AVANT la demande.
+      var kyc = await Repo.myIdentityStatus();
+      if (kyc != 'pending' && kyc != 'approved') {
+        if (!mounted) return;
+        final go = await showDialog<bool>(
+          context: context,
+          builder: (d) => AlertDialog(
+            title: const Text("Vérification d'identité requise"),
+            content: const Text("Avant de demander l'ouverture d'une boutique, vous devez envoyer votre dossier de vérification d'identité (date de naissance, pièce, photo). Cela protège les acheteurs et les vendeurs. C'est la même vérification que pour le Bazar : une seule fois."),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')),
+              FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Remplir la vérification')),
+            ],
+          ),
+        );
+        if (go == true && mounted) await openKyc();
+        kyc = await Repo.myIdentityStatus();
+        if (kyc != 'pending' && kyc != 'approved') {
+          if (mounted) toast(context, "Envoyez d'abord votre vérification d'identité pour continuer.");
+          if (mounted) setState(() => busy = false);
+          return;
+        }
+      }
       final free = await Repo.shopNameAvailable(name.text.trim());
       if (free == false) {
         if (mounted) toast(context, 'Ce nom de boutique est déjà utilisé. Choisissez-en un autre.');
@@ -46,20 +76,14 @@ class _ShopRequestState extends State<ShopRequestScreen> {
       await Repo.createShop(name.text.trim(), city.text.trim());
       if (!mounted) return;
       final nav = Navigator.of(context);
-      final wantKyc = await showDialog<bool>(
+      await showDialog<void>(
         context: context,
         builder: (d) => AlertDialog(
           title: const Text('Demande envoyée'),
-          content: const Text("Votre boutique sera activée après vérification de votre identité (KYC) et validation par l'administration. Vous pouvez envoyer vos documents maintenant : c'est la même vérification que pour le Bazar, une seule fois."),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Plus tard')),
-            FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text("Vérifier mon identité")),
-          ],
+          content: const Text("Votre demande est enregistrée. L'administration examine votre dossier d'identité puis active votre boutique. Vous serez prévenu dans vos notifications. Vous pourrez ensuite payer l'abonnement depuis votre portefeuille USD et publier vos produits."),
+          actions: [FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Compris'))],
         ),
       );
-      if (wantKyc == true && mounted) {
-        await nav.push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text("Vérification d'identité", style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
-      }
       if (mounted) nav.pop();
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -73,6 +97,25 @@ class _ShopRequestState extends State<ShopRequestScreen> {
         body: ListView(padding: const EdgeInsets.all(18), children: [
           const MascotHeader(mascot: Mascot.boutiques, title: 'Ouvrir ma boutique'),
           _info("Abonnement : 20 USD par mois. Vitrine dans la Marketplace, gestion du stock, commandes et livraison HAITIKET. Votre boutique est vérifiée avant activation. L'abonnement (20 USD par mois ou 200 USD par an) se paie depuis votre portefeuille USD une fois la boutique activée ; il est obligatoire pour publier des produits."),
+          FutureBuilder<String?>(
+            future: kycF,
+            builder: (_, k) {
+              final st = k.data;
+              final ok = st == 'approved' || st == 'pending';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: ok ? C.mint.withValues(alpha: .7) : const Color(0xFFFFF1EC), borderRadius: BorderRadius.circular(18), border: Border.all(color: ok ? C.green : C.terracotta)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(st == 'approved' ? 'Étape 1 · Identité approuvée ✓' : st == 'pending' ? 'Étape 1 · Dossier envoyé, en attente d\'approbation ✓' : st == 'rejected' ? 'Étape 1 · Dossier refusé : à refaire' : st == 'needs_changes' ? 'Étape 1 · Dossier à corriger' : 'Étape 1 · Vérification d\'identité à faire', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+                  const SizedBox(height: 4),
+                  Text(ok ? 'Vous pouvez maintenant remplir l\'étape 2 et demander l\'ouverture.' : 'Obligatoire avant toute demande de boutique : envoyez votre dossier, puis revenez ici.', style: const TextStyle(color: C.ink)),
+                  if (!ok) Padding(padding: const EdgeInsets.only(top: 8), child: OutlinedButton.icon(onPressed: openKyc, icon: const Icon(Icons.verified_user_outlined), label: const Text("Remplir la vérification d'identité"))),
+                ]),
+              );
+            },
+          ),
+          const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Étape 2 · Informations de la boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16))),
           Field(name, 'Nom de la boutique'),
           Field(city, 'Ville'),
           PrimaryButton(label: busy ? 'Envoi…' : "Demander l'ouverture", icon: Icons.storefront, onPressed: busy ? null : submit),
