@@ -106,6 +106,66 @@ String friendlyError(Object? e) {
       'shop_must_have_rejected_deletion_request': "Cette boutique ne peut pas être réactivée ici : contactez le support.",
       'approved_kyc_required_before_shop_reactivation': "Vérification d'identité (KYC) approuvée requise avant la réactivation.",
       'shop_has_unresolved_refunds': 'Des remboursements sont encore en cours : réessayez quand ils seront terminés.',
+      'admin_console_locked': "Console administrateur verrouillée : re-saisissez le code secret (valable 30 minutes).",
+      'admin_reason_required': "Un motif est obligatoire pour cette action.",
+      'adult_identity_document_required': "Pièce d'identité requise pour une personne majeure (CIN/NINU, passeport ou permis).",
+      'approved_kyc_required_before_courier_approval': "Impossible d'approuver ce livreur : sa vérification d'identité (KYC) n'est pas encore approuvée. Ouvrez l'onglet KYC, approuvez le dossier, puis réessayez.",
+      'approved_kyc_required_before_shop_activation': "Impossible d'activer cette boutique : l'identité (KYC) du vendeur n'est pas encore approuvée. Ouvrez l'onglet KYC, approuvez son dossier, puis revenez ici.",
+      'bazar_requires_approved_kyc': "Le Bazar exige une vérification d'identité (KYC) approuvée par l'administration.",
+      'bazar_shop_owner_not_found': "Propriétaire de l'annonce introuvable.",
+      'buyer_shop_not_found_or_inactive': "Votre boutique d'achat est introuvable ou inactive.",
+      'buyer_shop_not_owned': "Cette boutique ne vous appartient pas.",
+      'cannot_moderate_own_admin_account': "Vous ne pouvez pas modérer votre propre compte administrateur.",
+      'cannot_order_from_own_shop': "Vous ne pouvez pas commander dans votre propre boutique.",
+      'date_of_birth_invalid': "Date de naissance invalide.",
+      'deleted_account_cannot_be_unbanned': "Un compte supprimé ne peut pas être rétabli.",
+      'identity_already_verified': "Votre identité est déjà vérifiée.",
+      'identity_review_status_invalid': "Décision de vérification invalide.",
+      'identity_verification_not_pending': "Ce dossier n'est plus en attente de décision.",
+      'invalid_wholesale_request_action': "Action invalide sur cette demande de gros.",
+      'invalid_wholesale_request_transition': "Cette demande de gros ne peut pas passer à cet état.",
+      'kyc_required_before_shop_request': "Vérification d'identité requise : envoyez d'abord votre dossier KYC (formulaire « Vérification d'identité »), puis redemandez l'ouverture de votre boutique.",
+      'shop_city_required': "Indiquez la ville de votre boutique.",
+      'minor_birth_certificate_and_adult_guardian_documents_required': "Mineur : acte de naissance et documents d'un tuteur majeur requis.",
+      'no_active_courier_application': "Aucune candidature de livreur active.",
+      'only_pending_or_accepted_request_can_be_cancelled': "Seule une demande en attente ou acceptée peut être annulée.",
+      'only_pending_request_can_be_cancelled': "Seule une demande en attente peut être annulée.",
+      'product_must_be_published_and_have_minimum_stock': "Le produit doit être publié et avoir le stock minimum.",
+      'product_not_found_or_shop_not_eligible': "Produit introuvable ou boutique non éligible.",
+      'recent_photo_required': "Une photo récente de vous est requise.",
+      'return_reference_not_eligible': "Cette commande n'est pas éligible au retour.",
+      'shop_deletion_cooling_off_period_active': "Délai de réflexion en cours : la suppression ne peut pas encore être finalisée.",
+      'shop_deletion_not_approved': "La suppression de cette boutique n'a pas été approuvée.",
+      'shop_deletion_request_not_pending': "Cette demande de suppression n'est plus en attente.",
+      'shop_has_disputed_orders_manual_review_required': "Des commandes contestées exigent une revue manuelle avant cette action.",
+      'shop_has_inflight_orders': "Des commandes sont encore en cours : terminez-les ou remboursez-les d'abord.",
+      'stock_below_reserved_wholesale_quantity': "Le stock ne peut pas descendre sous la quantité réservée pour le gros.",
+      'stock_cannot_be_negative': "Le stock ne peut pas être négatif.",
+      'stock_delta_invalid': "Variation de stock invalide.",
+      'stock_limit_exceeded': "Limite de stock dépassée.",
+      'stock_quantity_invalid': "Quantité de stock invalide.",
+      'stock_reason_invalid': "Motif de mouvement de stock invalide.",
+      'stock_reference_already_recorded': "Cette référence de stock est déjà enregistrée.",
+      'stock_reference_type_invalid': "Type de référence de stock invalide.",
+      'supplier_receipt_reference_not_eligible': "Référence de réception fournisseur non éligible.",
+      'supplier_shop_not_owned': "La boutique fournisseur ne vous appartient pas.",
+      'supplier_shop_unavailable': "La boutique fournisseur est indisponible.",
+      'user_action_invalid': "Action invalide sur ce compte.",
+      'user_profile_not_found': "Profil introuvable.",
+      'variant_not_found_for_product': "Variante introuvable pour ce produit.",
+      'variant_not_found_or_shop_not_eligible': "Variante introuvable ou boutique non éligible.",
+      'variant_required_for_variant_product': "Choisissez une variante (taille/couleur) pour ce produit.",
+      'verification_already_pending': "Un dossier de vérification est déjà en cours d'examen.",
+      'wholesale_min_qty_invalid': "Quantité minimale de gros invalide.",
+      'wholesale_minimum_quantity_not_met': "Quantité minimale de gros non atteinte.",
+      'wholesale_note_too_long': "La note est trop longue.",
+      'wholesale_offer_unavailable': "Offre de gros indisponible.",
+      'wholesale_price_invalid': "Prix de gros invalide.",
+      'wholesale_quantity_invalid': "Quantité de gros invalide.",
+      'wholesale_request_not_found': "Demande de gros introuvable.",
+      'wholesale_stock_insufficient': "Stock insuffisant pour cette demande de gros.",
+      'wholesale_stock_insufficient_at_fulfillment': "Stock insuffisant au moment de l'exécution de la demande de gros.",
+      'wholesale_stock_reserved_or_insufficient': "Stock réservé ou insuffisant pour la demande de gros.",
     };
     final hit = known[m.trim()];
     if (hit != null) return hit;
@@ -292,6 +352,19 @@ class Repo {
   }
 
   /// Vérifie qu'un nom de boutique est libre (les boutiques fermées définitivement ne le réservent plus).
+  /// Dernier statut de ma vérification d'identité (pending, approved, rejected, needs_changes) ou null si aucune.
+  static Future<String?> myIdentityStatus() async {
+    final u = currentUser();
+    if (u == null) return null;
+    try {
+      final rows = await _c.from('identity_verifications').select('status').eq('user_id', u.id).order('created_at', ascending: false).limit(1);
+      final l = List<Map<String, dynamic>>.from(rows);
+      return l.isEmpty ? null : '${l.first['status']}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<bool?> shopNameAvailable(String name) async {
     try {
       final r = await _c.rpc('shop_name_available_v68', params: {'p_name': name});
@@ -783,6 +856,16 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> adminList(String kind) async {
+    // 0060 : files enrichies (propriétaire + statut KYC pour les boutiques ; transactions portefeuille pour les paiements).
+    if (kind == 'shop' || kind == 'payment') {
+      try {
+        final r = await _c.rpc(kind == 'shop' ? 'admin_shop_requests_v69' : 'admin_wallet_transactions_v69');
+        return [for (final e in (r as List)) Map<String, dynamic>.from(e as Map)];
+      } on PostgrestException catch (e) {
+        final missing = e.code == 'PGRST202' || e.message.contains('Could not find the function');
+        if (!missing) rethrow; // vraie erreur (console verrouillée, etc.) : on l'affiche au lieu de la masquer
+      }
+    }
     final cfg = {
       'shop': ['shops', 'id,name,city,status,verified_at,deletion_requested_at,deletion_scheduled_at,deletion_review_status'],
       'courier': ['courier_applications', 'id,full_name,phone,transport,zone,status,verified_at'],
