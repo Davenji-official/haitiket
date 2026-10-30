@@ -181,6 +181,9 @@ String friendlyError(Object? e) {
       'recent_photo_required': "Une photo récente de vous est requise.",
       'return_reference_not_eligible': "Cette commande n'est pas éligible au retour.",
       'shop_not_found': "Boutique introuvable.",
+      'order_not_found': "Commande introuvable.",
+      'order_not_finished': "Seules les commandes terminées, annulées ou remboursées peuvent être retirées de la liste.",
+      'only_closed_shop_can_be_purged': "Seule une boutique déjà fermée peut être supprimée définitivement.",
       'shop_deletion_cooling_off_period_active': "Délai de réflexion en cours : la suppression ne peut pas encore être finalisée.",
       'shop_deletion_not_approved': "La suppression de cette boutique n'a pas été approuvée.",
       'shop_deletion_request_not_pending': "Cette demande de suppression n'est plus en attente.",
@@ -637,7 +640,8 @@ class Repo {
   static Future<List<Map<String, dynamic>>> myShops() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('shops').select('id,name,status,city,kind,is_official,official_badge_label,verified_at,deletion_requested_at,deletion_scheduled_at,deletion_review_status,lat,lng,plan_paid_until,logo_url,banner_url,slogan,color_primary,color_accent').eq('owner_id', u.id).order('created_at');
+    // Les boutiques fermées/supprimées n'apparaissent plus dans l'espace vendeur (leur historique reste en base).
+    final rows = await _c.from('shops').select('id,name,status,city,kind,is_official,official_badge_label,verified_at,deletion_requested_at,deletion_scheduled_at,deletion_review_status,lat,lng,plan_paid_until,logo_url,banner_url,slogan,color_primary,color_accent').eq('owner_id', u.id).neq('status', 'closed').order('created_at');
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -782,8 +786,38 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
-    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(50);
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
+    return _onlyRealOrders(List<Map<String, dynamic>>.from(rows));
+  }
+
+  /// Retire les réservations non payées, celles annulées avant paiement et celles que j'ai retirées de ma liste.
+  static Future<List<Map<String, dynamic>>> _onlyRealOrders(List<Map<String, dynamic>> all) async {
+    if (all.isEmpty) return all;
+    var unpaidCancelled = <String>{};
+    try {
+      final ev = await _c.from('order_status_events').select('order_id').eq('from_status', 'PENDING_PAYMENT').eq('to_status', 'CANCELLED').inFilter('order_id', [for (final o in all) o['id']]);
+      unpaidCancelled = {for (final e in List<Map<String, dynamic>>.from(ev)) '${e['order_id']}'};
+    } catch (_) {}
+    final hidden = await hiddenOrderIds();
+    return [for (final o in all) if (o['status'] != 'PENDING_PAYMENT' && !unpaidCancelled.contains('${o['id']}') && !hidden.contains('${o['id']}')) o];
+  }
+
+  static Future<Set<String>> hiddenOrderIds() async {
+    try {
+      final r = await _c.rpc('hidden_order_ids_v71');
+      return {for (final e in (r as List)) '$e'};
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  static Future<void> hideOrder(String orderId) async {
+    await _c.rpc('hide_order_v71', params: {'p_order': orderId});
+  }
+
+  static Future<int> hideCancelledOrders(String shopId) async {
+    final r = await _c.rpc('hide_cancelled_orders_v71', params: {'p_shop': shopId});
+    return (r as num?)?.toInt() ?? 0;
   }
 
   /// Réservations non payées (affichées dans le Panier, jamais dans « Mes commandes »).
@@ -821,14 +855,7 @@ class Repo {
     final u = currentUser();
     if (u == null) return [];
     final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor,variant_label)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
-    final all = List<Map<String, dynamic>>.from(rows);
-    // « Mes commandes » = achats réellement payés : on retire les réservations non payées et celles annulées avant paiement.
-    var unpaidCancelled = <String>{};
-    try {
-      final ev = await _c.from('order_status_events').select('order_id').eq('from_status', 'PENDING_PAYMENT').eq('to_status', 'CANCELLED').inFilter('order_id', [for (final o in all) o['id']]);
-      unpaidCancelled = {for (final e in List<Map<String, dynamic>>.from(ev)) '${e['order_id']}'};
-    } catch (_) {}
-    return [for (final o in all) if (o['status'] != 'PENDING_PAYMENT' && !unpaidCancelled.contains('${o['id']}')) o];
+    return _onlyRealOrders(List<Map<String, dynamic>>.from(rows));
   }
 
   static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address, [String? coupon]) async {
@@ -946,11 +973,21 @@ class Repo {
     throw const FormatException('Enregistrement de la boutique officielle invalide.');
   }
 
+  /// Interrupteur de l'écran admin : afficher aussi les boutiques fermées.
+  static bool adminShowClosedShops = false;
+
+  static Future<Map<String, dynamic>> adminPurgeClosedShop(String shopId, String reason) async {
+    final r = await _c.rpc('admin_purge_closed_shop_v71', params: {'p_shop': shopId, 'p_reason': reason.trim()});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
   static Future<List<Map<String, dynamic>>> adminList(String kind) async {
     // 0060 : files enrichies (propriétaire + statut KYC pour les boutiques ; transactions portefeuille pour les paiements).
     if (kind == 'shop' || kind == 'payment') {
       try {
-        final r = await _c.rpc(kind == 'shop' ? 'admin_shop_requests_v69' : 'admin_wallet_transactions_v69');
+        final r = kind == 'shop'
+            ? await _c.rpc('admin_shop_requests_v71', params: {'p_include_closed': adminShowClosedShops})
+            : await _c.rpc('admin_wallet_transactions_v69');
         return [for (final e in (r as List)) Map<String, dynamic>.from(e as Map)];
       } on PostgrestException catch (e) {
         final missing = e.code == 'PGRST202' || e.message.contains('Could not find the function');
