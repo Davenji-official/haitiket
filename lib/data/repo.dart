@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
 
@@ -14,6 +16,20 @@ class CartLine {
   final List<Map<String, dynamic>> tiers;
   int qty;
   CartLine({required this.key, required this.productId, required this.name, required this.currency, required this.basePrice, required this.tiers, this.variantId, this.variantLabel, this.qty = 1});
+
+  Map<String, dynamic> toJson() => {'key': key, 'productId': productId, 'name': name, 'currency': currency, 'basePrice': basePrice, 'tiers': tiers, 'variantId': variantId, 'variantLabel': variantLabel, 'qty': qty};
+
+  static CartLine fromJson(Map<String, dynamic> j) => CartLine(
+        key: j['key'] as String,
+        productId: j['productId'] as String,
+        name: j['name'] as String,
+        currency: (j['currency'] ?? 'HTG') as String,
+        basePrice: (j['basePrice'] as num).toInt(),
+        tiers: List<Map<String, dynamic>>.from(((j['tiers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map))),
+        variantId: j['variantId'] as String?,
+        variantLabel: j['variantLabel'] as String?,
+        qty: (j['qty'] as num?)?.toInt() ?? 1,
+      );
 }
 
 class CartStore {
@@ -59,6 +75,36 @@ class CartStore {
         variantLabel: label,
       );
     }
+    lines.value = m;
+  }
+
+  static const _prefKey = 'haitiket_cart_v1';
+
+  /// Le panier survit à la fermeture de l'application (les articles non payés y restent).
+  static Future<void> restore() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_prefKey);
+      if (raw == null || raw.isEmpty) return;
+      final m = <String, CartLine>{};
+      for (final e in (jsonDecode(raw) as List)) {
+        final l = CartLine.fromJson(Map<String, dynamic>.from(e as Map));
+        m[l.key] = l;
+      }
+      lines.value = m;
+    } catch (_) {}
+  }
+
+  static Future<void> persist() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_prefKey, jsonEncode([for (final l in lines.value.values) l.toJson()]));
+    } catch (_) {}
+  }
+
+  /// Retire du panier les articles qui viennent d'être payés (reconnaissance par nom de produit).
+  static void removePaidNames(Set<String> names) {
+    final m = Map<String, CartLine>.from(lines.value)..removeWhere((_, l) => names.contains(l.name));
     lines.value = m;
   }
 
@@ -134,6 +180,7 @@ String friendlyError(Object? e) {
       'product_not_found_or_shop_not_eligible': "Produit introuvable ou boutique non éligible.",
       'recent_photo_required': "Une photo récente de vous est requise.",
       'return_reference_not_eligible': "Cette commande n'est pas éligible au retour.",
+      'shop_not_found': "Boutique introuvable.",
       'shop_deletion_cooling_off_period_active': "Délai de réflexion en cours : la suppression ne peut pas encore être finalisée.",
       'shop_deletion_not_approved': "La suppression de cette boutique n'a pas été approuvée.",
       'shop_deletion_request_not_pending': "Cette demande de suppression n'est plus en attente.",
@@ -482,6 +529,12 @@ class Repo {
     return Map<String, dynamic>.from(r as Map);
   }
 
+  /// Fermeture immédiate par l'administration (sans délai de 30 jours ; les remboursements en attente bloquent la fermeture finale).
+  static Future<Map<String, dynamic>> adminCloseShopNow(String shopId, String reason) async {
+    final r = await _c.rpc('admin_close_shop_now_v70', params: {'p_shop': shopId, 'p_reason': reason.trim()});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
   static Future<bool> adminFinalizeShopDeletion(String shopId) async =>
       await _c.rpc('admin_finalize_shop_deletion_v60', params: {'p_shop': shopId}) as bool;
 
@@ -733,11 +786,49 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  /// Réservations non payées (affichées dans le Panier, jamais dans « Mes commandes »).
+  static Future<List<Map<String, dynamic>>> myPendingOrders() async {
+    final u = currentUser();
+    if (u == null) return [];
+    final rows = await _c.from('orders').select('id,status,total_minor,currency,reserved_until,created_at,shops(name),order_items(name,qty)').eq('customer_id', u.id).eq('status', 'PENDING_PAYMENT').order('created_at', ascending: false).limit(20);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  /// Annule mes réservations non payées (remet le stock en vente) : appelé avant une nouvelle validation.
+  static Future<void> cancelMyPendingOrders() async {
+    try {
+      for (final o in await myPendingOrders()) {
+        try {
+          await cancelOrder('${o['id']}');
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  /// Noms des produits contenus dans ces commandes.
+  static Future<Set<String>> orderItemNames(Iterable<String> orderIds) async {
+    final ids = orderIds.toList();
+    if (ids.isEmpty) return <String>{};
+    try {
+      final rows = await _c.from('order_items').select('name').inFilter('order_id', ids);
+      return {for (final r in List<Map<String, dynamic>>.from(rows)) '${r['name']}'};
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> myOrders() async {
     final u = currentUser();
     if (u == null) return [];
     final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor,variant_label)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
-    return List<Map<String, dynamic>>.from(rows);
+    final all = List<Map<String, dynamic>>.from(rows);
+    // « Mes commandes » = achats réellement payés : on retire les réservations non payées et celles annulées avant paiement.
+    var unpaidCancelled = <String>{};
+    try {
+      final ev = await _c.from('order_status_events').select('order_id').eq('from_status', 'PENDING_PAYMENT').eq('to_status', 'CANCELLED').inFilter('order_id', [for (final o in all) o['id']]);
+      unpaidCancelled = {for (final e in List<Map<String, dynamic>>.from(ev)) '${e['order_id']}'};
+    } catch (_) {}
+    return [for (final o in all) if (o['status'] != 'PENDING_PAYMENT' && !unpaidCancelled.contains('${o['id']}')) o];
   }
 
   static Future<List<Map<String, dynamic>>> createOrders(List<CartLine> lines, String mode, String address, [String? coupon]) async {
