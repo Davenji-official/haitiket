@@ -91,8 +91,8 @@ class _CheckoutState extends State<CheckoutScreen> {
   }
 
   /// Étape de paiement juste après la création : solde du portefeuille, paiement en un geste ou recharge.
-  Future<bool> offerPayment(List<Map<String, dynamic>> orders) async {
-    if (!mounted || orders.isEmpty) return false;
+  Future<Set<String>> offerPayment(List<Map<String, dynamic>> orders) async {
+    if (!mounted || orders.isEmpty) return <String>{};
     final balances = <String, num>{};
     try {
       final w = await Repo.myWalletV2();
@@ -121,37 +121,37 @@ class _CheckoutState extends State<CheckoutScreen> {
             Text(
               lacking.isEmpty
                   ? 'Vous pouvez payer maintenant avec votre portefeuille. Le vendeur est prévenu dès le paiement ; votre argent reste protégé par HAITIKET jusqu\'à la livraison.'
-                  : 'Solde insuffisant en ${lacking.map((e) => e.key).join(' et ')}. Rechargez votre portefeuille (MonCash / NatCash), puis payez depuis « Mes commandes ». La réservation du stock est limitée dans le temps.',
+                  : 'Solde insuffisant en ${lacking.map((e) => e.key).join(' et ')}. Rechargez votre portefeuille (MonCash / NatCash), puis revenez valider votre panier : vos articles y restent.',
               style: const TextStyle(color: C.muted),
             ),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(d, 'later'), child: const Text('Plus tard')),
+          TextButton(onPressed: () => Navigator.pop(d, 'later'), child: const Text('Garder dans le panier')),
           if (lacking.isNotEmpty) TextButton(onPressed: () => Navigator.pop(d, 'topup'), child: const Text('Recharger')),
           if (lacking.isEmpty) FilledButton(onPressed: () => Navigator.pop(d, 'pay'), child: const Text('Payer maintenant')),
         ],
       ),
     );
-    if (!mounted) return false;
+    if (!mounted) return <String>{};
     if (choice == 'topup') {
       await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Portefeuille')), body: const WalletScreen())));
-      return false;
+      return <String>{};
     }
-    if (choice != 'pay') return false;
-    var ok = 0;
+    if (choice != 'pay') return <String>{};
+    final paid = <String>{};
     String? error;
     for (final o in orders) {
       try {
         await Repo.payOrderFromWallet('${o['id']}');
-        ok++;
+        paid.add('${o['id']}');
       } catch (e) {
         error = Repo.err(e);
       }
     }
-    if (!mounted) return ok == orders.length;
+    if (!mounted) return paid;
     if (error != null) toast(context, 'Paiement partiel ou refusé : $error');
-    return ok == orders.length;
+    return paid;
   }
 
   Future<void> submit() async {
@@ -163,6 +163,7 @@ class _CheckoutState extends State<CheckoutScreen> {
     }
     setState(() => busy = true);
     try {
+      await Repo.cancelMyPendingOrders(); // libère d'anciennes réservations non payées avant de recommencer
       final orders = await Repo.createOrders(lines, mode, address.text.trim(), coupon.text);
       var locationSaved = true;
       final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
@@ -175,9 +176,19 @@ class _CheckoutState extends State<CheckoutScreen> {
           }
         }
       }
-      CartStore.lines.value = {};
       if (!mounted) return;
-      final paidNow = await offerPayment(orders);
+      final paidIds = await offerPayment(orders);
+      // Les réservations non payées sont annulées (stock remis en vente) : leurs articles restent dans le panier.
+      for (final o in orders) {
+        if (!paidIds.contains('${o['id']}')) {
+          try {
+            await Repo.cancelOrder('${o['id']}');
+          } catch (_) {}
+        }
+      }
+      // Seuls les articles réellement payés quittent le panier.
+      if (paidIds.isNotEmpty) CartStore.removePaidNames(await Repo.orderItemNames(paidIds));
+      final paidNow = paidIds.length == orders.length;
       if (!mounted) return;
       final gpsMessage = mode == 'delivery' && deliveryLat != null && coordinatesMatchAddress
           ? (locationSaved
@@ -186,11 +197,17 @@ class _CheckoutState extends State<CheckoutScreen> {
           : '';
       final navigator = Navigator.of(context);
       final messenger = ScaffoldMessenger.of(context);
-      navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Mes commandes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const OrdersScreen())));
+      if (paidIds.isNotEmpty) {
+        navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Mes commandes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const OrdersScreen())));
+      } else {
+        navigator.pop();
+      }
       messenger.showSnackBar(SnackBar(content: Text(
         paidNow
             ? '${orders.length} commande(s) payée(s). Le vendeur est prévenu.$gpsMessage'
-            : '${orders.length} commande(s) créée(s) : payez-les vite depuis « Mes commandes », la réservation du stock est limitée dans le temps.$gpsMessage',
+            : paidIds.isEmpty
+                ? 'Rien n\'a été payé : vos articles restent dans le panier.'
+                : '${paidIds.length} commande(s) payée(s). Les autres articles restent dans le panier.$gpsMessage',
       )));
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -375,6 +392,46 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> {
       );
 }
 
+/// Frise d'avancement d'une commande payée : Payée, Préparation, Prête, En route, Livrée (ou Retirée).
+class OrderProgress extends StatelessWidget {
+  final String status;
+  final bool delivery;
+  const OrderProgress({super.key, required this.status, required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = delivery ? const ['Payée', 'Préparation', 'Prête', 'En route', 'Livrée'] : const ['Payée', 'Préparation', 'Prête', 'Retirée'];
+    final last = steps.length - 1;
+    final idx = switch (status) {
+      'PAID' => 0,
+      'CONFIRMED' || 'PREPARING' => 1,
+      'READY_FOR_PICKUP' => 2,
+      'IN_TRANSIT' => delivery ? 3 : 2,
+      'DELIVERED' || 'COMPLETED' => last,
+      _ => -1,
+    };
+    if (idx < 0) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (var i = 0; i < steps.length; i++) ...[
+          Expanded(
+            child: Column(children: [
+              Row(children: [
+                Expanded(child: Container(height: 3, color: i == 0 ? Colors.transparent : (i <= idx ? C.green : C.line))),
+                CircleAvatar(radius: 11, backgroundColor: i <= idx ? C.green : C.line, child: Icon(i <= idx ? Icons.check : Icons.circle, size: i <= idx ? 14 : 6, color: Colors.white)),
+                Expanded(child: Container(height: 3, color: i == last ? Colors.transparent : (i < idx ? C.green : C.line))),
+              ]),
+              const SizedBox(height: 4),
+              Text(steps[i], textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: i == idx ? FontWeight.w800 : FontWeight.w500, color: i <= idx ? C.ink : C.muted)),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
   @override
@@ -432,6 +489,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
                         Text(statusFr(o['status'] as String), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
+                        OrderProgress(status: '${o['status']}', delivery: '${o['delivery_mode']}' == 'delivery'),
                         const SizedBox(height: 6),
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}${it['variant_label'] == null ? '' : ' (${it['variant_label']})'}'),
                         const SizedBox(height: 6),
@@ -461,6 +519,8 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                           const Text('Le paiement est vérifié côté serveur. Le solde utilisé doit être dans la même devise que la commande.'),
                         ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
+                        if (o['status'] == 'READY_FOR_PICKUP' || o['status'] == 'IN_TRANSIT')
+                          const Padding(padding: EdgeInsets.only(bottom: 4), child: Text('Donnez votre code seulement après avoir reçu votre colis : c\'est lui qui libère le paiement du vendeur et du livreur.', style: TextStyle(color: C.muted, fontSize: 12.5))),
                         if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].contains(o['status']))
                           TextButton.icon(
                             icon: const Icon(Icons.location_on_outlined),

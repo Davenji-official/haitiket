@@ -781,6 +781,19 @@ class _AdminShopDeletionTabState extends State<AdminShopDeletionTab> {
       reload();
     } catch (e) { if (mounted) toast(context, Repo.err(e)); }
   }
+  Future<void> closeNow(Map<String, dynamic> shop) async {
+    final reason = await askText(context, 'Fermer cette boutique immédiatement', hint: 'Motif obligatoire (conservé dans le journal)');
+    if (reason == null || reason.trim().length < 3) return;
+    try {
+      final r = await Repo.adminCloseShopNow(shop['id'].toString(), reason);
+      if (mounted) {
+        toast(context, r['closed'] == true
+            ? 'Boutique fermée immédiatement. Historique conservé, nom de boutique libéré.'
+            : 'Commandes traitées. Il reste ${r['unresolved_refunds'] ?? 0} remboursement(s) à exécuter avant la fermeture finale : exécutez-les puis relancez.');
+      }
+      reload();
+    } catch (e) { if (mounted) toast(context, Repo.err(e)); }
+  }
   @override
   Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(future: f, builder: (_, snap) {
     if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
@@ -788,8 +801,8 @@ class _AdminShopDeletionTabState extends State<AdminShopDeletionTab> {
     final items = snap.data ?? [];
     if (items.isEmpty) return const EmptyState(title: 'Aucune demande en attente', text: 'Les demandes de suppression seront affichées ici.');
     return ListView(padding: const EdgeInsets.all(12), children: [
-      const Text('La validation ne supprime pas immédiatement les données. Délai minimal de 30 jours; les remboursements doivent être confirmés.', style: TextStyle(fontWeight: FontWeight.w700)),
-      for (final shop in items) Card(child: ListTile(title: Text('${shop['name']}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Boutique ${shop['id']}\nDemandée : ${shop['deletion_requested_at']}\nSuppression au plus tôt : ${shop['deletion_scheduled_at']}\nStatut : ${shop['deletion_review_status']}'), isThreeLine: true, trailing: Wrap(children: [if (shop['deletion_review_status'] == 'pending_admin') IconButton(tooltip: 'Approuver', icon: const Icon(Icons.check_circle_outline, color: Colors.green), onPressed: () => act(shop, true)), if (shop['deletion_review_status'] == 'pending_admin') IconButton(tooltip: 'Refuser', icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent), onPressed: () => act(shop, false)), if (shop['deletion_review_status'] == 'approved') IconButton(tooltip: 'Finaliser après 30 jours et réconciliation', icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent), onPressed: () async { try { await Repo.adminFinalizeShopDeletion(shop['id'].toString()); if (mounted) toast(context, 'Fermeture logique finalisée; historique conservé.'); reload(); } catch (e) { if (mounted) toast(context, Repo.err(e)); } })]))),
+      const Text('La validation ne supprime pas immédiatement les données. Le délai de 30 jours protège le vendeur, mais vous pouvez agir tout de suite avec l\'éclair : fermeture immédiate (les commandes en cours sont annulées et remboursées ; la fermeture finale attend que les remboursements soient exécutés).', style: TextStyle(fontWeight: FontWeight.w700)),
+      for (final shop in items) Card(child: ListTile(title: Text('${shop['name']}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Boutique ${shop['id']}\nDemandée : ${shop['deletion_requested_at']}\nSuppression au plus tôt : ${shop['deletion_scheduled_at']}\nStatut : ${shop['deletion_review_status']}'), isThreeLine: true, trailing: Wrap(children: [IconButton(tooltip: 'Fermer immédiatement', icon: const Icon(Icons.bolt, color: C.terracotta), onPressed: () => closeNow(shop)), if (shop['deletion_review_status'] == 'pending_admin') IconButton(tooltip: 'Approuver', icon: const Icon(Icons.check_circle_outline, color: Colors.green), onPressed: () => act(shop, true)), if (shop['deletion_review_status'] == 'pending_admin') IconButton(tooltip: 'Refuser', icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent), onPressed: () => act(shop, false)), if (shop['deletion_review_status'] == 'approved') IconButton(tooltip: 'Finaliser après 30 jours et réconciliation', icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent), onPressed: () async { try { await Repo.adminFinalizeShopDeletion(shop['id'].toString()); if (mounted) toast(context, 'Fermeture logique finalisée; historique conservé.'); reload(); } catch (e) { if (mounted) toast(context, Repo.err(e)); } })]))),
     ]);
   });
 }

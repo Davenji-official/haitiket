@@ -405,8 +405,46 @@ class FavoritesScreen extends StatelessWidget {
       ]);
 }
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
+  @override
+  State<CartScreen> createState() => _CartState();
+}
+
+class _CartState extends State<CartScreen> {
+  late Future<List<Map<String, dynamic>>> pending = _loadPending();
+
+  Future<List<Map<String, dynamic>>> _loadPending() async {
+    if (currentUser() == null) return <Map<String, dynamic>>[];
+    try {
+      return await Repo.myPendingOrders();
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  void reloadPending() => setState(() => pending = _loadPending());
+
+  Future<void> payPending(Map<String, dynamic> o) async {
+    try {
+      await Repo.payOrderFromWallet('${o['id']}');
+      if (mounted) toast(context, 'Commande payée. Le vendeur est prévenu : retrouvez-la dans « Mes commandes ».');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    reloadPending();
+  }
+
+  Future<void> cancelPending(Map<String, dynamic> o) async {
+    try {
+      await Repo.cancelOrder('${o['id']}');
+      if (mounted) toast(context, 'Réservation annulée : le stock est remis en vente.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    reloadPending();
+  }
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
         valueListenable: CartStore.lines,
@@ -436,10 +474,41 @@ class CartScreen extends StatelessWidget {
               const SizedBox(height: 4),
               const Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
               const SizedBox(height: 16),
-              PrimaryButton(label: tr('Passer commande'), icon: Icons.lock_outline, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()))),
+              PrimaryButton(
+                label: tr('Passer commande'),
+                icon: Icons.lock_outline,
+                onPressed: () async {
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckoutScreen()));
+                  if (mounted) reloadPending();
+                },
+              ),
               const SizedBox(height: 8),
-              const Text('Le paiement se fait après la réservation, depuis « Mes commandes », avec votre portefeuille HTG ou USD. Les paiements externes (MonCash/carte) ne sont pas activés tant que leur prestataire n’est pas configuré.', style: TextStyle(color: C.muted, fontWeight: FontWeight.w600)),
+              const Text('Vos articles restent dans le panier tant qu\'ils ne sont pas payés. Le paiement se fait à la validation, avec votre portefeuille HTG ou USD. Seuls les achats payés apparaissent dans « Mes commandes ».', style: TextStyle(color: C.muted)),
             ],
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: pending,
+              builder: (_, s) {
+                final items = s.data ?? const <Map<String, dynamic>>[];
+                if (items.isEmpty) return const SizedBox();
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const SizedBox(height: 22),
+                  const Text('Réservations en attente de paiement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+                  const Text('Ces articles sont réservés pour un temps limité. Payez-les ou annulez pour les remettre en vente.', style: TextStyle(color: C.muted)),
+                  for (final o in items)
+                    Card(
+                      color: Colors.white,
+                      child: ListTile(
+                        title: Text('${(o['shops'] as Map?)?['name'] ?? 'Boutique'} · ${money((o['total_minor'] as num?) ?? 0, '${o['currency'] ?? 'HTG'}')}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text([for (final it in (o['order_items'] as List? ?? const [])) '${(it as Map)['qty']} × ${it['name']}'].join(', ')),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          IconButton(tooltip: 'Annuler la réservation', onPressed: () => cancelPending(o), icon: const Icon(Icons.close, color: C.terracotta)),
+                          FilledButton(onPressed: () => payPending(o), child: const Text('Payer')),
+                        ]),
+                      ),
+                    ),
+                ]);
+              },
+            ),
           ]);
         },
       );
