@@ -104,7 +104,7 @@ class _CheckoutState extends State<CheckoutScreen> {
       totals[cur] = (totals[cur] ?? 0) + ((o['total_minor'] as num?)?.toInt() ?? 0);
     }
     final lacking = totals.entries.where((e) => (balances[e.key] ?? 0) < e.value).toList();
-    if (!mounted) return false;
+    if (!mounted) return <String>{};
     final choice = await showDialog<String>(
       context: context,
       barrierDismissible: false,
