@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
+import 'data/repo.dart';
 import 'i18n.dart';
 import 'theme.dart';
 import 'ui/splash.dart';
@@ -16,6 +17,8 @@ Future<void> main() async {
   }
 
   await loadLang();
+  await CartStore.restore();
+  CartStore.lines.addListener(CartStore.persist);
   runApp(const HaitiketApp());
 }
 
