@@ -173,6 +173,32 @@ class _AdminListState extends State<_AdminList> {
     }
   }
 
+  Future<void> purgeShop(String id) async {
+    final c = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Supprimer définitivement ?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('La boutique fermée est effacée de la base. Impossible si elle a un historique de commandes : elle reste alors archivée et masquée.'),
+          TextField(controller: c, decoration: const InputDecoration(hintText: 'Motif obligatoire')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text.trim()), child: const Text('Supprimer')),
+        ],
+      ),
+    );
+    if (reason == null || reason.length < 3) return;
+    try {
+      final r = await Repo.adminPurgeClosedShop(id, reason);
+      if (mounted) toast(context, r['purged'] == true ? 'Boutique supprimée définitivement.' : 'Suppression impossible : la boutique a un historique de commandes. Elle reste archivée et masquée.');
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
   String kycLabel(String k) => switch (k) {
         'approved' => 'approuvée',
         'pending' => 'dossier envoyé, en attente de décision',
@@ -215,6 +241,7 @@ class _AdminListState extends State<_AdminList> {
           if (st == 'pending') TextButton(onPressed: () => act(id, 'closed', needReason: true), child: const Text('Rejeter la demande')),
           if (st == 'active') TextButton(onPressed: () => act(id, 'suspended', needReason: true), child: const Text('Suspendre')),
           if (st != 'closed') TextButton(onPressed: () => closeShopNow(id), child: const Text('Fermer maintenant')),
+          if (st == 'closed') TextButton(onPressed: () => purgeShop(id), child: const Text('Supprimer définitivement')),
         ];
       case 'courier':
         return [
@@ -251,7 +278,24 @@ class _AdminListState extends State<_AdminList> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
+  Widget build(BuildContext context) {
+    if (widget.kind != 'shop') return listBuild(context);
+    return Column(children: [
+      SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+        title: const Text('Afficher les boutiques fermées', style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: const Text('Masquées par défaut. Une boutique fermée sans historique peut être supprimée définitivement.'),
+        value: Repo.adminShowClosedShops,
+        onChanged: (v) {
+          Repo.adminShowClosedShops = v;
+          reload();
+        },
+      ),
+      Expanded(child: listBuild(context)),
+    ]);
+  }
+
+  Widget listBuild(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
         future: f,
         builder: (_, s) {
           if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());

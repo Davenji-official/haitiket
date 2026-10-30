@@ -490,6 +490,22 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
                         Text(statusFr(o['status'] as String), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
                         OrderProgress(status: '${o['status']}', delivery: '${o['delivery_mode']}' == 'delivery'),
+                        if (o['status'] == 'CANCELLED' || o['status'] == 'REFUNDED')
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () async {
+                                try {
+                                  await Repo.hideOrder('${o['id']}');
+                                  reload();
+                                } catch (e) {
+                                  if (context.mounted) toast(context, Repo.err(e));
+                                }
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Retirer de ma liste'),
+                            ),
+                          ),
                         const SizedBox(height: 6),
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}${it['variant_label'] == null ? '' : ' (${it['variant_label']})'}'),
                         const SizedBox(height: 6),
@@ -875,6 +891,12 @@ class _ShopPanelState extends State<ShopPanel> {
     try {
       if (v == 'chat') return openChat(context, 'order', id);
       if (v == 'pin') return showPin(context, id, 'Code de collecte');
+      if (v == 'hide') {
+        await Repo.hideOrder(id);
+        if (mounted) toast(context, 'Commande retirée de votre liste (l\'historique reste conservé).');
+        reload();
+        return;
+      }
       if (v == 'dispute') {
         await disputeDialog(context, id);
         reload();
@@ -1015,7 +1037,7 @@ class _ShopPanelState extends State<ShopPanel> {
               ]),
             ),
           if (widget.shop['status'] == 'closed') const Text('Boutique fermée définitivement — historique conservé.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
-          if (!personal && !official) PlanCard(shop: widget.shop),
+          if (!personal && !official && widget.shop['status'] == 'active' && widget.shop['deletion_review_status'] != 'pending_admin' && widget.shop['deletion_review_status'] != 'approved') PlanCard(shop: widget.shop),
           if (official) const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.verified, color: C.green), title: Text('Boutique officielle HAITIKET', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Abonnement vendeur non requis.')),
           if (!personal && active) BrandingEditor(shop: widget.shop),
           if (active)
@@ -1130,8 +1152,25 @@ class _ShopPanelState extends State<ShopPanel> {
             future: orders,
             builder: (_, s) {
               final items = s.data ?? [];
-              if (items.isEmpty) return const Padding(padding: EdgeInsets.only(top: 6), child: Text('Aucune commande.', style: TextStyle(color: C.muted)));
+              if (items.isEmpty) return const Padding(padding: EdgeInsets.only(top: 6), child: Text('Aucune commande payée pour le moment.', style: TextStyle(color: C.muted)));
               return Column(children: [
+                if (items.any((o) => o['status'] == 'CANCELLED' || o['status'] == 'REFUNDED'))
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        try {
+                          final n = await Repo.hideCancelledOrders(widget.shop['id'] as String);
+                          if (mounted) toast(context, '$n commande(s) annulée(s) retirée(s) de votre liste.');
+                          reload();
+                        } catch (e) {
+                          if (mounted) toast(context, Repo.err(e));
+                        }
+                      },
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Nettoyer les commandes annulées'),
+                    ),
+                  ),
                 for (final o in items)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -1142,6 +1181,7 @@ class _ShopPanelState extends State<ShopPanel> {
                         final dm = o['delivery_mode'];
                         return [
                           const PopupMenuItem(value: 'chat', child: Text('Écrire au client')),
+                          if (const ['CANCELLED', 'REFUNDED', 'COMPLETED'].contains(st)) const PopupMenuItem(value: 'hide', child: Text('Retirer de ma liste')),
                           if (st == 'PAID') const PopupMenuItem(value: 'CONFIRMED', child: Text('Confirmer la commande')),
                           if (st == 'CONFIRMED') const PopupMenuItem(value: 'PREPARING', child: Text('Passer en préparation')),
                           if (st == 'PREPARING') const PopupMenuItem(value: 'READY_FOR_PICKUP', child: Text('Marquer prête')),

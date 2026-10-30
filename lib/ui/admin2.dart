@@ -122,7 +122,7 @@ class _DashState extends State<AdminDashboardTab> {
           future: f,
           builder: (_, s) {
             if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-            if (s.hasError) return ListView(padding: const EdgeInsets.all(18), children: [EmptyState(title: 'Accès refusé', text: Repo.err(s.error!))]);
+            if (s.hasError) return ListView(padding: const EdgeInsets.all(18), children: [EmptyState(title: 'Tableau indisponible', text: Repo.err(s.error!)), const SizedBox(height: 8), OutlinedButton.icon(onPressed: () => setState(() => f = Repo.adminDashboard()), icon: const Icon(Icons.refresh), label: const Text('Réessayer'))]);
             final d = s.data!;
             return ListView(padding: const EdgeInsets.all(14), children: [
               const MascotHeader(mascot: Mascot.admin, title: 'Administration', subtitle: 'Chiffres calculés à partir des données réelles (tirez vers le bas pour actualiser).'),
