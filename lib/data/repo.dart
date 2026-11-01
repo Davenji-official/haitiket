@@ -786,7 +786,7 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
-    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
+    final rows = await _c.from('orders').select('id,status,delivery_due_at,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
     return _onlyRealOrders(List<Map<String, dynamic>>.from(rows));
   }
 
@@ -808,6 +808,22 @@ class Repo {
       return {for (final e in (r as List)) '$e'};
     } catch (_) {
       return <String>{};
+    }
+  }
+
+  /// Le client demande le remboursement d'une commande en retard (portefeuille). Retourne le détail du serveur.
+  static Future<Map<String, dynamic>> refundLateOrder(String orderId) async {
+    final r = await _c.rpc('refund_late_order_v72', params: {'p_order': orderId});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Rembourse automatiquement les commandes dont le délai est dépassé (idempotent). Retourne le nombre remboursé.
+  static Future<int> processLateOrders() async {
+    try {
+      final r = await _c.rpc('process_late_orders_v72');
+      return (((r as Map)['refunded']) as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -854,7 +870,7 @@ class Repo {
   static Future<List<Map<String, dynamic>>> myOrders() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('orders').select('id,status,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor,variant_label)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
+    final rows = await _c.from('orders').select('id,status,delivery_due_at,total_minor,items_minor,delivery_minor,currency,delivery_mode,reserved_until,created_at,shops(name),order_items(name,qty,unit_minor,variant_label)').eq('customer_id', u.id).order('created_at', ascending: false).limit(50);
     return _onlyRealOrders(List<Map<String, dynamic>>.from(rows));
   }
 
