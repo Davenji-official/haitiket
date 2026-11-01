@@ -22,6 +22,22 @@ import '../i18n.dart';
 
 int _jsonListCount(String value) { try { final x = jsonDecode(value.isEmpty ? '[]' : value); return x is List ? x.length : 0; } catch (_) { return 0; } }
 
+String dmHm(DateTime d) {
+  String two(int x) => x.toString().padLeft(2, '0');
+  return '${two(d.day)}/${two(d.month)} à ${two(d.hour)}:${two(d.minute)}';
+}
+
+const _awaitingStatuses = ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT'];
+
+/// Ligne d'échéance pour le vendeur : « À traiter avant le … ».
+String sellerDue(Map<String, dynamic> o) {
+  final v = o['delivery_due_at'];
+  if (v == null || !_awaitingStatuses.contains(o['status'])) return '';
+  final d = DateTime.tryParse('$v')?.toLocal();
+  if (d == null) return '';
+  return d.isBefore(DateTime.now()) ? '\n⚠ Délai dépassé : le client peut être remboursé' : '\nÀ traiter avant le ${dmHm(d)}';
+}
+
 String statusFr(String s) =>
     const {
       'PENDING_PAYMENT': 'En attente de paiement',
@@ -444,8 +460,41 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
   void reload() => setState(() => f = Repo.myOrders());
 
   Future<void> checkPending() async {
-    // Les commandes internes ne sont plus vérifiées auprès d'un prestataire externe.
+    // Remboursement automatique des commandes dont le délai est dépassé, puis rafraîchissement.
+    await Repo.processLateOrders();
     if (mounted) reload();
+  }
+
+  Widget dueBlock(Map<String, dynamic> o) {
+    final v = o['delivery_due_at'];
+    if (v == null || !_awaitingStatuses.contains(o['status'])) return const SizedBox();
+    final d = DateTime.tryParse('$v')?.toLocal();
+    if (d == null) return const SizedBox();
+    final late = d.isBefore(DateTime.now());
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(late ? 'Délai dépassé depuis le ${dmHm(d)}' : 'Livraison ou retrait prévu avant le ${dmHm(d)}', style: TextStyle(color: late ? C.terracotta : C.muted, fontWeight: late ? FontWeight.w800 : FontWeight.w600, fontSize: 13)),
+        if (late)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                try {
+                  final r = await Repo.refundLateOrder('${o['id']}');
+                  if (!mounted) return;
+                  toast(context, r['refunded'] == true ? 'Remboursé : le montant est revenu dans votre portefeuille.' : 'Pas remboursable pour le moment : un litige est ouvert, ou le livreur est en route (24 h de grâce).');
+                  reload();
+                } catch (e) {
+                  if (mounted) toast(context, Repo.err(e));
+                }
+              },
+              icon: const Icon(Icons.undo),
+              label: const Text('Demander le remboursement (retard)'),
+            ),
+          ),
+      ]),
+    );
   }
 
   @override
@@ -490,6 +539,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
                         Text(statusFr(o['status'] as String), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
                         OrderProgress(status: '${o['status']}', delivery: '${o['delivery_mode']}' == 'delivery'),
+                        dueBlock(o),
                         if (o['status'] == 'CANCELLED' || o['status'] == 'REFUNDED')
                           Align(
                             alignment: Alignment.centerRight,
@@ -1191,7 +1241,7 @@ class _ShopPanelState extends State<ShopPanel> {
                         ];
                       },
                     ),
-                    title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}${i['variant_label'] == null ? '' : ' (${i['variant_label']})'}').join(', ')}'),
+                    title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}${i['variant_label'] == null ? '' : ' (${i['variant_label']})'}').join(', ')}${sellerDue(o)}'),
                     subtitle: Text('${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
                   ),
               ]);

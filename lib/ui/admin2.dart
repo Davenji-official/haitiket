@@ -130,6 +130,17 @@ class _DashState extends State<AdminDashboardTab> {
               const AdminOrderHistoryPanel(),
               const SizedBox(height: 10),
               OutlinedButton.icon(
+                icon: const Icon(Icons.undo),
+                label: const Text('Rembourser les commandes en retard'),
+                onPressed: () async {
+                  final n = await Repo.processLateOrders();
+                  if (!context.mounted) return;
+                  toast(context, n > 0 ? '$n commande(s) en retard remboursée(s) dans les portefeuilles.' : 'Aucune commande remboursable pour le moment (litige ouvert, livreur en route ou délai non dépassé).');
+                  setState(() => f = Repo.adminDashboard());
+                },
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
                 icon: const Icon(Icons.file_download_outlined),
                 label: const Text('Exporter les statistiques (CSV)'),
                 onPressed: () async {
@@ -278,6 +289,7 @@ class _DashState extends State<AdminDashboardTab> {
               group('À traiter', [
                 tile('Litiges ouverts', d['disputes_open'], alert: true),
                 tile('Remboursements à exécuter', d['refunds_to_execute'], alert: true),
+                tile('Commandes en retard', d['orders_late'], alert: true),
                 tile('Transactions portefeuille en revue', d['payments_refund_required'], alert: true),
                 tile('Dossiers KYC à traiter', d['kyc_pending'], alert: true),
                 tile('Suppressions de boutique à décider', d['shop_deletions_pending'], alert: true),
@@ -344,6 +356,8 @@ class _SettingsState extends State<AdminSettingsTab> {
     ['shop_fee_yearly_usd', 'Abonnement boutique pro (USD / 365 jours)', 'Tarif par défaut : 200 USD. Le paiement doit être confirmé côté serveur avant activation.'],
     ['bazar_fee_usd', 'Frais de publication Bazar (USD / 14 jours)', 'Tarif par défaut : 2 USD. Le paiement doit être confirmé côté serveur avant publication.'],
     ['payment_provider', 'Prestataire de paiement sélectionné', 'Plop Plop sert aux mouvements externes de recharge/retrait. Les commandes, abonnements, annonces Bazar et ajustements de livraison utilisent les portefeuilles internes selon les fonctions disponibles.'],
+    ['late_delivery_hours', 'Délai maximum de livraison (heures)', 'Au-delà, le client peut être remboursé automatiquement dans son portefeuille. Défaut : 72. Le retard de trafic déclaré par le livreur s\'ajoute.'],
+    ['late_pickup_hours', 'Délai maximum de retrait en boutique (heures)', 'Délai pour préparer et remettre une commande à retirer. Défaut : 96.'],
     ['delivery_immediate_sla_minutes', 'Délai cible livraison immédiate (minutes)', 'Valeur demandée : 45. Afficher comme objectif, jamais comme garantie de trafic.'],
     ['delivery_traffic_extension_options', 'Extensions trafic autorisées (minutes)', 'Ex. 120,240 pour proposer 2 h ou 4 h, avec motif et horodatage.'],
     ['delivery_offer_expiry_minutes', 'Expiration des offres de livraison (minutes)', 'Durée pendant laquelle le client peut comparer les offres des livreurs.'],

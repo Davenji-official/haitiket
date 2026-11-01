@@ -10,6 +10,7 @@ import 'screens2.dart';
 import 'screens4.dart';
 import 'fx.dart';
 import 'screens5.dart';
+import 'guides_screen.dart';
 import 'screens7.dart';
 import 'auth_screens.dart';
 import 'map_screen.dart';
@@ -539,6 +540,12 @@ class AccountScreen extends StatelessWidget {
         ),
       ] else
         AuthPanel(onChanged: onChanged),
+      const SizedBox(height: 14),
+      OutlinedButton.icon(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GuidesScreen())),
+        icon: const Icon(Icons.menu_book_outlined),
+        label: const Text("Guides d'utilisation (PDF)"),
+      ),
     ]);
   }
 }
