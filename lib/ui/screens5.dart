@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
 import '../i18n.dart';
 import '../theme.dart';
@@ -133,6 +135,17 @@ class _NotificationsState extends State<NotificationsScreen> {
 
   void reload() => setState(() => f = Repo.myNotifications());
 
+  Widget? _notifBody(Map<String, dynamic> n) {
+    final img = '${n['image_url'] ?? ''}', link = '${n['link_url'] ?? ''}', code = '${n['coupon_code'] ?? ''}';
+    if (n['body'] == null && img.isEmpty && link.isEmpty && code.isEmpty) return null;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (n['body'] != null) Text('${n['body']}'),
+      if (img.startsWith('http')) Padding(padding: const EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(img, errorBuilder: (_, __, ___) => const SizedBox.shrink()))),
+      if (code.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: OutlinedButton.icon(onPressed: () { Clipboard.setData(ClipboardData(text: code)); toast(context, 'Coupon $code copié : collez-le au paiement.'); }, icon: const Icon(Icons.local_offer_outlined), label: Text('Coupon $code'))),
+      if (link.startsWith('https://')) Padding(padding: const EdgeInsets.only(top: 4), child: TextButton.icon(onPressed: () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication), icon: const Icon(Icons.open_in_new), label: const Text('Ouvrir le lien'))),
+    ]);
+  }
+
   IconData icon(String k) => switch (k) {
         'order' => Icons.receipt_long_outlined,
         'message' => Icons.chat_bubble_outline,
@@ -164,7 +177,7 @@ class _NotificationsState extends State<NotificationsScreen> {
                       child: ListTile(
                         leading: Icon(icon(items[i]['kind'] as String), color: C.green),
                         title: Text('${items[i]['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                        subtitle: items[i]['body'] == null ? null : Text('${items[i]['body']}'),
+                        subtitle: _notifBody(items[i]),
                         trailing: IconButton(tooltip: 'Supprimer cette notification', icon: const Icon(Icons.delete_outline), onPressed: () async {
                           try { await Repo.deleteNotification(items[i]['id'] as String); reload(); } catch (e) { if (context.mounted) toast(context, Repo.err(e)); }
                         }),

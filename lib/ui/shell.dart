@@ -5,7 +5,8 @@ import '../config.dart';
 import '../data/repo.dart';
 import 'auth_screens.dart';
 import '../theme.dart';
-import 'admin_screen.dart';
+import 'admin_pro.dart';
+import 'guides_screen.dart';
 import 'fx.dart';
 import 'home_screen.dart';
 import 'screens.dart';
@@ -44,6 +45,7 @@ class _ShellState extends State<Shell> {
   late Stream<List<Map<String, dynamic>>> announcements;
   String? streamUser;
   StreamSubscription<AuthState>? authSub;
+  Timer? presenceTimer;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
   bool hideDrawerBalances = false;
@@ -70,6 +72,10 @@ class _ShellState extends State<Shell> {
     // Retour de la page Plop Plop (recharge) : on ouvre le portefeuille, qui vérifie la recharge automatiquement.
     if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) sec = Sec.wallet;
     if (Config.configured) {
+      Repo.touchPresence();
+      presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+        if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) Repo.touchPresence();
+      });
       authSub = Supabase.instance.client.auth.onAuthStateChange.listen((st) {
         if (!mounted) return;
         setState(() {});
@@ -83,6 +89,7 @@ class _ShellState extends State<Shell> {
   @override
   void dispose() {
     authSub?.cancel();
+    presenceTimer?.cancel();
     super.dispose();
   }
 
@@ -154,7 +161,7 @@ class _ShellState extends State<Shell> {
       case Sec.courier:
         return const CourierScreen();
       case Sec.admin:
-        return const AdminScreen();
+        return const AdminPro();
       case Sec.orders:
         return const OrdersScreen();
       case Sec.dashboard:
@@ -263,6 +270,15 @@ class _ShellState extends State<Shell> {
                   drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
                   drawerItem(Icons.account_balance_wallet_outlined, 'Portefeuille', Sec.wallet),
                   const Divider(height: 28),
+                  ListTile(
+                    leading: const Icon(Icons.menu_book_outlined, color: C.green),
+                    title: Text(tr("Guides d'utilisation"), style: const TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GuidesScreen()));
+                    },
+                  ),
                   drawerItem(Icons.support_agent_outlined, tr('Support'), Sec.support),
                   drawerItem(Icons.settings_outlined, tr('Paramètres'), Sec.settings),
                   const Divider(height: 28),
@@ -391,8 +407,9 @@ class _ShellState extends State<Shell> {
         bottom: false,
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+            constraints: BoxConstraints(maxWidth: sec == Sec.admin ? 1600 : 720),
             child: Column(children: [
+              const ImpersonationBanner(),
               header(),
               globalAnnouncement(),
               Expanded(

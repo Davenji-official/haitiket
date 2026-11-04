@@ -4,7 +4,8 @@ import '../theme.dart';
 import 'widgets.dart';
 
 /// Les guides PDF sont hébergés dans le dépôt public (dossier « guides »).
-const kGuidesBase = 'https://github.com/Davenji-official/haitiket/raw/main/guides/';
+const kGuidesBase = 'https://davenji-official.github.io/haitiket/guides/';
+const kGuidesFallback = 'https://github.com/Davenji-official/haitiket/raw/main/guides/';
 
 class _Guide {
   final String file, title, text;
@@ -23,7 +24,15 @@ class GuidesScreen extends StatelessWidget {
   ];
 
   Future<void> _open(BuildContext c, String file, String lang) async {
-    final ok = await launchUrl(Uri.parse('${kGuidesBase}guide_${file}_$lang.pdf'), mode: LaunchMode.externalApplication);
+    var ok = false;
+    for (final base in const [kGuidesBase, kGuidesFallback]) {
+      try {
+        ok = await launchUrl(Uri.parse('${base}guide_${file}_$lang.pdf'), mode: LaunchMode.externalApplication);
+      } catch (_) {
+        ok = false;
+      }
+      if (ok) break;
+    }
     if (!ok && c.mounted) toast(c, "Impossible d'ouvrir le guide. Vérifiez votre connexion.");
   }
 

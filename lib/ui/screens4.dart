@@ -130,7 +130,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileState extends State<ProfileScreen> {
-  final name = TextEditingController(), phone = TextEditingController(), city = TextEditingController();
+  final name = TextEditingController(), phone = TextEditingController(), whatsapp = TextEditingController(), city = TextEditingController();
   String? avatar;
   bool loading = true, busy = false;
   late final Future<Map<String, dynamic>> roles = currentUser() == null ? Future.value({}) : Repo.myRoles();
@@ -150,6 +150,7 @@ class _ProfileState extends State<ProfileScreen> {
       final p = await Repo.getProfile();
       name.text = (p?['display_name'] ?? '') as String;
       phone.text = (p?['phone'] ?? '') as String;
+      whatsapp.text = (p?['whatsapp'] ?? '') as String;
       city.text = (p?['city'] ?? '') as String;
       avatar = p?['avatar_url'] as String?;
     } catch (_) {}
@@ -160,6 +161,7 @@ class _ProfileState extends State<ProfileScreen> {
     setState(() => busy = true);
     try {
       await Repo.saveProfile(name.text.trim(), phone.text.trim(), city.text.trim(), avatar);
+      await Repo.updateMyContact(phone.text.trim(), whatsapp.text.trim());
       if (mounted) toast(context, 'Profil enregistré.');
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -249,6 +251,7 @@ class _ProfileState extends State<ProfileScreen> {
           ),
           Field(name, 'Nom complet'),
           Field(phone, 'Téléphone', type: TextInputType.phone),
+          Field(whatsapp, 'Numéro WhatsApp (ex. 50937000000)', type: TextInputType.phone),
           Field(city, 'Commune ou ville'),
           const Text("Votre téléphone n'est jamais public : il n'est partagé qu'avec les personnes d'une commande.", style: TextStyle(color: C.muted)),
           const SizedBox(height: 16),

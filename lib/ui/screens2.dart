@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
+import 'contacts_widget.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'fx.dart';
@@ -1225,12 +1226,15 @@ class _ShopPanelState extends State<ShopPanel> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                 trailing: PopupMenuButton<String>(
-                      onSelected: (v) => orderAction(o, v),
+                      onSelected: (v) => v == 'contacts'
+                          ? showModalBottomSheet<void>(context: context, builder: (_) => SafeArea(child: Padding(padding: const EdgeInsets.all(12), child: ContactsCard(orderId: o['id'].toString()))))
+                          : orderAction(o, v),
                       itemBuilder: (_) {
                         final st = o['status'];
                         final dm = o['delivery_mode'];
                         return [
                           const PopupMenuItem(value: 'chat', child: Text('Écrire au client')),
+                          const PopupMenuItem(value: 'contacts', child: Text('Appeler / WhatsApp (client, livreur)')),
                           if (const ['CANCELLED', 'REFUNDED', 'COMPLETED'].contains(st)) const PopupMenuItem(value: 'hide', child: Text('Retirer de ma liste')),
                           if (st == 'PAID') const PopupMenuItem(value: 'CONFIRMED', child: Text('Confirmer la commande')),
                           if (st == 'CONFIRMED') const PopupMenuItem(value: 'PREPARING', child: Text('Passer en préparation')),
@@ -1719,6 +1723,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
                   ),
                 ),
               ],
+              ContactsCard(orderId: widget.orderId),
               const Text('Offres des coursiers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               if (_offersLoading && _offers.isEmpty) const LinearProgressIndicator(),
               if (_offersError != null) Text('Offres indisponibles : $_offersError', style: const TextStyle(color: C.terracotta)),

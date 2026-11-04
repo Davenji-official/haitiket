@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
+import 'contacts_widget.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'screens5.dart';
@@ -548,7 +549,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                   for (final j in mine)
                     Card(
                       color: Colors.white,
-                      child: ListTile(
+                      child: Column(children: [ListTile(
                         title: Text('${j['pickup_area']} → ${j['dropoff_address']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text('${money(j['pay_minor'] as num, j['currency'] as String)} · ${j['status']}'),
                         trailing: (j['status'] == 'assigned' || j['status'] == 'picked_up')
@@ -567,6 +568,8 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                               )
                             : null,
                       ),
+                      if (j['status'] == 'assigned' || j['status'] == 'picked_up') ContactsCard(jobId: j['id'].toString()),
+                      ]),
                     ),
               ]);
             },
