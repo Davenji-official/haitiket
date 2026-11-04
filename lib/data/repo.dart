@@ -318,7 +318,7 @@ class Repo {
   static Future<List<Map<String, dynamic>>> myNotifications() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('notifications').select('id,kind,title,body,created_at,read_at').eq('user_id', u.id).order('created_at', ascending: false).limit(60);
+    final rows = await _c.from('notifications').select('id,kind,title,body,created_at,read_at,image_url,link_url,coupon_code').eq('user_id', u.id).order('created_at', ascending: false).limit(60);
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -1172,9 +1172,29 @@ class Repo {
   static Future<Map<String, dynamic>?> getProfile() async {
     final u = currentUser();
     if (u == null) return null;
-    final rows = await _c.from('profiles').select('display_name,phone,city,avatar_url').eq('id', u.id);
+    final rows = await _c.from('profiles').select('display_name,phone,whatsapp,city,avatar_url').eq('id', u.id);
     final l = List<Map<String, dynamic>>.from(rows);
     return l.isEmpty ? null : l.first;
+  }
+
+  /// V73 : téléphone + WhatsApp partagés uniquement avec les participants d'une commande payée.
+  static Future<void> updateMyContact(String phone, String whatsapp) async =>
+      _c.rpc('update_my_contact', params: {'p_phone': phone, 'p_whatsapp': whatsapp});
+
+  static Future<List<Map<String, dynamic>>> orderContacts(String orderId) async {
+    final r = await _c.rpc('order_contacts', params: {'p_order': orderId});
+    return (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> jobContacts(String jobId) async {
+    final r = await _c.rpc('job_contacts', params: {'p_job': jobId});
+    return (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Présence : appelé périodiquement par l'application (admin : « en ligne maintenant »).
+  static Future<void> touchPresence() async {
+    if (currentUser() == null) return;
+    try { await _c.rpc('touch_presence'); } catch (_) {}
   }
 
   static Future<void> saveProfile(String name, String phone, String city, String? avatar) async {
