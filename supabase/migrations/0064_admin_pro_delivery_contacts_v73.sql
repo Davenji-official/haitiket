@@ -330,7 +330,7 @@ revoke all on function public.admin_search_users_v73(text,text,integer,integer) 
 grant execute on function public.admin_search_users_v73(text,text,integer,integer) to authenticated;
 
 create or replace function public.admin_user_360(p_user uuid) returns jsonb
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql volatile security definer set search_path = public as $$
 declare r jsonb;
 begin
   if not public.admin_unlocked() then raise exception 'Accès refusé : console verrouillée'; end if;
