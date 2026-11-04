@@ -976,6 +976,9 @@ class Repo {
     return r == true;
   }
 
+  static Future<void> adminSetOfficialShopLocation(double lat, double lng) async =>
+      _c.rpc('admin_set_official_shop_location', params: {'p_lat': lat, 'p_lng': lng});
+
   static Future<Map<String, dynamic>?> adminOfficialShop() async {
     final r = await _c.rpc('admin_get_official_shop');
     if (r == null) return null;
@@ -1585,7 +1588,30 @@ class Repo {
     await _c.auth.signOut();
   }
 
-  static Future<void> signIn(String email, String pass) => _c.auth.signInWithPassword(email: email, password: pass);
+  static int _loginFails = 0;
+  static DateTime? _loginLockedUntil;
+
+  /// Limite les tentatives répétées (cahier des charges §3) : 5 échecs => blocage progressif côté application.
+  /// Supabase Auth applique en plus ses propres limites côté serveur.
+  static Future<void> signIn(String email, String pass) async {
+    final lock = _loginLockedUntil;
+    if (lock != null && DateTime.now().isBefore(lock)) {
+      final s = lock.difference(DateTime.now()).inSeconds + 1;
+      throw StateError('Trop de tentatives. Réessayez dans $s secondes.');
+    }
+    try {
+      await _c.auth.signInWithPassword(email: email, password: pass);
+      _loginFails = 0;
+      _loginLockedUntil = null;
+    } catch (e) {
+      _loginFails++;
+      if (_loginFails >= 5) {
+        final wait = 30 * (1 << (_loginFails - 5).clamp(0, 5));
+        _loginLockedUntil = DateTime.now().add(Duration(seconds: wait));
+      }
+      rethrow;
+    }
+  }
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
   static Future<void> signOut() => _c.auth.signOut();
 
