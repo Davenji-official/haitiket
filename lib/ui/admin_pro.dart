@@ -587,7 +587,52 @@ class AdminUserDetail extends StatefulWidget {
 
 class _AdminUserDetailState extends State<AdminUserDetail> {
   late Future<Map<String, dynamic>> f = _obj('admin_user_360', {'p_user': widget.userId});
-  void reload() => setState(() => f = _obj('admin_user_360', {'p_user': widget.userId}));
+  late Future<Map<String, dynamic>> fx = _extra();
+  Future<Map<String, dynamic>> _extra() async {
+    try {
+      return await _obj('admin_user_extra', {'p_user': widget.userId});
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  void reload() => setState(() {
+        f = _obj('admin_user_360', {'p_user': widget.userId});
+        fx = _extra();
+      });
+
+  Future<void> notifyUser() async {
+    final t = TextEditingController(), b = TextEditingController(), l = TextEditingController(), c = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Envoyer un message à ce client'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: t, decoration: const InputDecoration(labelText: 'Titre')),
+            TextField(controller: b, maxLines: 3, decoration: const InputDecoration(labelText: 'Message')),
+            TextField(controller: l, decoration: const InputDecoration(labelText: 'Lien https:// (optionnel)')),
+            TextField(controller: c, decoration: const InputDecoration(labelText: 'Code coupon (optionnel)')),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Envoyer'))],
+      ),
+    );
+    if (ok != true) return;
+    await run(() => _db.rpc('admin_notify_user', params: {'p_user': widget.userId, 'p_title': t.text, 'p_body': b.text, 'p_link': l.text, 'p_coupon': c.text}), 'Message envoyé.');
+  }
+
+  Future<void> resetPassword(String email) async {
+    if (!await _confirm(context, 'Réinitialiser le mot de passe ?', 'Un e-mail de réinitialisation sera envoyé à $email.')) return;
+    await run(() => _db.auth.resetPasswordForEmail(email), 'E-mail de réinitialisation envoyé.');
+  }
+
+  Future<void> softDelete() async {
+    final r = await askText(context, 'Supprimer ce compte (irréversible)', hint: 'Motif obligatoire');
+    if (r == null || r.length < 3 || !mounted) return;
+    if (!await _confirm(context, 'Confirmer la suppression ?', 'Le compte sera anonymisé et bloqué. Les historiques financiers sont conservés.')) return;
+    await run(() => Repo.adminManageUser(widget.userId, 'soft_delete', r), 'Compte supprimé.');
+  }
 
   Future<void> run(Future<void> Function() a, String ok) async {
     try {
@@ -693,6 +738,9 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
                     OutlinedButton.icon(onPressed: isAdmin ? null : () => ban(!blocked), icon: Icon(blocked ? Icons.lock_open : Icons.block), label: Text(blocked ? 'Réactiver' : 'Bloquer')),
                     OutlinedButton.icon(onPressed: phone.isEmpty ? null : () => launchUrl(Uri(scheme: 'tel', path: phone)), icon: const Icon(Icons.call), label: const Text('Appeler')),
                     OutlinedButton.icon(onPressed: wa.isEmpty ? null : () { final n = wa.replaceAll(RegExp(r'[^0-9]'), ''); launchUrl(Uri.parse('https://wa.me/${n.length == 8 ? '509$n' : n}'), mode: LaunchMode.externalApplication); }, icon: const Icon(Icons.chat), label: const Text('WhatsApp')),
+                    OutlinedButton.icon(onPressed: notifyUser, icon: const Icon(Icons.notifications_active_outlined), label: const Text('Message')),
+                    OutlinedButton.icon(onPressed: () => resetPassword('${d['email']}'), icon: const Icon(Icons.lock_reset), label: const Text('Mot de passe')),
+                    OutlinedButton.icon(onPressed: isAdmin ? null : softDelete, icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent), label: const Text('Supprimer')),
                     OutlinedButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: widget.userId)).then((_) { if (mounted) toast(context, 'Identifiant copié.'); }), icon: const Icon(Icons.copy), label: const Text('ID')),
                   ]),
                   const SizedBox(height: 10),
@@ -713,6 +761,37 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
                       OutlinedButton(onPressed: () => setRole('admin', !isAdmin), child: Text(isAdmin ? 'Retirer « admin »' : 'Donner « admin »')),
                     ]),
                   ]),
+                  FutureBuilder<Map<String, dynamic>>(
+                    future: fx,
+                    builder: (_, xs) {
+                      final x = xs.data ?? const <String, dynamic>{};
+                      if (x.isEmpty) return const SizedBox.shrink();
+                      final addr = (x['addresses'] as List?) ?? [];
+                      final tickets = (x['tickets'] as List?) ?? [];
+                      final audit = (x['audit'] as List?) ?? [];
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        section('Vérification et activité', [
+                          kv('Identité (KYC)', x['identity_status'] ?? 'aucun dossier'),
+                          kv('Signalements reçus', x['reports_against']),
+                          kv('Avis donnés', x['reviews_given']),
+                          kv('Favoris', x['favorites']),
+                          kv('Filleuls parrainés', x['referred_count']),
+                        ]),
+                        section('Adresses (${addr.length})', [
+                          for (final a in addr) Text('• ${a['label']} — ${a['recipient']}, ${a['street'] ?? ''} ${a['quarter'] ?? ''}, ${a['commune']} ${a['phone'] ?? ''}'),
+                          if (addr.isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                        ]),
+                        section('Tickets support (${tickets.length})', [
+                          for (final t in tickets) Text('• ${_date(t['created_at'])} — ${t['status']} — ${t['subject']}'),
+                          if (tickets.isEmpty) const Text('Aucun.', style: TextStyle(color: C.muted)),
+                        ]),
+                        section('Journal admin concernant ce compte', [
+                          for (final l in audit) Text('• ${_date(l['created_at'])} — ${l['action']} ${l['reason'] ?? ''}'),
+                          if (audit.isEmpty) const Text('Aucune action.', style: TextStyle(color: C.muted)),
+                        ]),
+                      ]);
+                    },
+                  ),
                   section('Portefeuilles', [
                     if ((d['wallets'] as List).isEmpty) const Text('Aucun portefeuille.', style: TextStyle(color: C.muted)),
                     for (final w in d['wallets'] as List) kv('${w['currency']}', money(_n(w['balance_minor']), '${w['currency']}')),

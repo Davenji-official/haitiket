@@ -434,6 +434,7 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
   final name = TextEditingController(text: 'HAITIKET Official Store');
   final city = TextEditingController(text: 'Port-au-Prince');
   final slogan = TextEditingController(text: 'La boutique officielle HAITIKET');
+  final latC = TextEditingController(), lngC = TextEditingController();
   bool busy = false;
   int panelRevision = 0;
 
@@ -458,7 +459,27 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
   }
 
   @override
-  void dispose() { name.dispose(); city.dispose(); slogan.dispose(); super.dispose(); }
+  void dispose() { name.dispose(); city.dispose(); slogan.dispose(); latC.dispose(); lngC.dispose(); super.dispose(); }
+
+  Future<void> saveLocation({bool gps = false}) async {
+    try {
+      double? lat, lng;
+      if (gps) {
+        final p = await myPosition(context);
+        if (p == null) return;
+        lat = p.latitude; lng = p.longitude;
+      } else {
+        lat = double.tryParse(latC.text.trim().replaceAll(',', '.'));
+        lng = double.tryParse(lngC.text.trim().replaceAll(',', '.'));
+      }
+      if (lat == null || lng == null) return toast(context, 'Latitude/longitude invalides (ex. 18.5392 et -72.3364).');
+      await Repo.adminSetOfficialShopLocation(lat, lng);
+      latC.text = lat.toStringAsFixed(5); lngC.text = lng.toStringAsFixed(5);
+      if (mounted) toast(context, 'Position enregistrée : la boutique officielle apparaît sur la carte.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>?>(
@@ -485,6 +506,26 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
         const SizedBox(height: 8),
         FilledButton.icon(onPressed: busy ? null : save, icon: const Icon(Icons.save_outlined), label: Text(busy ? 'Enregistrement…' : shop == null ? 'Créer la boutique officielle' : 'Enregistrer les paramètres')),
         if (shop != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Position sur la carte', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              Text(shop['lat'] == null ? 'Non définie : la boutique officielle n’apparaît pas encore sur la carte.' : 'Actuelle : ${shop['lat']}, ${shop['lng']}', style: const TextStyle(color: C.muted)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(controller: latC, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: 'Latitude'))),
+                const SizedBox(width: 10),
+                Expanded(child: TextField(controller: lngC, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: 'Longitude'))),
+              ]),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                FilledButton.icon(onPressed: () => saveLocation(), icon: const Icon(Icons.pin_drop_outlined), label: const Text('Enregistrer')),
+                OutlinedButton.icon(onPressed: () => saveLocation(gps: true), icon: const Icon(Icons.my_location), label: const Text('Utiliser ma position')),
+              ]),
+            ]),
+          ),
           const SizedBox(height: 20),
           const Divider(),
           const Text('Gestion complète de la boutique', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),

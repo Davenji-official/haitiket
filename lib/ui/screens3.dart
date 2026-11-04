@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
@@ -384,6 +385,8 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
     }
   }
 
+  Set<String>? _seenJobs;
+
   Future<Map<String, dynamic>> load() async {
     final app = await Repo.myCourierApplication();
     if (app == null || app['status'] != 'approved') return {'app': app};
@@ -404,6 +407,13 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
       await _stopGps();
     }
     final open = avail ? await Repo.openJobs() : <Map<String, dynamic>>[];
+    // Alerte sonore + vibration quand une NOUVELLE mission apparaît (écran ouvert).
+    final ids = {for (final j in open) '${j['id']}'};
+    if (_seenJobs != null && ids.difference(_seenJobs!).isNotEmpty) {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
+    }
+    _seenJobs = ids;
     final mine = await Repo.myJobs();
     return {'app': app, 'avail': avail, 'open': open, 'mine': mine};
   }
@@ -551,7 +561,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                       color: Colors.white,
                       child: Column(children: [ListTile(
                         title: Text('${j['pickup_area']} → ${j['dropoff_address']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('${money(j['pay_minor'] as num, j['currency'] as String)} · ${j['status']}'),
+                        subtitle: Text('${(j['pay_minor'] as num) > 0 ? money(j['pay_minor'] as num, j['currency'] as String) : 'Prix choisi par offre'} · ${j['status']}'),
                         trailing: (j['status'] == 'assigned' || j['status'] == 'picked_up')
                             ? PopupMenuButton<String>(
                                 onSelected: (action) {

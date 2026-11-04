@@ -39,8 +39,9 @@ class _Pin extends StatelessWidget {
   const _Pin({super.key, required this.shop, required this.selected, required this.pulse, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    final pro = shop['kind'] == 'pro';
-    final accent = hexColor(shop['color_accent'] as String?) ?? (pro ? C.terracotta : C.yellow);
+    final official = shop['kind'] == 'platform';
+    final pro = shop['kind'] == 'pro' || official;
+    final accent = hexColor(shop['color_accent'] as String?) ?? (official ? C.green : (pro ? C.terracotta : C.yellow));
     final logo = shop['logo_url'] as String?;
     final size = selected ? 54.0 : 44.0;
     return GestureDetector(
@@ -63,7 +64,7 @@ class _Pin extends StatelessWidget {
             height: size,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: accent, width: selected ? 4 : 3), boxShadow: [BoxShadow(color: accent.withValues(alpha: .55), blurRadius: selected ? 18 : 7)]),
-            child: logo != null ? Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent)) : Icon(pro ? Icons.storefront : Icons.person_pin_circle, color: accent, size: selected ? 30 : 24),
+            child: logo != null ? Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent)) : Icon(official ? Icons.verified : (pro ? Icons.storefront : Icons.person_pin_circle), color: accent, size: selected ? 30 : 24),
           ),
         ]),
       ),
@@ -154,7 +155,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   List<Map<String, dynamic>> get visible {
-    final l = shops.where((s) => kind == 'all' || s['kind'] == kind).where((s) => q.isEmpty || '${s['name']} ${s['city'] ?? ''}'.toLowerCase().contains(q.toLowerCase())).toList();
+    final l = shops.where((s) => kind == 'all' || s['kind'] == kind || (kind == 'pro' && s['kind'] == 'platform')).where((s) => q.isEmpty || '${s['name']} ${s['city'] ?? ''}'.toLowerCase().contains(q.toLowerCase())).toList();
     if (me != null) l.sort((a, b) => dist(a).compareTo(dist(b)));
     return l;
   }
@@ -366,8 +367,9 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget card(Map<String, dynamic> s) {
-    final pro = s['kind'] == 'pro';
-    final accent = hexColor(s['color_accent'] as String?) ?? (pro ? C.terracotta : C.yellow);
+    final official = s['kind'] == 'platform';
+    final pro = s['kind'] == 'pro' || official;
+    final accent = hexColor(s['color_accent'] as String?) ?? (official ? C.green : (pro ? C.terracotta : C.yellow));
     final primary = hexColor(s['color_primary'] as String?) ?? C.ink;
     final logo = s['logo_url'] as String?;
     final isSel = s['id'] == selectedId;
