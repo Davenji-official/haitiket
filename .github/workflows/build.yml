@@ -53,6 +53,8 @@ jobs:
           # Retour de paiement Plop Plop (…/payment/plopplop/success) : GitHub Pages renvoie 404.html pour une adresse inconnue.
           # En y copiant l'application, la page de retour ouvre l'application au lieu d'une erreur 404.
           cp build/web/index.html build/web/404.html
+          # Guides PDF servis par GitHub Pages (accessibles dans l'application, même si le dépôt est privé)
+          mkdir -p build/web/guides && cp guides/*.pdf build/web/guides/ || echo "Aucun guide à copier"
       - uses: actions/upload-pages-artifact@v3
         with: { path: "${{ env.APP }}/build/web" }
   deploy:
@@ -93,6 +95,7 @@ jobs:
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
           sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="HAITIKET"|' $M
+          sed -i 's|<application|<queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent><intent><action android:name="android.intent.action.DIAL"/><data android:scheme="tel"/></intent></queries>\n    <application|' $M
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
       - name: Dépendances
         working-directory: ${{ env.APP }}
@@ -105,9 +108,27 @@ jobs:
       - name: Build APK
         working-directory: ${{ env.APP }}
         run: |
-          flutter build apk --release \
+          flutter build apk --release --build-number=${{ github.run_number }} \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+      - name: Signer l'APK avec la clé HAITIKET (installable et mettable à jour)
+        working-directory: ${{ env.APP }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > /tmp/haitiket.jks
+            "$BT/zipalign" -f -p 4 "$APK" /tmp/aligned.apk
+            "$BT/apksigner" sign --ks /tmp/haitiket.jks --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEYSTORE_PASSWORD" --out "$APK" /tmp/aligned.apk
+            "$BT/apksigner" verify --print-certs "$APK"
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secrets ANDROID_KEYSTORE_* absents : APK signé avec une clé de debug éphémère. Il ne pourra PAS remplacer une version déjà installée (désinstallez-la d'abord). Voir docs/APK_INSTALLATION.md"
+          fi
       - name: Publier l'APK dans Releases
         env:
           GH_TOKEN: ${{ github.token }}
