@@ -28,11 +28,13 @@ class HaitiketApp extends StatelessWidget {
   const HaitiketApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'HAITIKET',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        builder: (context, child) => DarkModeScope(child: child ?? const SizedBox.shrink()),
-        home: const SplashGate(),
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+        valueListenable: ThemeStore.dark,
+        builder: (_, __, ___) => MaterialApp(
+          title: 'HAITIKET',
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(),
+          home: const SplashGate(),
+        ),
       );
 }
