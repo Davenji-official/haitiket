@@ -4,6 +4,7 @@ import 'config.dart';
 import 'data/repo.dart';
 import 'i18n.dart';
 import 'theme.dart';
+import 'ui/dark_mode.dart';
 import 'ui/splash.dart';
 
 Future<void> main() async {
@@ -17,6 +18,7 @@ Future<void> main() async {
   }
 
   await loadLang();
+  await ThemeStore.restore();
   await CartStore.restore();
   CartStore.lines.addListener(CartStore.persist);
   runApp(const HaitiketApp());
@@ -30,6 +32,7 @@ class HaitiketApp extends StatelessWidget {
         title: 'HAITIKET',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
+        builder: (context, child) => DarkModeScope(child: child ?? const SizedBox.shrink()),
         home: const SplashGate(),
       );
 }
