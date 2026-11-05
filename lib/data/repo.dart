@@ -1,3 +1,4 @@
+import '../push.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -304,6 +305,8 @@ class Repo {
   }
 
   static Future<bool> confirmHandover(String orderId, String pin) async => (await _c.rpc('confirm_handover', params: {'p_order': orderId, 'p_pin': pin})) == true;
+  static Future<bool> confirmPickupQr(String jobId, String payload) async => (await _c.rpc('confirm_pickup_qr', params: {'p_job': jobId, 'p_payload': payload})) == true;
+  static Future<bool> confirmDeliveryQr(String jobId, String payload) async => (await _c.rpc('confirm_delivery_qr', params: {'p_job': jobId, 'p_payload': payload})) == true;
   static Future<bool> confirmPickup(String jobId, String pin) async => (await _c.rpc('confirm_pickup', params: {'p_job': jobId, 'p_pin': pin})) == true;
   static Future<bool> confirmDelivery(String jobId, String pin) async => (await _c.rpc('confirm_delivery', params: {'p_job': jobId, 'p_pin': pin})) == true;
 
@@ -1613,7 +1616,10 @@ class Repo {
     }
   }
   static Future<void> signUp(String email, String pass) => _c.auth.signUp(email: email, password: pass);
-  static Future<void> signOut() => _c.auth.signOut();
+  static Future<void> signOut() async {
+    await PushService.unregister();
+    await _c.auth.signOut();
+  }
 
   // V61: reactivation explicite après le rejet d'une demande de suppression de boutique.
   // Le serveur vérifie le propriétaire, le KYC approuvé et les remboursements résolus.
