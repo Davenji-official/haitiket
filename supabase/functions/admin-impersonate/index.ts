@@ -22,18 +22,27 @@ Deno.serve(async (req) => {
     const { user_id, reason } = await req.json();
     if (!user_id || typeof reason !== "string") return json({ error: "Paramètres manquants" }, 400);
 
-    // 1) Vérifie, sous l'identité de l'appelant, qu'il est administrateur déverrouillé, et journalise.
+    // 1) Vérifie, sous l'identité de l'appelant, qu'il est administrateur déverrouillé ; journalise ; lève temporairement
+    //    le blocage de connexion si le compte est bloqué/supprimé par l'administration (session de support de 20 min).
     const caller = createClient(url, anon, { global: { headers: { Authorization: auth } } });
-    const { error: logErr } = await caller.rpc("admin_log_impersonation", { p_user: user_id, p_reason: reason });
+    const { data: began, error: logErr } = await caller.rpc("admin_begin_support_session", { p_user: user_id, p_reason: reason });
     if (logErr) return json({ error: logErr.message }, 403);
+
+    const rollback = async () => { if (began?.was_banned) await caller.rpc("admin_end_support_session", { p_user: user_id }); };
 
     // 2) Génère un lien de connexion à usage unique pour le compte cible.
     const admin = createClient(url, svc);
     const { data: u, error: uErr } = await admin.auth.admin.getUserById(user_id);
-    if (uErr || !u?.user?.email) return json({ error: "Ce compte n'a pas d'adresse e-mail utilisable" }, 400);
+    if (uErr || !u?.user?.email || (u.user as { deleted_at?: string }).deleted_at) {
+      await rollback();
+      return json({ error: "Compte supprimé définitivement par son propriétaire ou sans e-mail : consultation seule (fiche 360°)." }, 400);
+    }
     const { data: link, error: lErr } = await admin.auth.admin.generateLink({ type: "magiclink", email: u.user.email });
-    if (lErr || !link?.properties?.hashed_token) return json({ error: "Impossible de générer l'accès" }, 500);
-    return json({ token_hash: link.properties.hashed_token, email: u.user.email });
+    if (lErr || !link?.properties?.hashed_token) {
+      await rollback();
+      return json({ error: "Impossible de générer l'accès" }, 500);
+    }
+    return json({ token_hash: link.properties.hashed_token, email: u.user.email, was_banned: !!began?.was_banned });
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500);
   }
