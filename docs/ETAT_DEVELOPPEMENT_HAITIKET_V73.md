@@ -63,3 +63,8 @@ L'écran existait (Accueil → bouton Guides) mais ouvrait des PDF sur `github.c
 * Carte client rafraîchie toutes les 30 s + GPS continu ; carte LIVE admin (livreurs, missions, livraisons, boutiques, centres) toutes les 10 s.
 * Fournisseur de cartes/itinéraires configurable (secrets MAP_TILE_URL, ROUTE_BASE_URL).
 * Mode nuit (menu) : filtre d'inversion global, photos préservées.
+
+## V76
+* Prise de contrôle : comptes bloqués/supprimés par l'admin (session de support 20 min, rétablissement automatique) — migration 0067 + fonction Edge mise à jour.
+* Mode nuit : vrai thème sombre (palette dynamique C.*, reconstruction complète à la bascule) à la place du filtre « négatif ». Fond de carte sombre par filtre de tuiles.
+* Carte client : GPS direct au chargement, cap, cercle de précision, suivi caméra, panneau de navigation (distance, durée, heure d'arrivée, vitesse), réacheminement automatique hors itinéraire, durée par mode (marche/moto/voiture).
