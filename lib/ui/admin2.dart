@@ -80,7 +80,7 @@ class _DashState extends State<AdminDashboardTab> {
     return Container(
       width: 160,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: alert && n > 0 ? const C.tint : C.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: alert && n > 0 ? C.terracotta : C.line)),
+      decoration: BoxDecoration(color: alert && n > 0 ? C.tint : C.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: alert && n > 0 ? C.terracotta : C.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(money_ ? money(n, cur) : '$n', style: TextStyle(fontSize: money_ ? 18 : 28, fontWeight: FontWeight.w900, color: alert && n > 0 ? C.terracotta : C.ink)),
         const SizedBox(height: 4),
@@ -442,7 +442,7 @@ class _UsersState extends State<AdminUsersTab> {
             return Column(children: [
               for (final u in l)
                 Card(
-                  color: u['suspended'] == true ? const C.tint : C.card,
+                  color: u['suspended'] == true ? C.tint : C.card,
                   child: ListTile(
                     title: Text('${u['display_name'] ?? 'Sans nom'}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${u['email'] ?? ''}${u['suspended'] == true ? '\nSUSPENDU' : ''}'),

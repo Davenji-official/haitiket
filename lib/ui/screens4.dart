@@ -105,7 +105,7 @@ class _ShopRequestState extends State<ShopRequestScreen> {
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: ok ? C.mint.withValues(alpha: .7) : const C.tint, borderRadius: BorderRadius.circular(18), border: Border.all(color: ok ? C.green : C.terracotta)),
+                decoration: BoxDecoration(color: ok ? C.mint.withValues(alpha: .7) : C.tint, borderRadius: BorderRadius.circular(18), border: Border.all(color: ok ? C.green : C.terracotta)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(st == 'approved' ? 'Étape 1 · Identité approuvée ✓' : st == 'pending' ? 'Étape 1 · Dossier envoyé, en attente d\'approbation ✓' : st == 'rejected' ? 'Étape 1 · Dossier refusé : à refaire' : st == 'needs_changes' ? 'Étape 1 · Dossier à corriger' : 'Étape 1 · Vérification d\'identité à faire', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
                   const SizedBox(height: 4),

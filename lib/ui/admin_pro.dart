@@ -168,7 +168,7 @@ class _LinePainter extends CustomPainter {
       }
     }
     if (maxV <= 0) maxV = 1;
-    final grid = Paint()..color = const C.line..strokeWidth = 1;
+    final grid = Paint()..color = C.line..strokeWidth = 1;
     for (var i = 0; i <= 4; i++) {
       final y = padT + h * i / 4;
       canvas.drawLine(Offset(padL, y), Offset(size.width, y), grid);
@@ -579,7 +579,7 @@ class _ClientsPageState extends State<_ClientsPage> {
     final blocked = u['account_status'] != 'active' || u['suspended'] == true;
     final url = '${u['avatar_url'] ?? ''}';
     return Card(
-      color: blocked ? const C.tint : C.card,
+      color: blocked ? C.tint : C.card,
       child: ListTile(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdminUserDetail(userId: u['id'] as String))).then((_) => search(reset: true)),
         leading: Stack(children: [
@@ -958,7 +958,7 @@ class _ProductsAdminState extends State<_ProductsAdmin> {
             return Column(children: [
               for (final p in l)
                 Card(
-                  color: p['status'] == 'removed' ? const C.soft : C.card,
+                  color: p['status'] == 'removed' ? C.soft : C.card,
                   child: ListTile(
                     title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${p['shop_name']} · ${money(_n(p['price_minor']), '${p['currency']}')} · stock ${p['stock']} · ${p['status']}'),

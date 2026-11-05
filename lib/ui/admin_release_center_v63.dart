@@ -45,7 +45,7 @@ class _AdminReleaseCenterV63State extends State<AdminReleaseCenterV63> {
           Text('Vue opérationnelle en lecture seule. Vérifiez les files avant chaque mise en production.', style: TextStyle(color: C.muted)),
           const SizedBox(height: 12),
           Card(
-            color: total == 0 ? const C.mint : const C.tint,
+            color: total == 0 ? C.mint : C.tint,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(

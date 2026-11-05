@@ -383,7 +383,7 @@ class _ShellState extends State<Shell> {
           if (visible.isEmpty) return const SizedBox.shrink();
           final a = visible.first;
           final sev = '${a['severity'] ?? 'info'}';
-          final bg = sev == 'urgent' || sev == 'warning' ? const C.tint : C.mint;
+          final bg = sev == 'urgent' || sev == 'warning' ? C.tint : C.mint;
           final icon = sev == 'urgent' ? Icons.warning_amber_rounded : sev == 'success' ? Icons.check_circle_outline : Icons.campaign_outlined;
           return Container(
             width: double.infinity,

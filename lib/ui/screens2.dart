@@ -1716,7 +1716,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
               const SizedBox(height: 8),
               if (_trafficDelay != null) ...[
                 Card(
-                  color: const C.tint,
+                  color: C.tint,
                   child: ListTile(
                     leading: const Icon(Icons.traffic, color: C.terracotta),
                     title: Text('Retard signalé : +${((_trafficDelay!['extension_minutes'] as num?) ?? 0) ~/ 60} h', style: const TextStyle(fontWeight: FontWeight.w800)),

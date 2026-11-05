@@ -30,7 +30,7 @@ class PlanCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: valid ? C.mint : const C.tint, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: valid ? C.mint : C.tint, borderRadius: BorderRadius.circular(18)),
       child: FutureBuilder<double?>(
         future: Repo.quoteWalletFeeUsd('shop_plan'),
         builder: (_, s) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

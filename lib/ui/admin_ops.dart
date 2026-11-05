@@ -225,7 +225,7 @@ class _CentersTabState extends State<_CentersTab> {
             if (l.isEmpty) const EmptyState(title: 'Aucun centre', text: 'Ajoutez votre premier centre logistique.'),
             for (final c in l)
               Card(
-                color: c['active'] == false ? const C.soft : C.card,
+                color: c['active'] == false ? C.soft : C.card,
                 child: ListTile(
                   leading: Icon(c['kind'] == 'partner' ? Icons.handshake_outlined : (c['kind'] == 'pickup_point' ? Icons.place_outlined : Icons.warehouse_outlined), color: C.green),
                   title: Text('${c['name']}', style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -467,7 +467,7 @@ class _AdminFraudPageState extends State<AdminFraudPage> {
             return Column(children: [
               for (final a in l)
                 Card(
-                  color: a['severity'] == 'high' ? const C.tint : C.card,
+                  color: a['severity'] == 'high' ? C.tint : C.card,
                   child: ListTile(
                     leading: Icon(a['severity'] == 'high' ? Icons.warning_amber_rounded : Icons.flag_outlined, color: a['severity'] == 'high' ? Colors.redAccent : C.yellow),
                     title: Text('${_labels[a['kind']] ?? a['kind']} · ${a['user_name'] ?? 'utilisateur'}', style: const TextStyle(fontWeight: FontWeight.w800)),

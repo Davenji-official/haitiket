@@ -17,7 +17,7 @@ class LegalScreen extends StatelessWidget {
         body: ListView(padding: const EdgeInsets.all(18), children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const C.tint, borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(color: C.tint, borderRadius: BorderRadius.circular(14)),
             child: const Text('Version provisoire (octobre 2026) : ce texte résume le fonctionnement de HAITIKET et doit être validé par un juriste avant le lancement commercial.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
           ),
           h("Conditions d'utilisation"),

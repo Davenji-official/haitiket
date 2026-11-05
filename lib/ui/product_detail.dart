@@ -113,7 +113,7 @@ class _GalleryState extends State<_Gallery> {
                     right: 0,
                     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                       for (var i = 0; i < items.length; i++)
-                        AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 3), width: i == idx ? 22 : 8, height: 8, decoration: BoxDecoration(color: i == idx ? C.card : C.card54, borderRadius: BorderRadius.circular(6))),
+                        AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 3), width: i == idx ? 22 : 8, height: 8, decoration: BoxDecoration(color: i == idx ? C.card : Colors.white54, borderRadius: BorderRadius.circular(6))),
                     ]),
                   ),
               ]);
