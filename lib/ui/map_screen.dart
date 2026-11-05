@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -16,6 +17,7 @@ import 'widgets.dart';
 
 // Fond de carte : OpenStreetMap par défaut. Pour un usage commercial intensif, remplacez-le par un fournisseur
 // (MapTiler, Stadia…) en ajoutant --dart-define=MAP_TILE_URL=... dans le workflow.
+const _routeBase = String.fromEnvironment('ROUTE_BASE_URL', defaultValue: 'https://router.project-osrm.org');
 const _tileUrl = String.fromEnvironment('MAP_TILE_URL', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
 
 /// Mémoire des boutiques géolocalisées : la carte s'ouvre instantanément avec les données déjà chargées.
@@ -64,7 +66,7 @@ class _Pin extends StatelessWidget {
             height: size,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: accent, width: selected ? 4 : 3), boxShadow: [BoxShadow(color: accent.withValues(alpha: .55), blurRadius: selected ? 18 : 7)]),
-            child: logo != null ? Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent)) : Icon(official ? Icons.verified : (pro ? Icons.storefront : Icons.person_pin_circle), color: accent, size: selected ? 30 : 24),
+            child: logo != null ? DarkSafe(child: Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent))) : Icon(official ? Icons.verified : (pro ? Icons.storefront : Icons.person_pin_circle), color: accent, size: selected ? 30 : 24),
           ),
         ]),
       ),
@@ -116,6 +118,8 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   late String kind = widget.kind ?? 'all';
   String q = '';
   Position? me;
+  Timer? liveTimer;
+  StreamSubscription<Position>? posSub;
   String? selectedId;
   double zoom = 10.5;
   List<LatLng> route = [];
@@ -125,10 +129,16 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     refresh(force: !ShopGeoCache.fresh);
+    // Carte vivante : boutiques actualisées toutes les 30 s, distances recalculées en continu avec le GPS.
+    liveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && !loading) refresh(force: true);
+    });
   }
 
   @override
   void dispose() {
+    liveTimer?.cancel();
+    posSub?.cancel();
     pulse.dispose();
     fly?.dispose();
     pages.dispose();
@@ -208,6 +218,9 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     if (p == null || !mounted) return;
     HapticFeedback.mediumImpact();
     setState(() => me = p);
+    posSub ??= Geolocator.getPositionStream(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20)).listen((np) {
+      if (mounted) setState(() => me = np);
+    }, onError: (_) {});
     flyTo(LatLng(p.latitude, p.longitude), 15);
   }
 
@@ -218,7 +231,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     final start = LatLng(me!.latitude, me!.longitude);
     setState(() => routing = true);
     try {
-      final url = 'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson';
+      final url = '$_routeBase/route/v1/driving/${start.longitude},${start.latitude};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson';
       final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 9));
       final d = jsonDecode(r.body) as Map<String, dynamic>;
       final rt = (d['routes'] as List).first as Map<String, dynamic>;

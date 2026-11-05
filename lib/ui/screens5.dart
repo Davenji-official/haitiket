@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
@@ -68,6 +70,9 @@ Future<void> showPin(BuildContext context, String orderId, String label) async {
             ? const Text("Aucun code disponible pour le moment. Il apparaît une fois la commande payée et confirmée.")
             : Column(mainAxisSize: MainAxisSize.min, children: [
                 Text(pin, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8, color: C.ink)),
+                const SizedBox(height: 10),
+                DarkSafe(child: Container(color: Colors.white, padding: const EdgeInsets.all(8), child: QrImageView(data: 'HKT1:$orderId:$pin', size: 190, backgroundColor: Colors.white))),
+                const Text('ou faites scanner ce QR code', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(height: 8),
                 const Text('Ne le communiquez qu\'à la personne qui vous remet ou récupère le colis.', textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
               ]),
@@ -140,7 +145,7 @@ class _NotificationsState extends State<NotificationsScreen> {
     if (n['body'] == null && img.isEmpty && link.isEmpty && code.isEmpty) return null;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (n['body'] != null) Text('${n['body']}'),
-      if (img.startsWith('http')) Padding(padding: const EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(img, errorBuilder: (_, __, ___) => const SizedBox.shrink()))),
+      if (img.startsWith('http')) Padding(padding: const EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: DarkSafe(child: Image.network(img, errorBuilder: (_, __, ___) => const SizedBox.shrink())))),
       if (code.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: OutlinedButton.icon(onPressed: () { Clipboard.setData(ClipboardData(text: code)); toast(context, 'Coupon $code copié : collez-le au paiement.'); }, icon: const Icon(Icons.local_offer_outlined), label: Text('Coupon $code'))),
       if (link.startsWith('https://')) Padding(padding: const EdgeInsets.only(top: 4), child: TextButton.icon(onPressed: () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication), icon: const Icon(Icons.open_in_new), label: const Text('Ouvrir le lien'))),
     ]);
@@ -259,7 +264,7 @@ class _ShopState extends State<ShopScreen> {
                   height: 150,
                   width: double.infinity,
                   decoration: BoxDecoration(gradient: LinearGradient(colors: [primary, accent])),
-                  child: banner == null ? null : Image.network(banner, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+                  child: banner == null ? null : DarkSafe(child: Image.network(banner, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
                 ),
                 Positioned(
                   left: 18,

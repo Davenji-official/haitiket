@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/repo.dart';
@@ -72,7 +73,7 @@ class _MediaPickerState extends State<MediaPickerField> {
                       height: 84,
                       clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16), border: Border.all(color: i == 0 ? C.terracotta : C.line, width: i == 0 ? 3 : 1)),
-                      child: widget.items[i]['kind'] == 'video' ? const Icon(Icons.play_circle_fill, size: 40, color: C.green) : Image.network(widget.items[i]['url']!, fit: BoxFit.cover),
+                      child: widget.items[i]['kind'] == 'video' ? const Icon(Icons.play_circle_fill, size: 40, color: C.green) : DarkSafe(child: Image.network(widget.items[i]['url']!, fit: BoxFit.cover)),
                     ),
                     Positioned(
                       right: -6,

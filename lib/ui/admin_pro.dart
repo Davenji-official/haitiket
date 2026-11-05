@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'admin_ops.dart';
 import 'admin_screen.dart';
 import 'fx.dart';
 import 'screens5.dart';
@@ -285,9 +286,12 @@ class _AdminProState extends State<AdminPro> {
   int idx = 0;
   static const _items = <(String, IconData)>[
     ('Analytique', Icons.insights_outlined),
+    ('Carte live', Icons.map_outlined),
     ('Clients', Icons.people_alt_outlined),
     ('Commandes', Icons.receipt_long_outlined),
     ('Catalogue', Icons.inventory_2_outlined),
+    ('Logistique', Icons.local_shipping_outlined),
+    ('Antifraude', Icons.shield_outlined),
     ('Diffusion', Icons.campaign_outlined),
     ('Réglages', Icons.tune),
     ('Modules', Icons.apps_outlined),
@@ -298,14 +302,20 @@ class _AdminProState extends State<AdminPro> {
       case 0:
         return const _AnalyticsPage();
       case 1:
-        return const _ClientsPage();
+        return const AdminLiveMapPage();
       case 2:
-        return const _OrdersPage();
+        return const _ClientsPage();
       case 3:
-        return const _CatalogPage();
+        return const _OrdersPage();
       case 4:
-        return const _BroadcastPage();
+        return const _CatalogPage();
       case 5:
+        return const AdminLogisticsPage();
+      case 6:
+        return const AdminFraudPage();
+      case 7:
+        return const _BroadcastPage();
+      case 8:
         return const _SettingsPage();
       default:
         return const AdminScreen();

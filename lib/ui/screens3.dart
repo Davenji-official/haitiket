@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import 'contacts_widget.dart';
+import 'qr_scan.dart';
+import 'tours_widget.dart';
 import '../data/repo.dart';
 import '../theme.dart';
 import 'screens5.dart';
@@ -466,10 +468,28 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   }
 
   Future<void> confirm(Map<String, dynamic> j, bool pickup) async {
-    final pin = await askText(context, pickup ? 'Code donné par le vendeur' : 'Code donné par le client', type: TextInputType.number);
-    if (pin == null || pin.isEmpty) return;
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const Icon(Icons.qr_code_scanner), title: const Text('Scanner le QR code'), onTap: () => Navigator.pop(c, 'qr')),
+          ListTile(leading: const Icon(Icons.pin_outlined), title: const Text('Saisir le code à 6 chiffres'), onTap: () => Navigator.pop(c, 'pin')),
+        ]),
+      ),
+    );
+    if (mode == null || !mounted) return;
+    String? pin, payload;
+    if (mode == 'qr') {
+      payload = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => QrScanScreen(title: pickup ? 'QR du vendeur' : 'QR du client')));
+      if (payload == null) return;
+    } else {
+      pin = await askText(context, pickup ? 'Code donné par le vendeur' : 'Code donné par le client', type: TextInputType.number);
+      if (pin == null || pin.isEmpty) return;
+    }
     try {
-      final ok = pickup ? await Repo.confirmPickup(j['id'] as String, pin) : await Repo.confirmDelivery(j['id'] as String, pin);
+      final ok = payload != null
+          ? (pickup ? await Repo.confirmPickupQr(j['id'] as String, payload) : await Repo.confirmDeliveryQr(j['id'] as String, payload))
+          : (pickup ? await Repo.confirmPickup(j['id'] as String, pin!) : await Repo.confirmDelivery(j['id'] as String, pin!));
       if (mounted) toast(context, ok ? (pickup ? 'Collecte confirmée.' : 'Remise confirmée.') : 'Code incorrect.');
       reload();
     } catch (e) {
@@ -550,6 +570,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                         trailing: FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
                       ),
                     ),
+                const MyToursCard(),
                 const SizedBox(height: 20),
                 const Text('Mes missions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                 const SizedBox(height: 8),

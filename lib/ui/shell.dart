@@ -5,6 +5,8 @@ import '../config.dart';
 import '../data/repo.dart';
 import 'auth_screens.dart';
 import '../theme.dart';
+import '../push.dart';
+import 'dark_mode.dart';
 import 'admin_pro.dart';
 import 'guides_screen.dart';
 import 'fx.dart';
@@ -73,12 +75,14 @@ class _ShellState extends State<Shell> {
     if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) sec = Sec.wallet;
     if (Config.configured) {
       Repo.touchPresence();
+      PushService.init();
       presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
         if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) Repo.touchPresence();
       });
       authSub = Supabase.instance.client.auth.onAuthStateChange.listen((st) {
         if (!mounted) return;
         setState(() {});
+        if (st.event == AuthChangeEvent.signedIn || st.event == AuthChangeEvent.initialSession) PushService.init();
         if (st.event == AuthChangeEvent.passwordRecovery) {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
         }
@@ -270,6 +274,15 @@ class _ShellState extends State<Shell> {
                   drawerItem(Icons.two_wheeler_outlined, tr('Espace livreur'), Sec.courier),
                   drawerItem(Icons.account_balance_wallet_outlined, 'Portefeuille', Sec.wallet),
                   const Divider(height: 28),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: ThemeStore.dark,
+                    builder: (_, on, __) => SwitchListTile(
+                      secondary: Icon(on ? Icons.dark_mode : Icons.light_mode_outlined, color: C.green),
+                      title: Text(tr('Mode nuit'), style: const TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
+                      value: on,
+                      onChanged: (v) => ThemeStore.set(v),
+                    ),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.menu_book_outlined, color: C.green),
                     title: Text(tr("Guides d'utilisation"), style: const TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),

@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
@@ -134,7 +135,7 @@ class ProductCard extends StatelessWidget {
             child: Stack(fit: StackFit.expand, children: [
               img == null || img.isEmpty
                   ? Container(color: C.mint, child: const Icon(Icons.shopping_basket_outlined, size: 40, color: C.green))
-                  : Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: C.mint)),
+                  : DarkSafe(child: Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: C.mint))),
               if (bazar) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(12)), child: const Text('Bazar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: C.ink)))),
               if (verifiedShop) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.blue.shade700, borderRadius: BorderRadius.circular(12)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.verified, size: 13, color: Colors.white), SizedBox(width: 4), Text('Boutique vérifiée', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10, color: Colors.white))]))),
               if (official) Positioned(left: 8, top: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: C.green, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.verified, size: 13, color: Colors.white), const SizedBox(width: 4), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 150), child: Text(officialLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10, color: Colors.white)))]))),
@@ -243,7 +244,7 @@ class _ImageUploadState extends State<ImageUploadField> {
             height: 72,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
-            child: url == null ? const Icon(Icons.image_outlined, color: C.green) : Image.network(url!, fit: BoxFit.cover),
+            child: url == null ? const Icon(Icons.image_outlined, color: C.green) : DarkSafe(child: Image.network(url!, fit: BoxFit.cover)),
           ),
           const SizedBox(width: 12),
           OutlinedButton.icon(onPressed: busy ? null : pick, icon: const Icon(Icons.photo_library_outlined), label: Text(busy ? 'Envoi…' : (url == null ? 'Ajouter une photo' : 'Changer la photo'))),

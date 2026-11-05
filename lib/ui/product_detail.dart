@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -73,11 +74,11 @@ class _GalleryState extends State<_Gallery> {
                                 child: InteractiveViewer(
                                   minScale: 0.8,
                                   maxScale: 5,
-                                  child: Image.network(
+                                  child: DarkSafe(child: Image.network(
                                     it['url'] as String,
                                     fit: BoxFit.contain,
                                     errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white, size: 64),
-                                  ),
+                                  )),
                                 ),
                               ),
                               Positioned(
@@ -100,7 +101,7 @@ class _GalleryState extends State<_Gallery> {
                             ]),
                           ),
                         ),
-                        child: Image.network(it['url'] as String, fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder()),
+                        child: DarkSafe(child: Image.network(it['url'] as String, fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder())),
                       );
                     },
                   ),
