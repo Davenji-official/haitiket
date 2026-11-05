@@ -94,6 +94,7 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
           sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application|' $M
+          sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="HAITIKET"|' $M
           sed -i 's|<application|<queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent><intent><action android:name="android.intent.action.DIAL"/><data android:scheme="tel"/></intent></queries>\n    <application|' $M
           echo "APP=$(pwd)" >> "$GITHUB_ENV"
@@ -107,10 +108,21 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | grep -E "error •|issues found|No issues" ; exit ${PIPESTATUS[0]}
       - name: Build APK
         working-directory: ${{ env.APP }}
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_SENDER_ID: ${{ secrets.FIREBASE_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          MAP_TILE_URL: ${{ secrets.MAP_TILE_URL }}
+          ROUTE_BASE_URL: ${{ secrets.ROUTE_BASE_URL }}
         run: |
+          EXTRA=""
+          if [ -n "$FIREBASE_API_KEY" ]; then EXTRA="$EXTRA --dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY --dart-define=FIREBASE_APP_ID=$FIREBASE_APP_ID --dart-define=FIREBASE_SENDER_ID=$FIREBASE_SENDER_ID --dart-define=FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"; fi
+          if [ -n "$MAP_TILE_URL" ]; then EXTRA="$EXTRA --dart-define=MAP_TILE_URL=$MAP_TILE_URL"; fi
+          if [ -n "$ROUTE_BASE_URL" ]; then EXTRA="$EXTRA --dart-define=ROUTE_BASE_URL=$ROUTE_BASE_URL"; fi
           flutter build apk --release --build-number=${{ github.run_number }} \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} $EXTRA
       - name: Signer l'APK avec la clé HAITIKET (installable et mettable à jour)
         working-directory: ${{ env.APP }}
         env:
