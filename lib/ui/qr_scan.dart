@@ -22,7 +22,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text(widget.title, style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: Stack(children: [
           MobileScanner(
             controller: controller,

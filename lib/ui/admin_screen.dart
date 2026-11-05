@@ -13,7 +13,7 @@ class AdminScreen extends StatelessWidget {
   Widget build(BuildContext context) => DefaultTabController(
         length: 18,
         child: Column(children: [
-          const TabBar(
+          TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             labelColor: C.ink,
@@ -311,17 +311,17 @@ class _AdminListState extends State<_AdminList> {
           return ListView(padding: const EdgeInsets.all(14), children: [
             for (final r in items)
               Card(
-                color: Colors.white,
+                color: C.card,
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title(r), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
+                    Text(title(r), style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)),
                     Text('Statut : ${r['status']}', style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
                     if (widget.kind == 'shop') ...[
-                      Text('Propriétaire : ${r['owner_name'] ?? '—'}${r['owner_phone'] == null ? '' : ' · ${r['owner_phone']}'}', style: const TextStyle(color: C.muted)),
+                      Text('Propriétaire : ${r['owner_name'] ?? '—'}${r['owner_phone'] == null ? '' : ' · ${r['owner_phone']}'}', style: TextStyle(color: C.muted)),
                       Text('Identité (KYC) : ${kycLabel('${r['kyc_status'] ?? 'none'}')}', style: TextStyle(fontWeight: FontWeight.w700, color: '${r['kyc_status']}' == 'approved' ? C.green : C.terracotta)),
                     ],
-                    if (widget.kind == 'payment') Text('Statut : ${r['status']} · ${r['provider'] ?? ''} · ${r['reference'] ?? ''}', style: const TextStyle(color: C.muted, fontSize: 12)),
+                    if (widget.kind == 'payment') Text('Statut : ${r['status']} · ${r['provider'] ?? ''} · ${r['reference'] ?? ''}', style: TextStyle(color: C.muted, fontSize: 12)),
                     Wrap(children: actions(r)),
                   ]),
                 ),
@@ -398,7 +398,7 @@ class _CouponTabState extends State<_CouponTab> {
             return Column(children: [
               for (final c in items)
                 Card(
-                  color: Colors.white,
+                  color: C.card,
                   child: ListTile(
                     title: Text('${c['code']} · ${c['kind'] == 'percent' ? '${c['value']} %' : money(c['value'] as num, 'HTG')}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('Utilisé ${c['used_count']}${c['max_uses'] == null ? '' : ' / ${c['max_uses']}'} fois'),
@@ -498,7 +498,7 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
         const SizedBox(height: 6),
         const Text('Une boutique contrôlée par la plateforme, sans abonnement supplémentaire. Ses produits apparaissent dans Marketplace avec le badge officiel. Les produits Bazar restent dans leur section.', style: TextStyle(height: 1.45)),
         const SizedBox(height: 14),
-        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(20)), child: Row(children: [const Icon(Icons.verified, color: C.green, size: 30), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Badge officiel HAITIKET', style: TextStyle(fontWeight: FontWeight.w900)), Text(shop == null ? 'Pas encore créée' : 'Active · ${shop['status']} · Abonnement exempté')]))])),
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(20)), child: Row(children: [Icon(Icons.verified, color: C.green, size: 30), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Badge officiel HAITIKET', style: TextStyle(fontWeight: FontWeight.w900)), Text(shop == null ? 'Pas encore créée' : 'Active · ${shop['status']} · Abonnement exempté')]))])),
         const SizedBox(height: 12),
         TextField(controller: name, maxLength: 80, decoration: const InputDecoration(labelText: 'Nom public de la boutique')),
         TextField(controller: city, decoration: const InputDecoration(labelText: 'Ville')),
@@ -509,10 +509,10 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Position sur la carte', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              Text(shop['lat'] == null ? 'Non définie : la boutique officielle n’apparaît pas encore sur la carte.' : 'Actuelle : ${shop['lat']}, ${shop['lng']}', style: const TextStyle(color: C.muted)),
+              Text(shop['lat'] == null ? 'Non définie : la boutique officielle n’apparaît pas encore sur la carte.' : 'Actuelle : ${shop['lat']}, ${shop['lng']}', style: TextStyle(color: C.muted)),
               const SizedBox(height: 8),
               Row(children: [
                 Expanded(child: TextField(controller: latC, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: 'Latitude'))),

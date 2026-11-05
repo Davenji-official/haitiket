@@ -41,7 +41,7 @@ class _ContactsCardState extends State<ContactsCard> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Contacts de la livraison', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 16)),
+                Text('Contacts de la livraison', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 16)),
                 const SizedBox(height: 6),
                 for (final p in l) _row(context, p),
               ]),
@@ -60,13 +60,13 @@ class _ContactsCardState extends State<ContactsCard> {
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$label · ${p['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
-            Text(phone.isEmpty ? 'Numéro non renseigné' : phone, style: const TextStyle(color: C.muted)),
+            Text('$label · ${p['name'] ?? ''}', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+            Text(phone.isEmpty ? 'Numéro non renseigné' : phone, style: TextStyle(color: C.muted)),
           ]),
         ),
         IconButton(
           tooltip: 'Appeler',
-          icon: const Icon(Icons.call, color: C.green),
+          icon: Icon(Icons.call, color: C.green),
           onPressed: phone.isEmpty ? null : () => _open(context, Uri(scheme: 'tel', path: phone)),
         ),
         IconButton(

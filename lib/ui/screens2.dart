@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
@@ -139,7 +140,7 @@ class _CheckoutState extends State<CheckoutScreen> {
               lacking.isEmpty
                   ? 'Vous pouvez payer maintenant avec votre portefeuille. Le vendeur est prévenu dès le paiement ; votre argent reste protégé par HAITIKET jusqu\'à la livraison.'
                   : 'Solde insuffisant en ${lacking.map((e) => e.key).join(' et ')}. Rechargez votre portefeuille (MonCash / NatCash), puis revenez valider votre panier : vos articles y restent.',
-              style: const TextStyle(color: C.muted),
+              style: TextStyle(color: C.muted),
             ),
           ]),
         ),
@@ -215,7 +216,7 @@ class _CheckoutState extends State<CheckoutScreen> {
       final navigator = Navigator.of(context);
       final messenger = ScaffoldMessenger.of(context);
       if (paidIds.isNotEmpty) {
-        navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Mes commandes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const OrdersScreen())));
+        navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: Text('Mes commandes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const OrdersScreen())));
       } else {
         navigator.pop();
       }
@@ -237,11 +238,11 @@ class _CheckoutState extends State<CheckoutScreen> {
     final lines = CartStore.lines.value.values.toList();
     final total = CartStore.totalMinor;
     return Scaffold(
-      appBar: AppBar(title: const Text('Commande', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+      appBar: AppBar(title: Text('Commande', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         if (currentUser() == null) const EmptyState(title: 'Connexion requise', text: 'Connectez-vous depuis le menu avant de commander.'),
         if (currentUser() != null) ...[
-          const Text('Mode de remise', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Mode de remise', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
           RadioGroup<String>(
             groupValue: mode,
             onChanged: (v) => setState(() => mode = v ?? 'pickup'),
@@ -306,8 +307,8 @@ class _CheckoutState extends State<CheckoutScreen> {
             ),
             if (deliveryLat != null && deliveryLng != null) ...[
               const SizedBox(height: 6),
-              Text('Destination sélectionnée : ${deliveryLat!.toStringAsFixed(6)}, ${deliveryLng!.toStringAsFixed(6)}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w700)),
-              Text('Précision GPS estimée : ${deliveryAccuracyM?.round() ?? 'point sélectionné sur la carte'}', style: const TextStyle(color: C.muted)),
+              Text('Destination sélectionnée : ${deliveryLat!.toStringAsFixed(6)}, ${deliveryLng!.toStringAsFixed(6)}', style: TextStyle(color: C.green, fontWeight: FontWeight.w700)),
+              Text('Précision GPS estimée : ${deliveryAccuracyM?.round() ?? 'point sélectionné sur la carte'}', style: TextStyle(color: C.muted)),
             ],
             TextButton.icon(
               onPressed: () async {
@@ -321,11 +322,11 @@ class _CheckoutState extends State<CheckoutScreen> {
           Field(coupon, 'Code promo (facultatif)'),
           const SizedBox(height: 8),
           Text('Articles : ${money(total, lines.isEmpty ? 'HTG' : lines.first.currency)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const Text('Frais de livraison, commission et total final : calculés par le serveur.', style: TextStyle(color: C.muted)),
+          Text('Frais de livraison, commission et total final : calculés par le serveur.', style: TextStyle(color: C.muted)),
           const SizedBox(height: 16),
           FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Enregistrement…' : 'Réserver et commander')),
           const SizedBox(height: 10),
-          const Text('Après la réservation, vous pourrez payer chaque commande depuis « Mes commandes », avec le portefeuille HTG ou USD correspondant exactement à la devise affichée. Aucun change automatique ne sera appliqué.', style: TextStyle(color: C.muted, fontWeight: FontWeight.w600)),
+          Text('Après la réservation, vous pourrez payer chaque commande depuis « Mes commandes », avec le portefeuille HTG ou USD correspondant exactement à la devise affichée. Aucun change automatique ne sera appliqué.', style: TextStyle(color: C.muted, fontWeight: FontWeight.w600)),
         ],
       ]),
     );
@@ -372,7 +373,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> {
                 onTap: (_, point) => setState(() { selected = point; touched = true; }),
               ),
               children: [
-                TileLayer(
+                TileLayer(tileBuilder: darkTileBuilder, 
                   urlTemplate: const String.fromEnvironment('MAP_TILE_URL', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
                   userAgentPackageName: 'com.haitiket.app',
                 ),
@@ -381,9 +382,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> {
                     point: selected,
                     width: 54,
                     height: 58,
-                    child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.location_pin, size: 42, color: C.terracotta),
-                      Text('Livraison', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                      Text('Livraison', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, backgroundColor: C.card)),
                     ]),
                   ),
                 ]),
@@ -532,12 +533,12 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
               return Column(children: [
                 for (final o in items)
                   Card(
-                    color: Colors.white,
+                    color: C.card,
                     margin: const EdgeInsets.only(bottom: 12),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
+                        Text('${(o['shops'] as Map?)?['name'] ?? ''}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink)),
                         Text(statusFr(o['status'] as String), style: const TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
                         OrderProgress(status: '${o['status']}', delivery: '${o['delivery_mode']}' == 'delivery'),
                         dueBlock(o),
@@ -560,7 +561,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 6),
                         for (final it in (o['order_items'] as List)) Text('${it['qty']} × ${it['name']}${it['variant_label'] == null ? '' : ' (${it['variant_label']})'}'),
                         const SizedBox(height: 6),
-                        Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
+                        Text('Total : ${money(o['total_minor'] as num, o['currency'] as String)}', style: TextStyle(fontWeight: FontWeight.w800, color: C.green)),
                         if (o['status'] == 'PENDING_PAYMENT') ...[
                           const SizedBox(height: 6),
                           PrimaryButton(
@@ -587,7 +588,7 @@ class _OrdersState extends State<OrdersScreen> with WidgetsBindingObserver {
                         ],
                         if (o['status'] != 'PENDING_PAYMENT' && o['status'] != 'CANCELLED') TextButton(onPressed: () => showPin(context, o['id'] as String, 'Code de remise'), child: const Text('Mon code de remise')),
                         if (o['status'] == 'READY_FOR_PICKUP' || o['status'] == 'IN_TRANSIT')
-                          const Padding(padding: EdgeInsets.only(bottom: 4), child: Text('Donnez votre code seulement après avoir reçu votre colis : c\'est lui qui libère le paiement du vendeur et du livreur.', style: TextStyle(color: C.muted, fontSize: 12.5))),
+                          Padding(padding: EdgeInsets.only(bottom: 4), child: Text('Donnez votre code seulement après avoir reçu votre colis : c\'est lui qui libère le paiement du vendeur et du livreur.', style: TextStyle(color: C.muted, fontSize: 12.5))),
                         if (const ['PAID', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].contains(o['status']))
                           TextButton.icon(
                             icon: const Icon(Icons.location_on_outlined),
@@ -828,9 +829,9 @@ class _ShopPanelState extends State<ShopPanel> {
             if (editCategory != null)
               SpecsForm(key: ValueKey('specs-$editCategory'), fields: specsFor(categories.where((c) => c['id'] == editCategory).map((c) => '${c['name']}').firstOrNull), values: specs)
             else
-              const Padding(padding: EdgeInsets.only(top: 6), child: Text('Choisissez une catégorie ci-dessus pour afficher ses champs (tailles, couleurs, marque, état, garantie…).', style: TextStyle(color: C.muted))),
+              Padding(padding: EdgeInsets.only(top: 6), child: Text('Choisissez une catégorie ci-dessus pour afficher ses champs (tailles, couleurs, marque, état, garantie…).', style: TextStyle(color: C.muted))),
             const SizedBox(height: 8),
-            const Text('Retire un média avec ✕. Le premier média image disponible devient la photo de couverture.', style: TextStyle(fontSize: 12, color: C.muted)),
+            Text('Retire un média avec ✕. Le premier média image disponible devient la photo de couverture.', style: TextStyle(fontSize: 12, color: C.muted)),
           ])),
         ),
         actions: [
@@ -1006,8 +1007,8 @@ class _ShopPanelState extends State<ShopPanel> {
                 Icon(icon, size: 20, color: C.green),
                 const SizedBox(width: 8),
                 Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
-                  Text(label, style: const TextStyle(fontSize: 11, color: C.muted)),
+                  Text(value, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                  Text(label, style: TextStyle(fontSize: 11, color: C.muted)),
                 ])),
               ]),
             );
@@ -1017,9 +1018,9 @@ class _ShopPanelState extends State<ShopPanel> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(border: Border.all(color: C.line), borderRadius: BorderRadius.circular(14)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(official ? 'Vue d’ensemble — boutique officielle' : 'Vue d’ensemble — boutique professionnelle', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                Text(official ? 'Vue d’ensemble — boutique officielle' : 'Vue d’ensemble — boutique professionnelle', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
                 const SizedBox(height: 4),
-                const Text('Les commandes affichées sont les 50 plus récentes au maximum. Les montants sont séparés par devise et ne représentent pas un relevé comptable.', style: TextStyle(fontSize: 12, color: C.muted)),
+                Text('Les commandes affichées sont les 50 plus récentes au maximum. Les montants sont séparés par devise et ne représentent pas un relevé comptable.', style: TextStyle(fontSize: 12, color: C.muted)),
                 const SizedBox(height: 12),
                 if (productSnapshot.connectionState != ConnectionState.done || orderSnapshot.connectionState != ConnectionState.done)
                   const LinearProgressIndicator(),
@@ -1030,7 +1031,7 @@ class _ShopPanelState extends State<ShopPanel> {
                   metric('Commandes chargées', '${orderRows.length}', Icons.receipt_long_outlined),
                 ]),
                 const SizedBox(height: 12),
-                const Text('Volume des commandes chargées par devise', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
+                Text('Volume des commandes chargées par devise', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   metric('Total HTG', money(totals['HTG']!, 'HTG'), Icons.payments_outlined),
@@ -1038,7 +1039,7 @@ class _ShopPanelState extends State<ShopPanel> {
                 ]),
                 if (statusCounts.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text('État des commandes', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
+                  Text('État des commandes', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
                   const SizedBox(height: 6),
                   Wrap(spacing: 6, runSpacing: 6, children: [
                     for (final entry in statusCounts.entries)
@@ -1050,7 +1051,7 @@ class _ShopPanelState extends State<ShopPanel> {
                   const Text('À réapprovisionner', style: TextStyle(fontWeight: FontWeight.w700, color: C.terracotta)),
                   for (final product in lowStock.take(5))
                     Padding(padding: const EdgeInsets.only(top: 4), child: Text('• ${product['name']} — stock ${product['stock']}', style: const TextStyle(fontSize: 13))),
-                  if (lowStock.length > 5) Text('Et ${lowStock.length - 5} autre(s) produit(s).', style: const TextStyle(fontSize: 12, color: C.muted)),
+                  if (lowStock.length > 5) Text('Et ${lowStock.length - 5} autre(s) produit(s).', style: TextStyle(fontSize: 12, color: C.muted)),
                 ],
               ]),
             );
@@ -1064,12 +1065,12 @@ class _ShopPanelState extends State<ShopPanel> {
   Widget build(BuildContext context) {
     final active = widget.shop['status'] == 'active';
     return Card(
-      color: Colors.white,
+      color: C.card,
       margin: const EdgeInsets.only(bottom: 18),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Flexible(child: Text('${widget.shop['name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink))), if (widget.shop['verified_at'] != null) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(avatar: Icon(Icons.verified, size: 16, color: Colors.blue), label: Text('Boutique vérifiée'), visualDensity: VisualDensity.compact))]),
+          Row(children: [Flexible(child: Text('${widget.shop['name']}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink))), if (widget.shop['verified_at'] != null) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(avatar: Icon(Icons.verified, size: 16, color: Colors.blue), label: Text('Boutique vérifiée'), visualDensity: VisualDensity.compact))]),
           Text(
             {'active': 'Boutique active', 'pending': 'En attente de vérification', 'draft': 'Brouillon', 'suspended': widget.shop['deletion_review_status'] == 'pending_admin' || widget.shop['deletion_review_status'] == 'approved' ? 'Suppression demandée : en examen par l’administration (délai minimal de 30 jours). Votre boutique reste suspendue.' : 'Boutique suspendue.', 'closed': 'Boutique fermée définitivement'}[widget.shop['status']] ?? 'Statut : ${widget.shop['status']}',
             style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700),
@@ -1084,12 +1085,12 @@ class _ShopPanelState extends State<ShopPanel> {
               padding: const EdgeInsets.only(top: 6),
               child: Wrap(spacing: 8, children: [
                 FilledButton.icon(onPressed: resumeShopNow, icon: const Icon(Icons.play_circle_outline), label: const Text('Réactiver ma boutique')),
-                const Text('Si la suspension vient de l’administration, contactez le support.', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text('Si la suspension vient de l’administration, contactez le support.', style: TextStyle(color: C.muted, fontSize: 12)),
               ]),
             ),
           if (widget.shop['status'] == 'closed') const Text('Boutique fermée définitivement — historique conservé.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
           if (!personal && !official && widget.shop['status'] == 'active' && widget.shop['deletion_review_status'] != 'pending_admin' && widget.shop['deletion_review_status'] != 'approved') PlanCard(shop: widget.shop),
-          if (official) const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.verified, color: C.green), title: Text('Boutique officielle HAITIKET', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Abonnement vendeur non requis.')),
+          if (official) ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.verified, color: C.green), title: Text('Boutique officielle HAITIKET', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Abonnement vendeur non requis.')),
           if (!personal && active) BrandingEditor(shop: widget.shop),
           if (active)
             Padding(
@@ -1139,7 +1140,7 @@ class _ShopPanelState extends State<ShopPanel> {
               future: products,
               builder: (_, s) {
                 final items = s.data ?? [];
-                if (items.isEmpty) return const Text('Aucun produit.', style: TextStyle(color: C.muted));
+                if (items.isEmpty) return Text('Aucun produit.', style: TextStyle(color: C.muted));
                 return Column(children: [
                   for (final p in items)
                     ListTile(
@@ -1198,12 +1199,12 @@ class _ShopPanelState extends State<ShopPanel> {
             ),
           ],
           const SizedBox(height: 16),
-          const Text('Commandes reçues', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Commandes reçues', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: orders,
             builder: (_, s) {
               final items = s.data ?? [];
-              if (items.isEmpty) return const Padding(padding: EdgeInsets.only(top: 6), child: Text('Aucune commande payée pour le moment.', style: TextStyle(color: C.muted)));
+              if (items.isEmpty) return Padding(padding: EdgeInsets.only(top: 6), child: Text('Aucune commande payée pour le moment.', style: TextStyle(color: C.muted)));
               return Column(children: [
                 if (items.any((o) => o['status'] == 'CANCELLED' || o['status'] == 'REFUNDED'))
                   Align(
@@ -1707,7 +1708,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.shopName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+              Text(widget.shopName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
               const SizedBox(height: 4),
               const Text('La carte affiche uniquement la position du coursier autorisée par le serveur.'),
               const SizedBox(height: 8),
@@ -1715,7 +1716,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
               const SizedBox(height: 8),
               if (_trafficDelay != null) ...[
                 Card(
-                  color: const Color(0xFFFFF1EC),
+                  color: const C.tint,
                   child: ListTile(
                     leading: const Icon(Icons.traffic, color: C.terracotta),
                     title: Text('Retard signalé : +${((_trafficDelay!['extension_minutes'] as num?) ?? 0) ~/ 60} h', style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -1728,7 +1729,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
               if (_offersLoading && _offers.isEmpty) const LinearProgressIndicator(),
               if (_offersError != null) Text('Offres indisponibles : $_offersError', style: const TextStyle(color: C.terracotta)),
               if (!_offersLoading && _offers.isEmpty && _offersError == null)
-                const Text('Aucune offre active pour le moment. Les coursiers disponibles peuvent proposer leur tarif.', style: TextStyle(color: C.muted)),
+                Text('Aucune offre active pour le moment. Les coursiers disponibles peuvent proposer leur tarif.', style: TextStyle(color: C.muted)),
               for (final offer in _offers)
                 Card(
                   child: ListTile(
@@ -1760,7 +1761,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
               mapController: _mapController,
               options: const MapOptions(initialCenter: _haitiCenter, initialZoom: 8),
               children: [
-                TileLayer(
+                TileLayer(tileBuilder: darkTileBuilder, 
                   urlTemplate: const String.fromEnvironment('MAP_TILE_URL', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
                   userAgentPackageName: 'com.haitiket.app',
                 ),
@@ -1768,16 +1769,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
                   MarkerLayer(markers: [
                     if (_hasPosition) Marker(
                       point: LatLng(_lat!, _lng!), width: 64, height: 64,
-                      child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.delivery_dining, size: 38, color: C.terracotta),
-                        Text('Coursier', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                        Text('Coursier', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: C.card)),
                       ]),
                     ),
                     if (_hasDestination) Marker(
                       point: LatLng(_destinationLat!, _destinationLng!), width: 76, height: 64,
-                      child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.location_on, size: 38, color: Colors.blue),
-                        Text('Destination', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: Colors.white)),
+                        Text('Destination', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, backgroundColor: C.card)),
                       ]),
                     ),
                   ]),

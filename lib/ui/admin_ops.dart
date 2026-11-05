@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -80,7 +81,7 @@ class _AdminLiveMapPageState extends State<AdminLiveMapPage> {
         child: GestureDetector(
           onTap: () => toast(context, label),
           child: Container(
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: color, width: 3), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6)]),
+            decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, border: Border.all(color: color, width: 3), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6)]),
             child: Icon(icon, color: color, size: 22),
           ),
         ),
@@ -103,9 +104,9 @@ class _AdminLiveMapPageState extends State<AdminLiveMapPage> {
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
         child: Wrap(spacing: 14, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          const Text('Carte en direct', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink)),
-          Text('${couriers.length} livreurs · ${jobs.length} missions ouvertes · ${deliveries.length} livraisons en cours', style: const TextStyle(color: C.muted)),
-          Text(updated == null ? 'chargement…' : 'mis à jour ${_d(updated!.toIso8601String())}', style: const TextStyle(color: C.muted, fontSize: 12)),
+          Text('Carte en direct', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink)),
+          Text('${couriers.length} livreurs · ${jobs.length} missions ouvertes · ${deliveries.length} livraisons en cours', style: TextStyle(color: C.muted)),
+          Text(updated == null ? 'chargement…' : 'mis à jour ${_d(updated!.toIso8601String())}', style: TextStyle(color: C.muted, fontSize: 12)),
           FilterChip(label: const Text('Boutiques'), selected: showShops, onSelected: (v) => setState(() => showShops = v)),
           IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
         ]),
@@ -124,7 +125,7 @@ class _AdminLiveMapPageState extends State<AdminLiveMapPage> {
           child: FlutterMap(
             options: const MapOptions(initialCenter: LatLng(18.5392, -72.3364), initialZoom: 11, minZoom: 3, maxZoom: 18),
             children: [
-              TileLayer(urlTemplate: _tileUrl, userAgentPackageName: 'com.haitiket.haitiket'),
+              TileLayer(tileBuilder: darkTileBuilder, urlTemplate: _tileUrl, userAgentPackageName: 'com.haitiket.haitiket'),
               MarkerLayer(markers: markers),
             ],
           ),
@@ -140,7 +141,7 @@ class _AdminLiveMapPageState extends State<AdminLiveMapPage> {
 class AdminLogisticsPage extends StatelessWidget {
   const AdminLogisticsPage({super.key});
   @override
-  Widget build(BuildContext context) => const DefaultTabController(
+  Widget build(BuildContext context) => DefaultTabController(
         length: 3,
         child: Column(children: [
           TabBar(labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Centres'), Tab(text: 'Tournées'), Tab(text: 'Scans')]),
@@ -224,7 +225,7 @@ class _CentersTabState extends State<_CentersTab> {
             if (l.isEmpty) const EmptyState(title: 'Aucun centre', text: 'Ajoutez votre premier centre logistique.'),
             for (final c in l)
               Card(
-                color: c['active'] == false ? const Color(0xFFF1F1F1) : Colors.white,
+                color: c['active'] == false ? const C.soft : C.card,
                 child: ListTile(
                   leading: Icon(c['kind'] == 'partner' ? Icons.handshake_outlined : (c['kind'] == 'pickup_point' ? Icons.place_outlined : Icons.warehouse_outlined), color: C.green),
                   title: Text('${c['name']}', style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -315,7 +316,7 @@ class _ToursTabState extends State<_ToursTab> {
             DropdownMenuItem(value: 'active', child: Text('En cours')), DropdownMenuItem(value: 'completed', child: Text('Terminées')), DropdownMenuItem(value: 'cancelled', child: Text('Annulées')),
           ], onChanged: (v) { status = v ?? 'all'; reload(); }),
         ]),
-        const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Une commande ne peut rejoindre une tournée que si sa mission est déjà attribuée au même livreur et non collectée. Chaque commande garde ses propres codes PIN/QR et son historique.', style: TextStyle(color: C.muted, fontSize: 12))),
+        Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Une commande ne peut rejoindre une tournée que si sa mission est déjà attribuée au même livreur et non collectée. Chaque commande garde ses propres codes PIN/QR et son historique.', style: TextStyle(color: C.muted, fontSize: 12))),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: f,
           builder: (_, s) {
@@ -326,12 +327,12 @@ class _ToursTabState extends State<_ToursTab> {
             return Column(children: [
               for (final t in l)
                 Card(
-                  color: Colors.white,
+                  color: C.card,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${t['courier_name'] ?? 'Livreur'} · ${t['center_name'] ?? 'sans centre'}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                      Text('${t['status']} · ${t['delivered']}/${t['stops']} livrées · capacité ${t['capacity']} · ${_d(t['created_at'])}', style: const TextStyle(color: C.muted)),
+                      Text('${t['status']} · ${t['delivered']}/${t['stops']} livrées · capacité ${t['capacity']} · ${_d(t['created_at'])}', style: TextStyle(color: C.muted)),
                       for (final it in (t['items'] as List)) Text('  ${it['seq']}. ${it['dropoff']} — ${it['job_status']}'),
                       Wrap(spacing: 6, children: [
                         if (t['status'] == 'planned' || t['status'] == 'active') TextButton(onPressed: () => addStop('${t['id']}'), child: const Text('+ Commande')),
@@ -400,7 +401,7 @@ class _ScansTabState extends State<_ScansTab> {
           builder: (_, s) {
             if (s.connectionState != ConnectionState.done) return const LinearProgressIndicator();
             final l = s.data ?? [];
-            if (l.isEmpty) return const Text('Aucun scan.', style: TextStyle(color: C.muted));
+            if (l.isEmpty) return Text('Aucun scan.', style: TextStyle(color: C.muted));
             return Column(children: [for (final r in l) ListTile(dense: true, title: Text('${r['center_name']} · ${r['event']}'), subtitle: Text('${_d(r['created_at'])} ${r['order_id'] ?? ''} ${r['note'] ?? ''}'))]);
           },
         ),
@@ -450,10 +451,10 @@ class _AdminFraudPageState extends State<AdminFraudPage> {
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(14), children: [
         Row(children: [
-          const Expanded(child: Text('Antifraude', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink))),
+          Expanded(child: Text('Antifraude', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink))),
           FilledButton.icon(onPressed: scan, icon: const Icon(Icons.radar), label: const Text('Lancer l’analyse')),
         ]),
-        const Text('Détection automatique (toutes les 15 min si pg_cron est actif). Aucune action n’est prise sans votre décision : examinez puis bloquez le compte depuis sa fiche client si nécessaire.', style: TextStyle(color: C.muted, fontSize: 12)),
+        Text('Détection automatique (toutes les 15 min si pg_cron est actif). Aucune action n’est prise sans votre décision : examinez puis bloquez le compte depuis sa fiche client si nécessaire.', style: TextStyle(color: C.muted, fontSize: 12)),
         const SizedBox(height: 8),
         Wrap(spacing: 6, children: [for (final s in const [('open', 'À traiter'), ('reviewed', 'Examinées'), ('dismissed', 'Rejetées'), ('all', 'Toutes')]) ChoiceChip(label: Text(s.$2), selected: status == s.$1, onSelected: (_) { status = s.$1; reload(); })]),
         FutureBuilder<List<Map<String, dynamic>>>(
@@ -466,7 +467,7 @@ class _AdminFraudPageState extends State<AdminFraudPage> {
             return Column(children: [
               for (final a in l)
                 Card(
-                  color: a['severity'] == 'high' ? const Color(0xFFFFF1EC) : Colors.white,
+                  color: a['severity'] == 'high' ? const C.tint : C.card,
                   child: ListTile(
                     leading: Icon(a['severity'] == 'high' ? Icons.warning_amber_rounded : Icons.flag_outlined, color: a['severity'] == 'high' ? Colors.redAccent : C.yellow),
                     title: Text('${_labels[a['kind']] ?? a['kind']} · ${a['user_name'] ?? 'utilisateur'}', style: const TextStyle(fontWeight: FontWeight.w800)),

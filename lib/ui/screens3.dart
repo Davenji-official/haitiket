@@ -103,16 +103,16 @@ class _ConversationsState extends State<ConversationsScreen> {
               return Column(children: [
                 for (final c in items)
                   Card(
-                    color: Colors.white,
+                    color: C.card,
                     child: ListTile(
                       contentPadding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
                       leading: ChatAvatar(url: c['other_avatar'] as String?, label: '${c['other_name'] ?? ''}', shop: c['other_is_shop'] == true),
                       title: Row(children: [
                         Expanded(child: Text('${c['other_name'] ?? c['subject']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),
-                        Text(_chatWhen(c['last_at']), style: const TextStyle(color: C.muted, fontSize: 12)),
+                        Text(_chatWhen(c['last_at']), style: TextStyle(color: C.muted, fontSize: 12)),
                       ]),
                       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('${c['subject']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.green, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Text('${c['subject']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.green, fontSize: 12, fontWeight: FontWeight.w700)),
                         Text(c['last_deleted'] == true ? 'Message supprimé' : (c['last_body'] == null ? 'Aucun message' : '${c['last_body']}'), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ]),
                       trailing: PopupMenuButton<String>(
@@ -223,8 +223,8 @@ class _ChatState extends State<ChatScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${o?['name'] ?? title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 17)),
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 12)),
+              Text('${o?['name'] ?? title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 17)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
             ]),
           ),
         ]),
@@ -235,7 +235,7 @@ class _ChatState extends State<ChatScreen> {
             stream: stream,
             builder: (_, s) {
               final msgs = (s.data ?? []).where((m) => !hidden.contains('${m['id']}')).toList().reversed.toList();
-              if (msgs.isEmpty) return const Center(child: Text('Écrivez le premier message.', style: TextStyle(color: C.muted)));
+              if (msgs.isEmpty) return Center(child: Text('Écrivez le premier message.', style: TextStyle(color: C.muted)));
               return ListView.builder(
                 reverse: true,
                 padding: const EdgeInsets.all(14),
@@ -261,9 +261,9 @@ class _ChatState extends State<ChatScreen> {
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               constraints: const BoxConstraints(maxWidth: 300),
-                              decoration: BoxDecoration(color: mine ? C.ink : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+                              decoration: BoxDecoration(color: mine ? C.deep : C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
                               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                                if (!mine && senderName.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(senderName, style: const TextStyle(color: C.green, fontWeight: FontWeight.w800, fontSize: 12))),
+                                if (!mine && senderName.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(senderName, style: TextStyle(color: C.green, fontWeight: FontWeight.w800, fontSize: 12))),
                                 Text(deleted ? 'Message supprimé' : '${m['body']}', style: TextStyle(color: mine ? Colors.white : C.ink, fontSize: 16, fontStyle: deleted ? FontStyle.italic : FontStyle.normal)),
                                 Padding(padding: const EdgeInsets.only(top: 3), child: Text(_chatWhen(m['created_at']), style: TextStyle(color: mine ? Colors.white60 : C.muted, fontSize: 10))),
                               ]),
@@ -285,7 +285,7 @@ class _ChatState extends State<ChatScreen> {
             child: Row(children: [
               Expanded(child: TextField(controller: input, maxLength: 2000, buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null, onSubmitted: (_) => send(), decoration: const InputDecoration(hintText: 'Votre message'))),
               const SizedBox(width: 8),
-              IconButton.filled(onPressed: send, style: IconButton.styleFrom(backgroundColor: C.ink), icon: const Icon(Icons.send, color: Colors.white)),
+              IconButton.filled(onPressed: send, style: IconButton.styleFrom(backgroundColor: C.deep), icon: const Icon(Icons.send, color: Colors.white)),
             ]),
           ),
         ),
@@ -545,7 +545,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
               final open = List<Map<String, dynamic>>.from(d['open'] as List);
               final mine = List<Map<String, dynamic>>.from(d['mine'] as List);
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (app['verified_at'] != null) const Chip(avatar: Icon(Icons.verified, color: Colors.white, size: 16), label: Text('Livreur vérifié'), backgroundColor: C.green, labelStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                if (app['verified_at'] != null) Chip(avatar: Icon(Icons.verified, color: Colors.white, size: 16), label: Text('Livreur vérifié'), backgroundColor: C.green, labelStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(avail ? 'Disponible pour les livraisons' : 'Indisponible', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
@@ -554,32 +554,32 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                 ),
                 Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: withdrawCourierRole, icon: const Icon(Icons.person_remove_alt_1_outlined), label: const Text('Je ne souhaite plus être livreur'))),
                 const SizedBox(height: 12),
-                const Text('Missions proposées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                Text('Missions proposées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                 const SizedBox(height: 8),
                 if (!avail)
-                  const Text('Activez votre disponibilité pour voir les missions.', style: TextStyle(color: C.muted))
+                  Text('Activez votre disponibilité pour voir les missions.', style: TextStyle(color: C.muted))
                 else if (open.isEmpty)
-                  const Text('Aucune mission disponible pour le moment.', style: TextStyle(color: C.muted))
+                  Text('Aucune mission disponible pour le moment.', style: TextStyle(color: C.muted))
                 else
                   for (final j in open)
                     Card(
-                      color: Colors.white,
+                      color: C.card,
                       child: ListTile(
                         title: Text('Départ : ${j['pickup_area']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('Proposez votre tarif · ${j['currency'] ?? 'HTG'}', style: const TextStyle(color: C.green, fontWeight: FontWeight.w800)),
+                        subtitle: Text('Proposez votre tarif · ${j['currency'] ?? 'HTG'}', style: TextStyle(color: C.green, fontWeight: FontWeight.w800)),
                         trailing: FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
                       ),
                     ),
                 const MyToursCard(),
                 const SizedBox(height: 20),
-                const Text('Mes missions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                Text('Mes missions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                 const SizedBox(height: 8),
                 if (mine.isEmpty)
-                  const Text('Aucune mission acceptée.', style: TextStyle(color: C.muted))
+                  Text('Aucune mission acceptée.', style: TextStyle(color: C.muted))
                 else
                   for (final j in mine)
                     Card(
-                      color: Colors.white,
+                      color: C.card,
                       child: Column(children: [ListTile(
                         title: Text('${j['pickup_area']} → ${j['dropoff_address']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text('${(j['pay_minor'] as num) > 0 ? money(j['pay_minor'] as num, j['currency'] as String) : 'Prix choisi par offre'} · ${j['status']}'),

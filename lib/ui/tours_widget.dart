@@ -19,17 +19,17 @@ class MyToursCard extends StatelessWidget {
           if (l.isEmpty) return const SizedBox.shrink();
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const SizedBox(height: 12),
-            const Text('Mes tournées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+            Text('Mes tournées', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
             for (final t in l)
               Card(
                 color: C.mint,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${t['center_name'] ?? 'Tournée'} · ${t['status'] == 'active' ? 'en cours' : 'planifiée'}', style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
-                    if (t['center_address'] != null) Text('Départ : ${t['center_address']}', style: const TextStyle(color: C.muted)),
+                    Text('${t['center_name'] ?? 'Tournée'} · ${t['status'] == 'active' ? 'en cours' : 'planifiée'}', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
+                    if (t['center_address'] != null) Text('Départ : ${t['center_address']}', style: TextStyle(color: C.muted)),
                     for (final it in (t['items'] as List)) Text('${it['seq']}. ${it['dropoff']} — ${it['job_status']}'),
-                    if (t['notes'] != null) Text('Note : ${t['notes']}', style: const TextStyle(color: C.muted)),
+                    if (t['notes'] != null) Text('Note : ${t['notes']}', style: TextStyle(color: C.muted)),
                   ]),
                 ),
               ),

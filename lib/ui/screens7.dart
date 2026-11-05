@@ -73,7 +73,7 @@ class _MediaPickerState extends State<MediaPickerField> {
                       height: 84,
                       clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16), border: Border.all(color: i == 0 ? C.terracotta : C.line, width: i == 0 ? 3 : 1)),
-                      child: widget.items[i]['kind'] == 'video' ? const Icon(Icons.play_circle_fill, size: 40, color: C.green) : DarkSafe(child: Image.network(widget.items[i]['url']!, fit: BoxFit.cover)),
+                      child: widget.items[i]['kind'] == 'video' ? Icon(Icons.play_circle_fill, size: 40, color: C.green) : DarkSafe(child: Image.network(widget.items[i]['url']!, fit: BoxFit.cover)),
                     ),
                     Positioned(
                       right: -6,
@@ -83,7 +83,7 @@ class _MediaPickerState extends State<MediaPickerField> {
                           setState(() => widget.items.removeAt(i));
                           widget.onChanged();
                         },
-                        child: const CircleAvatar(radius: 12, backgroundColor: C.ink, child: Icon(Icons.close, size: 14, color: Colors.white)),
+                        child: CircleAvatar(radius: 12, backgroundColor: C.deep, child: Icon(Icons.close, size: 14, color: Colors.white)),
                       ),
                     ),
                   ]),
@@ -95,7 +95,7 @@ class _MediaPickerState extends State<MediaPickerField> {
           OutlinedButton.icon(onPressed: busy ? null : () => pick(false), icon: const Icon(Icons.photo_library_outlined), label: Text(busy ? 'Envoi…' : 'Ajouter des photos')),
           OutlinedButton.icon(onPressed: busy ? null : () => pick(true), icon: const Icon(Icons.videocam_outlined), label: const Text('Ajouter une vidéo')),
         ]),
-        const Padding(padding: EdgeInsets.only(top: 6), child: Text('La première photo est la couverture du produit.', style: TextStyle(color: C.muted))),
+        Padding(padding: EdgeInsets.only(top: 6), child: Text('La première photo est la couverture du produit.', style: TextStyle(color: C.muted))),
       ]);
 }
 
@@ -114,7 +114,7 @@ class _SpecsFormState extends State<SpecsForm> {
 
   List<String> listOf(String k) => List<String>.from((widget.values[k] as List?) ?? const []);
 
-  Widget title(String t) => Padding(padding: const EdgeInsets.only(top: 14, bottom: 8), child: Text(t, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)));
+  Widget title(String t) => Padding(padding: const EdgeInsets.only(top: 14, bottom: 8), child: Text(t, style: TextStyle(fontWeight: FontWeight.w800, color: C.ink, fontSize: 16)));
 
   Widget field(SpecField f) {
     switch (f.type) {
@@ -172,7 +172,7 @@ class _SpecsFormState extends State<SpecsForm> {
                     child: curColors.any((x) => x['name'] == e.key) ? Icon(Icons.check, size: 20, color: e.key == 'Blanc' || e.key == 'Jaune' || e.key == 'Beige' ? Colors.black : Colors.white) : null,
                   ),
                   const SizedBox(height: 2),
-                  Text(e.key, style: const TextStyle(fontSize: 11, color: C.muted)),
+                  Text(e.key, style: TextStyle(fontSize: 11, color: C.muted)),
                 ]),
               ),
           ]),
@@ -261,14 +261,14 @@ class _NewProductState extends State<NewProductScreen> {
   Widget section(String title, IconData icon, List<Widget> children, {String? hint}) => Container(
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: C.line)),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(22), border: Border.all(color: C.line)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Icon(icon, color: C.green, size: 22),
             const SizedBox(width: 8),
-            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink))),
+            Expanded(child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink))),
           ]),
-          if (hint != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(hint, style: const TextStyle(color: C.muted, fontSize: 13))),
+          if (hint != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(hint, style: TextStyle(color: C.muted, fontSize: 13))),
           const SizedBox(height: 12),
           ...children,
         ]),
@@ -279,7 +279,7 @@ class _NewProductState extends State<NewProductScreen> {
     final fields = specsFor(cat?['name'] as String?);
     final hasCondition = fields.any((f) => f.key == 'condition');
     return Scaffold(
-      appBar: AppBar(title: Text(widget.bazar ? 'Nouvelle annonce' : 'Nouveau produit', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+      appBar: AppBar(title: Text(widget.bazar ? 'Nouvelle annonce' : 'Nouveau produit', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (widget.bazar)
           Container(
@@ -290,7 +290,7 @@ class _NewProductState extends State<NewProductScreen> {
               future: bazarFee,
               builder: (_, f) => Text(
                 'Annonce Bazar${f.data == null ? '' : ' : ${f.data!.toStringAsFixed(2)} USD'} pour 14 jours. Remplissez le formulaire, puis payez avec votre portefeuille : l\'annonce devient visible après paiement. Une annonce non renouvelée est bloquée à l\'expiration.',
-                style: const TextStyle(color: C.ink, fontWeight: FontWeight.w600, height: 1.35),
+                style: TextStyle(color: C.ink, fontWeight: FontWeight.w600, height: 1.35),
               ),
             ),
           ),
@@ -339,12 +339,12 @@ class _NewProductState extends State<NewProductScreen> {
             ),
           ]),
           if (variants.isEmpty) Field(stock, widget.bazar ? 'Quantité disponible' : 'Quantité en stock', type: TextInputType.number),
-          if (variants.isNotEmpty) const Text('Le stock est géré par variante (voir plus bas).', style: TextStyle(color: C.muted)),
+          if (variants.isNotEmpty) Text('Le stock est géré par variante (voir plus bas).', style: TextStyle(color: C.muted)),
         ]),
         if (widget.bazar)
           section('État et lieu', Icons.place_outlined, [
             if (!hasCondition) ...[
-              const Text('État de l\'article', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+              Text('État de l\'article', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
               const SizedBox(height: 6),
               Wrap(spacing: 8, children: [
                 for (final c in ['Neuf', 'Comme neuf', 'Bon état', 'À réparer'])
@@ -445,7 +445,7 @@ Future<void> startBazarListing(BuildContext context) async {
           FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Ouvrir le formulaire'))],
       ));
       if (openKyc == true && context.mounted) {
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Vérification d’identité', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: Text('Vérification d’identité', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), body: const NetworkScreen(kycOnly: true))));
       }
     } else {
       toast(context, message);

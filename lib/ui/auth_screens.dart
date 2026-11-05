@@ -8,16 +8,16 @@ const termsVersion = '2026-10';
 
 class LegalScreen extends StatelessWidget {
   const LegalScreen({super.key});
-  Widget h(String t) => Padding(padding: const EdgeInsets.only(top: 18, bottom: 6), child: Text(t, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)));
-  Widget p(String t) => Text(t, style: const TextStyle(fontSize: 15, color: C.muted, height: 1.45));
+  Widget h(String t) => Padding(padding: const EdgeInsets.only(top: 18, bottom: 6), child: Text(t, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)));
+  Widget p(String t) => Text(t, style: TextStyle(fontSize: 15, color: C.muted, height: 1.45));
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Conditions et confidentialité', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text('Conditions et confidentialité', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFFFF1EC), borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(color: const C.tint, borderRadius: BorderRadius.circular(14)),
             child: const Text('Version provisoire (octobre 2026) : ce texte résume le fonctionnement de HAITIKET et doit être validé par un juriste avant le lancement commercial.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)),
           ),
           h("Conditions d'utilisation"),
@@ -112,7 +112,7 @@ class _AuthPanelState extends State<AuthPanel> {
             duration: const Duration(milliseconds: 250),
             padding: const EdgeInsets.symmetric(vertical: 12),
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: signup == value ? C.ink : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.line)),
+            decoration: BoxDecoration(color: signup == value ? C.deep : C.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.line)),
             child: Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: signup == value ? Colors.white : C.ink)),
           ),
         ),
@@ -143,7 +143,7 @@ class _AuthPanelState extends State<AuthPanel> {
             value: accepted,
             onChanged: (v) => setState(() => accepted = v ?? false),
             title: const Text("J'accepte les conditions d'utilisation et la politique de confidentialité", style: TextStyle(fontSize: 14)),
-            subtitle: GestureDetector(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen())), child: const Text('Lire le texte', style: TextStyle(color: C.green, fontWeight: FontWeight.w800, decoration: TextDecoration.underline))),
+            subtitle: GestureDetector(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen())), child: Text('Lire le texte', style: TextStyle(color: C.green, fontWeight: FontWeight.w800, decoration: TextDecoration.underline))),
           ),
         ] else
           Align(alignment: Alignment.centerRight, child: TextButton(onPressed: forgot, child: const Text('Mot de passe oublié ?'))),
@@ -180,7 +180,7 @@ class _ResetState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Nouveau mot de passe', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text('Nouveau mot de passe', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           Field(a, 'Nouveau mot de passe', obscure: true),
           Field(b, 'Confirmer le mot de passe', obscure: true),

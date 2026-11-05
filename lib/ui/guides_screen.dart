@@ -38,23 +38,23 @@ class GuidesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text("Guides d'utilisation", style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text("Guides d'utilisation", style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
-          const Text('Choisissez votre guide, en français ou en kreyòl. Chaque guide s\'ouvre en PDF et contient des exemples.', style: TextStyle(color: C.muted, height: 1.4)),
+          Text('Choisissez votre guide, en français ou en kreyòl. Chaque guide s\'ouvre en PDF et contient des exemples.', style: TextStyle(color: C.muted, height: 1.4)),
           const SizedBox(height: 14),
           for (final g in _items)
             Card(
-              color: Colors.white,
+              color: C.card,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
                     Icon(g.icon, color: C.green),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(g.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink))),
+                    Expanded(child: Text(g.title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink))),
                   ]),
                   const SizedBox(height: 6),
-                  Text(g.text, style: const TextStyle(color: C.muted)),
+                  Text(g.text, style: TextStyle(color: C.muted)),
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(child: OutlinedButton.icon(onPressed: () => _open(context, g.file, 'fr'), icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('Français'))),

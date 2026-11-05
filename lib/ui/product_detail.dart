@@ -34,7 +34,7 @@ class _GalleryState extends State<_Gallery> {
     super.dispose();
   }
 
-  Widget placeholder() => Container(color: C.mint, child: const Icon(Icons.shopping_basket_outlined, size: 72, color: C.green));
+  Widget placeholder() => Container(color: C.mint, child: Icon(Icons.shopping_basket_outlined, size: 72, color: C.green));
 
   @override
   Widget build(BuildContext context) => ClipRRect(
@@ -59,7 +59,7 @@ class _GalleryState extends State<_Gallery> {
                       if (it['kind'] == 'video') {
                         return GestureDetector(
                           onTap: () => launchUrl(Uri.parse(it['url'] as String), mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication),
-                          child: Container(color: C.ink, child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.play_circle_fill, size: 84, color: Colors.white), SizedBox(height: 8), Text('Voir la vidéo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))])),
+                          child: Container(color: C.deep, child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.play_circle_fill, size: 84, color: Colors.white), SizedBox(height: 8), Text('Voir la vidéo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))])),
                         );
                       }
                       return GestureDetector(
@@ -113,7 +113,7 @@ class _GalleryState extends State<_Gallery> {
                     right: 0,
                     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                       for (var i = 0; i < items.length; i++)
-                        AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 3), width: i == idx ? 22 : 8, height: 8, decoration: BoxDecoration(color: i == idx ? Colors.white : Colors.white54, borderRadius: BorderRadius.circular(6))),
+                        AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 3), width: i == idx ? 22 : 8, height: 8, decoration: BoxDecoration(color: i == idx ? C.card : C.card54, borderRadius: BorderRadius.circular(6))),
                     ]),
                   ),
               ]);
@@ -171,7 +171,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
           child: Row(children: [
             const Icon(Icons.local_offer_outlined, size: 18, color: C.terracotta),
             const SizedBox(width: 8),
-            Expanded(child: Text('Dès ${x['min_qty']}${x['label'] == null ? '' : ' (${x['label']})'} : ${money(x['unit_price_minor'] as num, 'HTG')} / unité', style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink))),
+            Expanded(child: Text('Dès ${x['min_qty']}${x['label'] == null ? '' : ' (${x['label']})'} : ${money(x['unit_price_minor'] as num, 'HTG')} / unité', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink))),
           ]),
         ),
     ];
@@ -188,7 +188,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
           SizedBox(width: 54, child: Center(child: Text('$quantity', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)))),
           IconButton.filledTonal(onPressed: quantity < availableStock ? () => setState(() => quantity++) : null, icon: const Icon(Icons.add)),
           const SizedBox(width: 8),
-          Expanded(child: Text('Disponible : ${availableStock < 0 ? 0 : availableStock} · ${(p['unit_label'] as String?) ?? 'unité'}', style: const TextStyle(color: C.muted))),
+          Expanded(child: Text('Disponible : ${availableStock < 0 ? 0 : availableStock} · ${(p['unit_label'] as String?) ?? 'unité'}', style: TextStyle(color: C.muted))),
         ]),
       ]);
 
@@ -226,10 +226,10 @@ class _ProductDetailState extends State<ProductDetailScreen> {
   Widget chip(IconData i, String t) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(14)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: C.green), const SizedBox(width: 6), Text(t, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 18, color: C.green), const SizedBox(width: 6), Text(t, style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))]),
       );
 
-  Widget heading(String t) => Padding(padding: const EdgeInsets.only(top: 18, bottom: 8), child: Text(t, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)));
+  Widget heading(String t) => Padding(padding: const EdgeInsets.only(top: 18, bottom: 8), child: Text(t, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)));
 
   List<Widget> specs() {
     final attrs = Map<String, dynamic>.from((p['attributes'] as Map?) ?? const {});
@@ -247,9 +247,9 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         Wrap(spacing: 14, runSpacing: 10, children: [
           for (final c in colors)
             Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 38, height: 38, decoration: BoxDecoration(color: hexColor(c['hex'] as String?) ?? C.line, shape: BoxShape.circle, border: Border.all(color: C.line, width: 2)), child: hexColor(c['hex'] as String?) == null ? const Icon(Icons.palette_outlined, size: 18, color: C.muted) : null),
+              Container(width: 38, height: 38, decoration: BoxDecoration(color: hexColor(c['hex'] as String?) ?? C.line, shape: BoxShape.circle, border: Border.all(color: C.line, width: 2)), child: hexColor(c['hex'] as String?) == null ? Icon(Icons.palette_outlined, size: 18, color: C.muted) : null),
               const SizedBox(height: 2),
-              Text('${c['name']}', style: const TextStyle(fontSize: 12, color: C.muted)),
+              Text('${c['name']}', style: TextStyle(fontSize: 12, color: C.muted)),
             ]),
         ]),
       ]);
@@ -258,7 +258,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
       out.add(heading('Caractéristiques'));
       for (final e in attrs.entries) {
         final v = e.value is List ? (e.value as List).join(', ') : '${e.value}';
-        out.add(Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 140, child: Text(specLabel(cat, e.key), style: const TextStyle(color: C.muted))), Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink)))])));
+        out.add(Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 140, child: Text(specLabel(cat, e.key), style: TextStyle(color: C.muted))), Expanded(child: Text(v, style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)))])));
       }
     }
     return out;
@@ -273,16 +273,16 @@ class _ProductDetailState extends State<ProductDetailScreen> {
     final bazar = p['source'] == 'bazar';
     final unit = (p['unit_label'] as String?) ?? 'unité';
     return Scaffold(
-      appBar: AppBar(title: Text('$shop', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)), actions: [IconButton(tooltip: 'Signaler', icon: const Icon(Icons.flag_outlined), onPressed: () => reportDialog(context, 'product', p['id'] as String))]),
+      appBar: AppBar(title: Text('$shop', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)), actions: [IconButton(tooltip: 'Signaler', icon: const Icon(Icons.flag_outlined), onPressed: () => reportDialog(context, 'product', p['id'] as String))]),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         _Gallery(productId: p['id'] as String, cover: p['image_url'] as String?, overlay: HeartButton(p['id'] as String, onImage: true)),
         const SizedBox(height: 18),
         Row(children: [
-          Expanded(child: Text('${p['name']}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: C.ink))),
+          Expanded(child: Text('${p['name']}', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: C.ink))),
           if (bazar) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(12)), child: const Text('Bazar', style: TextStyle(fontWeight: FontWeight.w800))),
         ]),
         const SizedBox(height: 6),
-        Text('${money((variant?['price_minor'] as num?) ?? (p['price_minor'] as num), (p['currency'] ?? 'HTG') as String)}${(variant?['unit_label'] as String? ?? unit) == 'unité' ? '' : ' / ${(variant?['unit_label'] as String? ?? unit)}'}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
+        Text('${money((variant?['price_minor'] as num?) ?? (p['price_minor'] as num), (p['currency'] ?? 'HTG') as String)}${(variant?['unit_label'] as String? ?? unit) == 'unité' ? '' : ' / ${(variant?['unit_label'] as String? ?? unit)}'}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
         const SizedBox(height: 10),
         FutureBuilder<Map<String, dynamic>>(
           future: loadStats(shopId),
@@ -304,9 +304,9 @@ class _ProductDetailState extends State<ProductDetailScreen> {
             if (shopId != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopScreen(shopId)));
           },
           child: Row(children: [
-            const Icon(Icons.storefront, color: C.green, size: 20),
+            Icon(Icons.storefront, color: C.green, size: 20),
             const SizedBox(width: 6),
-            Text('Voir la boutique $shop', style: const TextStyle(color: C.green, fontWeight: FontWeight.w800, decoration: TextDecoration.underline)),
+            Text('Voir la boutique $shop', style: TextStyle(color: C.green, fontWeight: FontWeight.w800, decoration: TextDecoration.underline)),
           ]),
         ),
         const SizedBox(height: 6),
@@ -318,7 +318,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         quantitySelector(),
         if (desc.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Text(desc, style: const TextStyle(fontSize: 17, color: C.muted, height: 1.45)),
+          Text(desc, style: TextStyle(fontSize: 17, color: C.muted, height: 1.45)),
         ],
         ...specs(),
         const SizedBox(height: 24),

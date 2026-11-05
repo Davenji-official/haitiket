@@ -213,12 +213,12 @@ class MascotHeader extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      for (final l in _lines()) Text(l, style: const TextStyle(fontSize: 38, height: 1.05, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)),
+                      for (final l in _lines()) Text(l, style: TextStyle(fontSize: 38, height: 1.05, fontWeight: FontWeight.w800, color: C.ink, letterSpacing: -1)),
                     ]),
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 8),
-                    Text(subtitle!, style: const TextStyle(fontSize: 15.5, color: C.muted, height: 1.4)),
+                    Text(subtitle!, style: TextStyle(fontSize: 15.5, color: C.muted, height: 1.4)),
                   ],
                   if (action != null) ...[const SizedBox(height: 12), action!],
                 ]),

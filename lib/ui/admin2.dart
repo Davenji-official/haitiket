@@ -80,11 +80,11 @@ class _DashState extends State<AdminDashboardTab> {
     return Container(
       width: 160,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: alert && n > 0 ? const Color(0xFFFFF1EC) : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: alert && n > 0 ? C.terracotta : C.line)),
+      decoration: BoxDecoration(color: alert && n > 0 ? const C.tint : C.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: alert && n > 0 ? C.terracotta : C.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(money_ ? money(n, cur) : '$n', style: TextStyle(fontSize: money_ ? 18 : 28, fontWeight: FontWeight.w900, color: alert && n > 0 ? C.terracotta : C.ink)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: C.muted, fontSize: 13)),
+        Text(label, style: TextStyle(color: C.muted, fontSize: 13)),
       ]),
     );
   }
@@ -94,12 +94,12 @@ class _DashState extends State<AdminDashboardTab> {
     return Container(
       margin: const EdgeInsets.only(top: 18),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+        Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
         const SizedBox(height: 12),
         for (final e in values) Padding(padding: const EdgeInsets.only(bottom: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Expanded(child: Text(e.key, style: const TextStyle(fontSize: 12, color: C.muted))), Text('${e.value}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: C.ink))]),
+          Row(children: [Expanded(child: Text(e.key, style: TextStyle(fontSize: 12, color: C.muted))), Text('${e.value}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: C.ink))]),
           const SizedBox(height: 4),
           ClipRRect(borderRadius: BorderRadius.circular(6), child: LayoutBuilder(builder: (context, constraints) => Container(height: 9, width: constraints.maxWidth, color: C.mint, child: Align(alignment: Alignment.centerLeft, child: Container(width: constraints.maxWidth * (e.value / maxValue).clamp(0, 1).toDouble(), color: C.green))))),
         ])),
@@ -108,7 +108,7 @@ class _DashState extends State<AdminDashboardTab> {
   }
 
   Widget group(String title, List<Widget> tiles) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.only(top: 18, bottom: 8), child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink))),
+        Padding(padding: const EdgeInsets.only(top: 18, bottom: 8), child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink))),
         Wrap(spacing: 10, runSpacing: 10, children: tiles),
       ]);
 
@@ -389,12 +389,12 @@ class _SettingsState extends State<AdminSettingsTab> {
           return ListView(padding: const EdgeInsets.all(14), children: [
             for (final d in defs)
               Card(
-                color: Colors.white,
+                color: C.card,
                 child: ListTile(
                   title: Text(d[1], style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text('${d[2]}\nValeur actuelle : ${m[d[0]] ?? 'non définie'}'),
                   isThreeLine: true,
-                  trailing: IconButton(icon: const Icon(Icons.edit_outlined, color: C.green), onPressed: () => edit(d[0], d[1])),
+                  trailing: IconButton(icon: Icon(Icons.edit_outlined, color: C.green), onPressed: () => edit(d[0], d[1])),
                 ),
               ),
           ]);
@@ -442,7 +442,7 @@ class _UsersState extends State<AdminUsersTab> {
             return Column(children: [
               for (final u in l)
                 Card(
-                  color: u['suspended'] == true ? const Color(0xFFFFF1EC) : Colors.white,
+                  color: u['suspended'] == true ? const C.tint : C.card,
                   child: ListTile(
                     title: Text('${u['display_name'] ?? 'Sans nom'}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${u['email'] ?? ''}${u['suspended'] == true ? '\nSUSPENDU' : ''}'),
@@ -496,9 +496,9 @@ class _AnnouncementsState extends State<AdminAnnouncementsTab> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(14), children: [
-    const Text('Message diffusé à tous les utilisateurs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
+    Text('Message diffusé à tous les utilisateurs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
     const SizedBox(height: 6),
-    const Text('Une seule annonce globale est active à la fois. La publication remplace l’annonce précédente. Les utilisateurs doivent être en ligne ou rouvrir l’application pour voir la mise à jour.', style: TextStyle(color: C.muted, height: 1.4)),
+    Text('Une seule annonce globale est active à la fois. La publication remplace l’annonce précédente. Les utilisateurs doivent être en ligne ou rouvrir l’application pour voir la mise à jour.', style: TextStyle(color: C.muted, height: 1.4)),
     const SizedBox(height: 14),
     TextField(controller: title, maxLength: 100, decoration: const InputDecoration(labelText: 'Titre', hintText: 'Ex. Maintenance programmée')),
     const SizedBox(height: 10),
@@ -513,13 +513,13 @@ class _AnnouncementsState extends State<AdminAnnouncementsTab> {
     const SizedBox(height: 12),
     FilledButton.icon(onPressed: busy ? null : publish, icon: const Icon(Icons.campaign_outlined), label: Text(busy ? 'Publication…' : 'Publier pour tous')),
     const SizedBox(height: 24),
-    const Text('Historique des messages', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink)),
+    Text('Historique des messages', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink)),
     FutureBuilder<List<Map<String, dynamic>>>(future: f, builder: (_, s) {
       if (s.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
       if (s.hasError) return Padding(padding: const EdgeInsets.all(8), child: Text('Historique indisponible : ${Repo.err(s.error!)}'));
       final rows = s.data ?? const [];
       if (rows.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('Aucun message publié.'));
-      return Column(children: [for (final a in rows) Card(color: Colors.white, child: ListTile(
+      return Column(children: [for (final a in rows) Card(color: C.card, child: ListTile(
         leading: Icon(a['active'] == true ? Icons.campaign : Icons.history, color: a['active'] == true ? C.terracotta : C.muted),
         title: Text('${a['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text('${a['body']}\nStatut : ${a['active'] == true ? 'ACTIF' : 'Inactif'} · Type : ${a['severity']}'),
@@ -599,9 +599,9 @@ class _AdminAuditLogTabState extends State<AdminAuditLogTab> {
       final rows = all.where((row) => term.isEmpty || [row['action'], row['resource'], row['reason'], row['actor'], row['resource_id']]
         .any((v) => '${v ?? ''}'.toLowerCase().contains(term))).toList();
       return ListView(padding: const EdgeInsets.all(14), children: [
-        const Text('Journal des actions administratives', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
+        Text('Journal des actions administratives', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
         const SizedBox(height: 6),
-        const Text('Historique en lecture seule des actions consignées par le serveur. Les entrées visibles dépendent des événements effectivement enregistrés.', style: TextStyle(color: C.muted, height: 1.4)),
+        Text('Historique en lecture seule des actions consignées par le serveur. Les entrées visibles dépendent des événements effectivement enregistrés.', style: TextStyle(color: C.muted, height: 1.4)),
         const SizedBox(height: 12),
         Row(children: [Expanded(child: TextField(controller: filter, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Filtrer action, ressource, motif ou identifiant', prefixIcon: Icon(Icons.search)))), const SizedBox(width: 8), IconButton(tooltip: 'Actualiser', onPressed: reload, icon: const Icon(Icons.refresh))]),
         const SizedBox(height: 8),
@@ -618,14 +618,14 @@ class _AdminAuditLogTabState extends State<AdminAuditLogTab> {
           label: Text('Exporter les ${rows.length} entrées filtrées (CSV)'),
         ),
         const SizedBox(height: 10),
-        Text('${rows.length} entrée(s) affichée(s) · ${all.length} chargée(s), maximum 200', style: const TextStyle(color: C.muted)),
+        Text('${rows.length} entrée(s) affichée(s) · ${all.length} chargée(s), maximum 200', style: TextStyle(color: C.muted)),
         if (rows.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Text('Aucune action ne correspond à ce filtre.')),
-        for (final row in rows) Card(color: Colors.white, child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: Text('${row['action'] ?? 'Action inconnue'}', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))), Text(displayDate(row['created_at']), style: const TextStyle(fontSize: 12, color: C.muted))]),
+        for (final row in rows) Card(color: C.card, child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: Text('${row['action'] ?? 'Action inconnue'}', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))), Text(displayDate(row['created_at']), style: TextStyle(fontSize: 12, color: C.muted))]),
           const SizedBox(height: 5),
-          Text('Ressource : ${row['resource'] ?? '—'}${row['resource_id'] == null ? '' : ' · ${row['resource_id']}'}', style: const TextStyle(color: C.muted)),
-          if ('${row['reason'] ?? ''}'.trim().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Motif / détail : ${row['reason']}', style: const TextStyle(color: C.ink))),
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text('Acteur : ${row['actor'] ?? '—'}', style: const TextStyle(fontSize: 12, color: C.muted))),
+          Text('Ressource : ${row['resource'] ?? '—'}${row['resource_id'] == null ? '' : ' · ${row['resource_id']}'}', style: TextStyle(color: C.muted)),
+          if ('${row['reason'] ?? ''}'.trim().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Motif / détail : ${row['reason']}', style: TextStyle(color: C.ink))),
+          Padding(padding: const EdgeInsets.only(top: 4), child: Text('Acteur : ${row['actor'] ?? '—'}', style: TextStyle(fontSize: 12, color: C.muted))),
         ]))),
       ]);
     },
@@ -656,13 +656,13 @@ class _AdminOrderHistoryPanelState extends State<AdminOrderHistoryPanel> {
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.line)),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+        Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
         const SizedBox(height: 10),
         for (final row in rows) ...[
           Row(children: [
-            SizedBox(width: 48, child: Text('${row['day']}'.toString().substring(5), style: const TextStyle(fontSize: 11, color: C.muted))),
+            SizedBox(width: 48, child: Text('${row['day']}'.toString().substring(5), style: TextStyle(fontSize: 11, color: C.muted))),
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(5),
@@ -695,10 +695,10 @@ class _AdminOrderHistoryPanelState extends State<AdminOrderHistoryPanel> {
     decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.line)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Expanded(child: Text('Historique des commandes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink))),
+        Expanded(child: Text('Historique des commandes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink))),
         IconButton(tooltip: 'Actualiser', onPressed: reload, icon: const Icon(Icons.refresh)),
       ]),
-      const Text('Commandes et montants encaissés par jour. Les devises restent séparées.', style: TextStyle(color: C.muted, fontSize: 12)),
+      Text('Commandes et montants encaissés par jour. Les devises restent séparées.', style: TextStyle(color: C.muted, fontSize: 12)),
       const SizedBox(height: 10),
       Wrap(spacing: 10, runSpacing: 8, children: [
         DropdownButton<int>(value: days, items: const [7, 30, 90].map((d) => DropdownMenuItem(value: d, child: Text('$d jours'))).toList(), onChanged: (v) { if (v != null) setState(() { days = v; future = Repo.adminOrderHistory(days: days, currency: currency); }); }),
@@ -712,12 +712,12 @@ class _AdminOrderHistoryPanelState extends State<AdminOrderHistoryPanel> {
         final currencies = currency == 'ALL' ? const ['HTG', 'USD'] : [currency];
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           for (final cur in currencies) ...[
-            Padding(padding: const EdgeInsets.only(top: 12), child: Text(cur, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: C.green))),
+            Padding(padding: const EdgeInsets.only(top: 12), child: Text(cur, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: C.green))),
             _seriesChart('Nombre de commandes — $cur', all.where((row) => row['currency'] == cur).toList(), 'order_count'),
             _seriesChart('Montant des commandes payées (unités mineures) — $cur', all.where((row) => row['currency'] == cur).toList(), 'paid_total_minor'),
           ],
           const SizedBox(height: 6),
-          const Text('Les montants sont affichés en unités mineures (centimes) ; ce graphique est un rapport opérationnel, pas un relevé comptable.', style: TextStyle(fontSize: 11, color: C.muted)),
+          Text('Les montants sont affichés en unités mineures (centimes) ; ce graphique est un rapport opérationnel, pas un relevé comptable.', style: TextStyle(fontSize: 11, color: C.muted)),
         ]);
       }),
     ]),

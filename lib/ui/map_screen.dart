@@ -65,7 +65,7 @@ class _Pin extends StatelessWidget {
             width: size,
             height: size,
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: accent, width: selected ? 4 : 3), boxShadow: [BoxShadow(color: accent.withValues(alpha: .55), blurRadius: selected ? 18 : 7)]),
+            decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, border: Border.all(color: accent, width: selected ? 4 : 3), boxShadow: [BoxShadow(color: accent.withValues(alpha: .55), blurRadius: selected ? 18 : 7)]),
             child: logo != null ? DarkSafe(child: Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent))) : Icon(official ? Icons.verified : (pro ? Icons.storefront : Icons.person_pin_circle), color: accent, size: selected ? 30 : 24),
           ),
         ]),
@@ -92,7 +92,7 @@ class _Cluster extends StatelessWidget {
           width: size,
           height: size,
           alignment: Alignment.center,
-          decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [C.ink, C.green], begin: Alignment.topLeft, end: Alignment.bottomRight), border: Border.all(color: Colors.white, width: 3), boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 10)]),
+          decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [C.deep, C.green], begin: Alignment.topLeft, end: Alignment.bottomRight), border: Border.all(color: Colors.white, width: 3), boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 10)]),
           child: Text('$count', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
         ),
       ),
@@ -124,11 +124,20 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   double zoom = 10.5;
   List<LatLng> route = [];
   Map<String, dynamic>? routeInfo;
+  bool follow = false, arrived = false;
+  String mode = 'moto'; // walk | moto | car (estimation du temps)
+  DateTime? lastReroute;
+  double remainKm = 0;
+  Timer? tick;
 
   @override
   void initState() {
     super.initState();
     refresh(force: !ShopGeoCache.fresh);
+    autoGps();
+    tick = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && me != null) setState(() {});
+    });
     // Carte vivante : boutiques actualisées toutes les 30 s, distances recalculées en continu avec le GPS.
     liveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && !loading) refresh(force: true);
@@ -138,6 +147,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     liveTimer?.cancel();
+    tick?.cancel();
     posSub?.cancel();
     pulse.dispose();
     fly?.dispose();
@@ -213,18 +223,91 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     flyTo(pos(s), math.max(zoom, 14.5));
   }
 
+  void startStream() {
+    posSub ??= Geolocator.getPositionStream(locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 4)).listen(onMove, onError: (_) {});
+  }
+
+  /// Démarre le GPS tout seul si l'autorisation est déjà accordée (sans interrompre l'utilisateur).
+  Future<void> autoGps() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      final perm = await Geolocator.checkPermission();
+      if (perm != LocationPermission.always && perm != LocationPermission.whileInUse) return;
+      final p = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)));
+      if (!mounted) return;
+      setState(() => me = p);
+      startStream();
+    } catch (_) {}
+  }
+
   Future<void> locate() async {
     final p = await myPosition(context);
     if (p == null || !mounted) return;
     HapticFeedback.mediumImpact();
-    setState(() => me = p);
-    posSub ??= Geolocator.getPositionStream(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20)).listen((np) {
-      if (mounted) setState(() => me = np);
-    }, onError: (_) {});
-    flyTo(LatLng(p.latitude, p.longitude), 15);
+    setState(() {
+      me = p;
+      follow = true;
+    });
+    startStream();
+    flyTo(LatLng(p.latitude, p.longitude), 16);
   }
 
-  Future<void> routeTo(Map<String, dynamic> s) async {
+  double get speedKmh => (me?.speed ?? 0) * 3.6;
+
+  /// Temps estimé selon le mode ; la vitesse GPS réelle est prise en compte quand l'utilisateur se déplace.
+  int etaMin(double km) {
+    final base = mode == 'walk' ? 5.0 : (mode == 'moto' ? 24.0 : 18.0);
+    final live = speedKmh;
+    final v = live >= 12 ? (live * .6 + base * .4) : base;
+    return math.max(1, (km / v * 60).round());
+  }
+
+  /// Chaque nouvelle position GPS : distances, cap, suivi caméra, progression de l'itinéraire et réacheminement.
+  void onMove(Position np) {
+    if (!mounted) return;
+    setState(() => me = np);
+    if (follow && ready) {
+      try {
+        mc.move(LatLng(np.latitude, np.longitude), mc.camera.zoom);
+      } catch (_) {}
+    }
+    if (route.isNotEmpty && selectedId != null) updateProgress(np);
+  }
+
+  void updateProgress(Position np) {
+    final dest = route.last;
+    double remaining, off = 0;
+    if (routeDotted || route.length < 2) {
+      remaining = distKm(np.latitude, np.longitude, dest.latitude, dest.longitude);
+    } else {
+      var bi = 0;
+      var bd = double.infinity;
+      for (var i = 0; i < route.length; i++) {
+        final d = distKm(np.latitude, np.longitude, route[i].latitude, route[i].longitude);
+        if (d < bd) {
+          bd = d;
+          bi = i;
+        }
+      }
+      off = bd;
+      remaining = bd;
+      for (var i = bi; i < route.length - 1; i++) {
+        remaining += distKm(route[i].latitude, route[i].longitude, route[i + 1].latitude, route[i + 1].longitude);
+      }
+    }
+    remainKm = remaining;
+    arrived = remaining < 0.04;
+    if (!routeDotted && off > 0.08 && !routing && !arrived) {
+      final now = DateTime.now();
+      if (lastReroute == null || now.difference(lastReroute!).inSeconds > 15) {
+        lastReroute = now;
+        final t = shops.where((x) => x['id'] == selectedId);
+        if (t.isNotEmpty) routeTo(t.first, silent: true);
+      }
+    }
+  }
+
+  Future<void> routeTo(Map<String, dynamic> s, {bool silent = false}) async {
     if (me == null) await locate();
     if (me == null || !mounted) return;
     final dest = pos(s);
@@ -241,6 +324,9 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
         route = pts;
         routeDotted = false;
         routeInfo = {'km': (rt['distance'] as num) / 1000, 'min': ((rt['duration'] as num) / 60).round(), 'road': true};
+        remainKm = (rt['distance'] as num) / 1000;
+        arrived = false;
+        lastReroute = DateTime.now();
       });
     } catch (_) {
       if (!mounted) return;
@@ -249,13 +335,15 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
         routeDotted = true;
         routeInfo = {'km': distKm(start.latitude, start.longitude, dest.latitude, dest.longitude), 'min': null, 'road': false};
       });
-      toast(context, "Itinéraire routier indisponible : distance à vol d'oiseau affichée.");
+      if (!silent) toast(context, "Itinéraire routier indisponible : distance à vol d'oiseau affichée.");
     }
     if (mounted) {
       setState(() => routing = false);
+      if (!silent) {
       try {
         mc.fitCamera(CameraFit.bounds(bounds: LatLngBounds.fromPoints(route), padding: const EdgeInsets.fromLTRB(50, 170, 50, 280)));
       } catch (_) {}
+      }
     }
   }
 
@@ -331,6 +419,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
       }
     }
     if (me != null) {
+      final moving = me!.speed > 1.0 && me!.heading >= 0;
       out.add(Marker(
         point: LatLng(me!.latitude, me!.longitude),
         width: 70,
@@ -339,7 +428,10 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
           animation: pulse,
           builder: (_, __) => Stack(alignment: Alignment.center, children: [
             Container(width: 20 + 44 * pulse.value, height: 20 + 44 * pulse.value, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blue.withValues(alpha: .3 * (1 - pulse.value)))),
-            Container(width: 20, height: 20, decoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6)])),
+            if (moving)
+              Transform.rotate(angle: me!.heading * math.pi / 180, child: const Icon(Icons.navigation, color: Colors.blue, size: 34, shadows: [Shadow(color: Color(0x66000000), blurRadius: 6)]))
+            else
+              Container(width: 20, height: 20, decoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6)])),
           ]),
         ),
       ));
@@ -353,7 +445,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
           width: 48,
           height: 48,
           margin: const EdgeInsets.only(top: 10),
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))]),
+          decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))]),
           child: spin ? const Padding(padding: EdgeInsets.all(13), child: CircularProgressIndicator(strokeWidth: 3)) : Icon(i, color: C.ink),
         ),
       );
@@ -373,7 +465,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
         curve: Curves.easeOutCubic,
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(color: sel ? C.ink : Colors.white, borderRadius: BorderRadius.circular(22), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8)]),
+        decoration: BoxDecoration(color: sel ? C.deep : C.card, borderRadius: BorderRadius.circular(22), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8)]),
         child: Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: sel ? Colors.white : C.ink)),
       ),
     );
@@ -392,7 +484,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26), border: Border.all(color: isSel ? accent : Colors.transparent, width: 2.5), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 6))]),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(26), border: Border.all(color: isSel ? accent : Colors.transparent, width: 2.5), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 6))]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             CircleAvatar(radius: 24, backgroundColor: accent, backgroundImage: logo == null ? null : NetworkImage(logo), child: logo == null ? Icon(pro ? Icons.storefront : Icons.person, color: Colors.white) : null),
@@ -400,22 +492,58 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('${s['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: primary)),
-                Text(slogan, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted)),
+                Text(slogan, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted)),
               ]),
             ),
-            if (me != null) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(12)), child: Text(fmtKm(dist(s)), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+            if (me != null) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(12)), child: Text(fmtKm(dist(s)), style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
           ]),
           const SizedBox(height: 6),
           if (isSel && routeInfo != null)
-            Text(routeInfo!['road'] == true ? '${(routeInfo!['km'] as num).toStringAsFixed(1)} km · environ ${routeInfo!['min']} min en voiture (estimation)' : "${fmtKm((routeInfo!['km'] as num).toDouble())} à vol d'oiseau", style: const TextStyle(color: C.green, fontWeight: FontWeight.w800))
+            Text(routeInfo!['road'] == true ? '${(routeInfo!['km'] as num).toStringAsFixed(1)} km · environ ${routeInfo!['min']} min en voiture (estimation)' : "${fmtKm((routeInfo!['km'] as num).toDouble())} à vol d'oiseau", style: TextStyle(color: C.green, fontWeight: FontWeight.w800))
           else
-            Text(pro ? 'Boutique professionnelle' : 'Vendeur du Bazar', style: const TextStyle(color: C.muted)),
+            Text('${pro ? 'Boutique professionnelle' : 'Vendeur du Bazar'}${me != null ? ' · ~${etaMin(dist(s) * 1.3)} min' : ''}', style: TextStyle(color: C.muted)),
           const Spacer(),
           Row(children: [
             Expanded(child: OutlinedButton.icon(onPressed: routing ? null : () => routeTo(s), icon: const Icon(Icons.directions, size: 20), label: Text(routing && isSel ? '…' : 'Itinéraire'))),
             const SizedBox(width: 10),
             Expanded(child: PrimaryButton(label: 'Boutique', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopScreen(s['id'] as String))))),
           ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget modeChip(String label, String value) => GestureDetector(
+        onTap: () => setState(() => mode = value),
+        child: Container(
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(color: mode == value ? Colors.white : Colors.white24, borderRadius: BorderRadius.circular(14)),
+          child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: mode == value ? C.deep : Colors.white)),
+        ),
+      );
+
+  /// Panneau de navigation en direct : distance restante, durée et heure d'arrivée recalculées à chaque position GPS.
+  Widget navPanel() {
+    final t = shops.where((x) => x['id'] == selectedId);
+    if (t.isEmpty || route.isEmpty || me == null) return const SizedBox.shrink();
+    final km = remainKm > 0 ? remainKm : ((routeInfo?['km'] as num?)?.toDouble() ?? 0);
+    final eta = etaMin(km);
+    final at = DateTime.now().add(Duration(minutes: eta));
+    String two(int x) => x.toString().padLeft(2, '0');
+    return Positioned(
+      left: 12,
+      right: 72,
+      bottom: 214,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: C.deep, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 14)]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(arrived ? 'Vous êtes arrivé à ${t.first['name']}' : 'Vers ${t.first['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+          if (!arrived)
+            Text('${fmtKm(km)} · ~$eta min · arrivée ${two(at.hour)}:${two(at.minute)}${speedKmh >= 3 ? ' · ${speedKmh.round()} km/h' : ''}', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Row(children: [modeChip('Marche', 'walk'), modeChip('Moto', 'moto'), modeChip('Voiture', 'car')]),
         ]),
       ),
     );
@@ -439,6 +567,12 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
               WidgetsBinding.instance.addPostFrameCallback((_) => fitAll());
             },
             onPositionChanged: (cam, gesture) {
+              if (gesture && follow) {
+                follow = false;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() {});
+                });
+              }
               final z = cam.zoom;
               final changed = z.round() != zoom.round();
               zoom = z;
@@ -450,9 +584,10 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
             },
           ),
           children: [
-            TileLayer(urlTemplate: _tileUrl, userAgentPackageName: 'com.haitiket.haitiket', panBuffer: 2, keepBuffer: 4),
+            TileLayer(tileBuilder: darkTileBuilder, urlTemplate: _tileUrl, userAgentPackageName: 'com.haitiket.haitiket', panBuffer: 2, keepBuffer: 4),
             if (route.isNotEmpty)
               PolylineLayer(polylines: routePolylines()),
+            if (me != null && me!.accuracy > 0) CircleLayer(circles: [CircleMarker(point: LatLng(me!.latitude, me!.longitude), radius: me!.accuracy, useRadiusInMeter: true, color: Colors.blue.withValues(alpha: .10), borderColor: Colors.blue.withValues(alpha: .35), borderStrokeWidth: 1)]),
             MarkerLayer(markers: markers()),
             const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
           ],
@@ -467,34 +602,52 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Pressable(onTap: () => Navigator.of(context).pop(), child: Container(width: 48, height: 48, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 10)]), child: const Icon(Icons.arrow_back, color: C.ink))),
+                  Pressable(onTap: () => Navigator.of(context).pop(), child: Container(width: 48, height: 48, decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 10)]), child: Icon(Icons.arrow_back, color: C.ink))),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10)]),
+                      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(26), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10)]),
                       child: Row(children: [
-                        const Icon(Icons.search, color: C.muted),
+                        Icon(Icons.search, color: C.muted),
                         const SizedBox(width: 8),
                         Expanded(child: TextField(controller: searchC, onChanged: (v) => setState(() => q = v.trim()), decoration: const InputDecoration(hintText: 'Rechercher une boutique ou une ville', border: InputBorder.none, enabledBorder: InputBorder.none, filled: false, isDense: true))),
-                        if (q.isNotEmpty) GestureDetector(onTap: () => setState(() { q = ''; searchC.clear(); }), child: const Icon(Icons.close, color: C.muted)),
+                        if (q.isNotEmpty) GestureDetector(onTap: () => setState(() { q = ''; searchC.clear(); }), child: Icon(Icons.close, color: C.muted)),
                       ]),
                     ),
                   ),
                 ]),
                 const SizedBox(height: 10),
-                SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [pill('Tout', 'all'), pill('Boutiques pro', 'pro'), pill('Bazar', 'personal'), Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(22)), child: Text('${list.length} lieu(x)', style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink)))])),
-                if (loading) const Padding(padding: EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.all(Radius.circular(8)), child: LinearProgressIndicator(minHeight: 4, color: C.terracotta, backgroundColor: Colors.white))),
+                SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [pill('Tout', 'all'), pill('Boutiques pro', 'pro'), pill('Bazar', 'personal'), Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9), decoration: BoxDecoration(color: C.yellow, borderRadius: BorderRadius.circular(22)), child: Text('${list.length} lieu(x)', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink)))])),
+                if (me != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8)]),
+                      child: Text('● GPS en direct · ±${me!.accuracy.round()} m${speedKmh >= 3 ? ' · ${speedKmh.round()} km/h' : ''}${follow ? ' · suivi actif' : ''}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF1B8A4B))),
+                    ),
+                  ),
+                if (loading) Padding(padding: EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.all(Radius.circular(8)), child: LinearProgressIndicator(minHeight: 4, color: C.terracotta, backgroundColor: C.card))),
               ]),
             ),
           ),
         ),
+        navPanel(),
         // Boutons flottants
         Positioned(
           right: 12,
           bottom: 232,
           child: Column(children: [
             fab(Icons.my_location, locate),
+            fab(follow ? Icons.gps_fixed : Icons.gps_not_fixed, () {
+              if (me == null) {
+                locate();
+              } else {
+                setState(() => follow = !follow);
+                if (follow) flyTo(LatLng(me!.latitude, me!.longitude), math.max(zoom, 16));
+              }
+            }),
             fab(Icons.refresh, () => refresh(force: true), spin: loading),
             fab(Icons.zoom_out_map, () {
               setState(() {
@@ -520,8 +673,8 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
                       padding: const EdgeInsets.all(14),
                       child: Container(
                         padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                        child: Text(shops.isEmpty ? "Aucune boutique n'a encore partagé sa position." : 'Aucun résultat pour ces filtres.', style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
+                        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(24)),
+                        child: Text(shops.isEmpty ? "Aucune boutique n'a encore partagé sa position." : 'Aucun résultat pour ces filtres.', style: TextStyle(fontWeight: FontWeight.w700, color: C.ink)),
                       ),
                     )
                   : PageView.builder(

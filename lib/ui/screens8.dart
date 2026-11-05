@@ -63,9 +63,9 @@ class _AddressesState extends State<AddressesScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Mes adresses', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text('Mes adresses', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: C.ink,
+          backgroundColor: C.deep,
           foregroundColor: Colors.white,
           onPressed: () async {
             final ok = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const AddressFormScreen()));
@@ -85,16 +85,16 @@ class _AddressesState extends State<AddressesScreen> {
                   return ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 100), children: [
                     for (final a in l)
                       Card(
-                        color: Colors.white,
+                        color: C.card,
                         child: Padding(
                           padding: const EdgeInsets.all(14),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [
-                              Expanded(child: Text('${a['label']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink))),
-                              if (a['is_default'] == true) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(12)), child: const Text('Par défaut', style: TextStyle(fontWeight: FontWeight.w800, color: C.green))),
+                              Expanded(child: Text('${a['label']}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: C.ink))),
+                              if (a['is_default'] == true) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(12)), child: Text('Par défaut', style: TextStyle(fontWeight: FontWeight.w800, color: C.green))),
                             ]),
                             const SizedBox(height: 6),
-                            Text(formatAddress(a), style: const TextStyle(color: C.muted, height: 1.4)),
+                            Text(formatAddress(a), style: TextStyle(color: C.muted, height: 1.4)),
                             Wrap(children: [
                               if (a['is_default'] != true) TextButton(onPressed: () => run(() => Repo.setDefaultAddress(a['id'] as String)), child: const Text('Définir par défaut')),
                               TextButton(onPressed: () => run(() => Repo.deleteAddress(a['id'] as String)), child: const Text('Supprimer')),
@@ -160,7 +160,7 @@ class _AddressFormState extends State<AddressFormScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Nouvelle adresse', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text('Nouvelle adresse', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           Field(label, 'Nom de l\'adresse (Domicile, Bureau…)'),
           Field(recipient, 'Nom du destinataire'),

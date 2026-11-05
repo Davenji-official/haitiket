@@ -124,7 +124,7 @@ class _PrimaryButtonState extends State<PrimaryButton> with SingleTickerProvider
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: const [C.ink, Color(0xFF2C6A5C), C.ink],
+                  colors: [C.deep, Color(0xFF2C6A5C), C.deep],
                   stops: [(p - .25).clamp(0.0, 1.0), p, (p + .25).clamp(0.0, 1.0)],
                 ),
                 boxShadow: const [BoxShadow(color: Color(0x3317332E), blurRadius: 14, offset: Offset(0, 6))],
@@ -155,7 +155,7 @@ class BottomBar extends StatelessWidget {
   const BottomBar({super.key, required this.index, required this.items, required this.onTap});
   @override
   Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line)), boxShadow: [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, -3))]),
+        decoration: BoxDecoration(color: C.card, border: Border(top: BorderSide(color: C.line)), boxShadow: [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, -3))]),
         child: SafeArea(
           top: false,
           child: Padding(

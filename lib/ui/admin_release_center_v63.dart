@@ -40,12 +40,12 @@ class _AdminReleaseCenterV63State extends State<AdminReleaseCenterV63> {
         final blockers = (data['blockers'] is List) ? (data['blockers'] as List) : const [];
         final total = blockers.fold<int>(0, (sum, item) => sum + ((item is Map ? item['count'] : 0) as num? ?? 0).toInt());
         return ListView(padding: const EdgeInsets.all(16), children: [
-          const Text('Centre de contrôle HAITIKET', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: C.ink)),
+          Text('Centre de contrôle HAITIKET', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: C.ink)),
           const SizedBox(height: 6),
-          const Text('Vue opérationnelle en lecture seule. Vérifiez les files avant chaque mise en production.', style: TextStyle(color: C.muted)),
+          Text('Vue opérationnelle en lecture seule. Vérifiez les files avant chaque mise en production.', style: TextStyle(color: C.muted)),
           const SizedBox(height: 12),
           Card(
-            color: total == 0 ? const Color(0xFFEAF7EF) : const Color(0xFFFFF1EC),
+            color: total == 0 ? const C.mint : const C.tint,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -88,8 +88,8 @@ class _AdminReleaseCenterV63State extends State<AdminReleaseCenterV63> {
           OutlinedButton.icon(onPressed: _refresh, icon: const Icon(Icons.refresh), label: const Text('Actualiser les contrôles')),
           FilledButton.icon(onPressed: () async { await Clipboard.setData(ClipboardData(text: const JsonEncoder.withIndent('  ').convert(data))); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapport JSON copié dans le presse-papiers.'))); }, icon: const Icon(Icons.copy_all_outlined), label: const Text('Copier le rapport JSON')),
           const SizedBox(height: 10),
-          Text('Dernière génération : ${data['generated_at'] ?? 'inconnue'}', style: const TextStyle(color: C.muted, fontSize: 12)),
-          const Text('Aucune opération financière ou fermeture de boutique n’est exécutée depuis cet écran.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Dernière génération : ${data['generated_at'] ?? 'inconnue'}', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Aucune opération financière ou fermeture de boutique n’est exécutée depuis cet écran.', style: TextStyle(color: C.muted, fontSize: 12)),
         ]);
       },
     ),

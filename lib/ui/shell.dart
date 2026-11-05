@@ -220,7 +220,7 @@ class _ShellState extends State<Shell> {
                             final url = snap.data?['avatar_url'] as String?;
                             return CircleAvatar(radius: 29, backgroundColor: C.mint,
                               backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
-                              child: url == null || url.isEmpty ? const Icon(Icons.person_outline, size: 30, color: C.green) : null);
+                              child: url == null || url.isEmpty ? Icon(Icons.person_outline, size: 30, color: C.green) : null);
                           },
                         ),
                       const SizedBox(width: 12),
@@ -231,8 +231,8 @@ class _ShellState extends State<Shell> {
                           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(display == null || display.isEmpty ? (u?.email ?? tr('Non connecté')) : display,
                               maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
-                            if (u != null) Text(u.email ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 12)),
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
+                            if (u != null) Text(u.email ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
                           ]);
                         },
                       )),
@@ -251,16 +251,16 @@ class _ShellState extends State<Shell> {
                         }
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
+                          decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Row(children: [const Icon(Icons.account_balance_wallet_outlined, color: C.green, size: 18), const SizedBox(width: 7), const Expanded(child: Text('Mes soldes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+                            Row(children: [Icon(Icons.account_balance_wallet_outlined, color: C.green, size: 18), const SizedBox(width: 7), Expanded(child: Text('Mes soldes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
                               IconButton(visualDensity: VisualDensity.compact, constraints: const BoxConstraints(), padding: EdgeInsets.zero,
                                 onPressed: () => setState(() => hideDrawerBalances = !hideDrawerBalances),
                                 icon: Icon(hideDrawerBalances ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 19, color: C.green)),
                             ]),
                             if (snap.connectionState != ConnectionState.done) const LinearProgressIndicator(minHeight: 2)
-                            else if (snap.hasError) const Text('Solde indisponible', style: TextStyle(color: C.muted, fontSize: 12))
-                            else Row(children: [Expanded(child: Text(value('HTG'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green))), Expanded(child: Text(value('USD'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)))]),
+                            else if (snap.hasError) Text('Solde indisponible', style: TextStyle(color: C.muted, fontSize: 12))
+                            else Row(children: [Expanded(child: Text(value('HTG'), style: TextStyle(fontWeight: FontWeight.w800, color: C.green))), Expanded(child: Text(value('USD'), style: TextStyle(fontWeight: FontWeight.w800, color: C.green)))]),
                             Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () { Navigator.pop(context); go(Sec.wallet); }, child: const Text('Ouvrir le portefeuille'))),
                           ]),
                         );
@@ -278,14 +278,14 @@ class _ShellState extends State<Shell> {
                     valueListenable: ThemeStore.dark,
                     builder: (_, on, __) => SwitchListTile(
                       secondary: Icon(on ? Icons.dark_mode : Icons.light_mode_outlined, color: C.green),
-                      title: Text(tr('Mode nuit'), style: const TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
+                      title: Text(tr('Mode nuit'), style: TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
                       value: on,
                       onChanged: (v) => ThemeStore.set(v),
                     ),
                   ),
                   ListTile(
-                    leading: const Icon(Icons.menu_book_outlined, color: C.green),
-                    title: Text(tr("Guides d'utilisation"), style: const TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
+                    leading: Icon(Icons.menu_book_outlined, color: C.green),
+                    title: Text(tr("Guides d'utilisation"), style: TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     onTap: () {
                       Navigator.pop(context);
@@ -300,7 +300,7 @@ class _ShellState extends State<Shell> {
                   else
                     ListTile(
                       leading: const Icon(Icons.logout, color: C.terracotta),
-                      title: Text(tr('Se déconnecter'), style: const TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
+                      title: Text(tr('Se déconnecter'), style: TextStyle(fontWeight: FontWeight.w700, color: C.ink, fontSize: 17)),
                       onTap: () async {
                         Navigator.pop(context);
                         await Repo.signOut();
@@ -310,7 +310,7 @@ class _ShellState extends State<Shell> {
                 ],
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: SizedBox(
                 width: double.infinity,
@@ -329,16 +329,16 @@ class _ShellState extends State<Shell> {
 
   Widget header() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: const BoxDecoration(color: C.bg, border: Border(bottom: BorderSide(color: C.line))),
+        decoration: BoxDecoration(color: C.bg, border: Border(bottom: BorderSide(color: C.line))),
         child: Row(children: [
-          IconButton(onPressed: () => scaffoldKey.currentState?.openDrawer(), icon: const Icon(Icons.menu, color: C.ink, size: 28)),
+          IconButton(onPressed: () => scaffoldKey.currentState?.openDrawer(), icon: Icon(Icons.menu, color: C.ink, size: 28)),
           Pressable(
             onTap: logoTap,
             scale: .9,
             child: Row(children: [
               Image.asset(Mascot.badge.path, height: 46, errorBuilder: (_, __, ___) => const SizedBox(width: 46, height: 46)),
               const SizedBox(width: 8),
-              const Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: C.ink)),
+              Text('HAITIKET', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: C.ink)),
             ]),
           ),
           const Spacer(),
@@ -348,11 +348,11 @@ class _ShellState extends State<Shell> {
               final unread = (snap.data ?? []).where((n) => n['read_at'] == null).length;
               return IconButton(
                 onPressed: () => go(Sec.notifications),
-                icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.notifications_none, color: C.green, size: 28)),
+                icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: Icon(Icons.notifications_none, color: C.green, size: 28)),
               );
             },
           ),
-          IconButton(onPressed: () => go(Sec.favorites), icon: const Icon(Icons.favorite_border, color: C.green, size: 28)),
+          IconButton(onPressed: () => go(Sec.favorites), icon: Icon(Icons.favorite_border, color: C.green, size: 28)),
           ValueListenableBuilder(
             valueListenable: CartStore.lines,
             builder: (_, __, ___) => IconButton(
@@ -364,7 +364,7 @@ class _ShellState extends State<Shell> {
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.elasticOut,
                 builder: (_, v, ch) => Transform.scale(scale: v, child: ch),
-                child: Badge(isLabelVisible: CartStore.count > 0, label: Text('${CartStore.count}'), child: const Icon(Icons.shopping_bag_outlined, color: C.green, size: 28)),
+                child: Badge(isLabelVisible: CartStore.count > 0, label: Text('${CartStore.count}'), child: Icon(Icons.shopping_bag_outlined, color: C.green, size: 28)),
               ),
             ),
           ),
@@ -383,7 +383,7 @@ class _ShellState extends State<Shell> {
           if (visible.isEmpty) return const SizedBox.shrink();
           final a = visible.first;
           final sev = '${a['severity'] ?? 'info'}';
-          final bg = sev == 'urgent' || sev == 'warning' ? const Color(0xFFFFE9DF) : C.mint;
+          final bg = sev == 'urgent' || sev == 'warning' ? const C.tint : C.mint;
           final icon = sev == 'urgent' ? Icons.warning_amber_rounded : sev == 'success' ? Icons.check_circle_outline : Icons.campaign_outlined;
           return Container(
             width: double.infinity,
@@ -393,8 +393,8 @@ class _ShellState extends State<Shell> {
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Icon(icon, color: C.ink), const SizedBox(width: 9),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${a['title']}', style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
-                const SizedBox(height: 3), Text('${a['body']}', style: const TextStyle(color: C.ink, height: 1.35)),
+                Text('${a['title']}', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
+                const SizedBox(height: 3), Text('${a['body']}', style: TextStyle(color: C.ink, height: 1.35)),
               ])),
             ]),
           );

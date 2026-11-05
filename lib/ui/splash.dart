@@ -47,7 +47,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
     const word = 'HAITIKET';
     return Scaffold(
       key: const ValueKey('splash'),
-      backgroundColor: Colors.white,
+      backgroundColor: C.card,
       body: AnimatedBuilder(
         animation: c,
         builder: (_, __) {
@@ -70,7 +70,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                     opacity: t(.35 + i * .04, .5 + i * .04, Curves.easeOut),
                     child: Transform.translate(
                       offset: Offset(0, 24 * (1 - t(.35 + i * .04, .55 + i * .04, Curves.easeOutBack))),
-                      child: Text(word[i], style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: C.ink, letterSpacing: 2)),
+                      child: Text(word[i], style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: C.ink, letterSpacing: 2)),
                     ),
                   ),
               ]),

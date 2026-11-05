@@ -69,12 +69,12 @@ Future<void> showPin(BuildContext context, String orderId, String label) async {
         content: pin == null
             ? const Text("Aucun code disponible pour le moment. Il apparaît une fois la commande payée et confirmée.")
             : Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(pin, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8, color: C.ink)),
+                Text(pin, style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8, color: C.ink)),
                 const SizedBox(height: 10),
                 DarkSafe(child: Container(color: Colors.white, padding: const EdgeInsets.all(8), child: QrImageView(data: 'HKT1:$orderId:$pin', size: 190, backgroundColor: Colors.white))),
-                const Text('ou faites scanner ce QR code', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text('ou faites scanner ce QR code', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(height: 8),
-                const Text('Ne le communiquez qu\'à la personne qui vous remet ou récupère le colis.', textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
+                Text('Ne le communiquez qu\'à la personne qui vous remet ou récupère le colis.', textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
               ]),
         actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Fermer'))],
       ),
@@ -122,7 +122,7 @@ class Stars extends StatelessWidget {
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.star_rounded, color: C.yellow, size: 20),
         const SizedBox(width: 4),
-        Text(n == 0 ? "Pas encore d'avis" : '${avg ?? 0} ($n avis)', style: const TextStyle(fontWeight: FontWeight.w700, color: C.muted)),
+        Text(n == 0 ? "Pas encore d'avis" : '${avg ?? 0} ($n avis)', style: TextStyle(fontWeight: FontWeight.w700, color: C.muted)),
       ]);
 }
 
@@ -178,7 +178,7 @@ class _NotificationsState extends State<NotificationsScreen> {
                   FadeSlideIn(
                     index: i,
                     child: Card(
-                      color: items[i]['read_at'] == null ? C.mint : Colors.white,
+                      color: items[i]['read_at'] == null ? C.mint : C.card,
                       child: ListTile(
                         leading: Icon(icon(items[i]['kind'] as String), color: C.green),
                         title: Text('${items[i]['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -269,7 +269,7 @@ class _ShopState extends State<ShopScreen> {
                 Positioned(
                   left: 18,
                   bottom: -38,
-                  child: CircleAvatar(radius: 42, backgroundColor: Colors.white, child: CircleAvatar(radius: 38, backgroundColor: accent, backgroundImage: logo == null ? null : NetworkImage(logo), child: logo == null ? const Icon(Icons.storefront, color: Colors.white, size: 36) : null)),
+                  child: CircleAvatar(radius: 42, backgroundColor: C.card, child: CircleAvatar(radius: 38, backgroundColor: accent, backgroundImage: logo == null ? null : NetworkImage(logo), child: logo == null ? const Icon(Icons.storefront, color: Colors.white, size: 36) : null)),
                 ),
               ]),
               const SizedBox(height: 50),
@@ -278,7 +278,7 @@ class _ShopState extends State<ShopScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${info['name']}', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: primary)),
                   if (slogan != null) Text(slogan, style: TextStyle(fontSize: 17, fontStyle: FontStyle.italic, color: accent, fontWeight: FontWeight.w700)),
-                  Text('${personal ? 'Vendeur particulier (Bazar)' : 'Boutique professionnelle'} · ${info['city'] ?? ''}', style: const TextStyle(color: C.muted)),
+                  Text('${personal ? 'Vendeur particulier (Bazar)' : 'Boutique professionnelle'} · ${info['city'] ?? ''}', style: TextStyle(color: C.muted)),
                   const SizedBox(height: 12),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     stat(Icons.people_outline, '${((stats['followers'] as num).toInt() + followDelta)} abonné(s)', primary),
@@ -293,7 +293,7 @@ class _ShopState extends State<ShopScreen> {
                       duration: const Duration(milliseconds: 350),
                       curve: Curves.easeOutCubic,
                       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      decoration: BoxDecoration(color: fol ? Colors.white : accent, border: Border.all(color: accent, width: 2), borderRadius: BorderRadius.circular(26)),
+                      decoration: BoxDecoration(color: fol ? C.card : accent, border: Border.all(color: accent, width: 2), borderRadius: BorderRadius.circular(26)),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 300),
@@ -306,18 +306,18 @@ class _ShopState extends State<ShopScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text('Abonnez-vous pour être averti de chaque nouveau produit.', style: TextStyle(color: C.muted)),
+                  Text('Abonnez-vous pour être averti de chaque nouveau produit.', style: TextStyle(color: C.muted)),
                   const SizedBox(height: 22),
-                  const Text('Produits', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                  Text('Produits', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                   const SizedBox(height: 10),
-                  if (products.isEmpty) const Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else ProductGrid(products),
+                  if (products.isEmpty) Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else ProductGrid(products),
                   const SizedBox(height: 24),
-                  const Text('Avis des clients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
+                  Text('Avis des clients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                   const SizedBox(height: 10),
-                  if (reviews.isEmpty) const Text("Aucun avis. Les avis proviennent uniquement d'achats réellement livrés.", style: TextStyle(color: C.muted)),
+                  if (reviews.isEmpty) Text("Aucun avis. Les avis proviennent uniquement d'achats réellement livrés.", style: TextStyle(color: C.muted)),
                   for (final r in reviews)
                     Card(
-                      color: Colors.white,
+                      color: C.card,
                       child: ListTile(
                         title: Row(children: [for (var i = 0; i < (r['rating'] as int); i++) const Icon(Icons.star_rounded, color: C.yellow, size: 18)]),
                         subtitle: r['comment'] == null ? null : Text('${r['comment']}'),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme.dart';
 
-/// Mode nuit : préférence mémorisée sur l'appareil, activable/désactivable à tout moment (menu).
+/// Mode nuit : vrai thème sombre (palette C.*), préférence mémorisée sur l'appareil.
 class ThemeStore {
   static final ValueNotifier<bool> dark = ValueNotifier<bool>(false);
   static const _key = 'haitiket_dark_mode';
@@ -9,45 +11,56 @@ class ThemeStore {
   static Future<void> restore() async {
     try {
       final p = await SharedPreferences.getInstance();
-      dark.value = p.getBool(_key) ?? false;
+      final v = p.getBool(_key) ?? false;
+      C.dark = v;
+      dark.value = v;
     } catch (_) {}
   }
 
   static Future<void> set(bool v) async {
+    C.dark = v;
     dark.value = v;
+    _repaintAll();
     try {
       final p = await SharedPreferences.getInstance();
       await p.setBool(_key, v);
     } catch (_) {}
   }
+
+  /// Les couleurs C.* sont lues à la construction des widgets : on force la reconstruction de tout l'arbre
+  /// (sans perdre l'état des écrans ni la navigation).
+  static void _repaintAll() {
+    void visit(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(visit);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
+  }
 }
 
-// Inversion de luminosité en conservant les teintes (équivalent de invert(1) hue-rotate(180deg)).
-const List<double> _kDarkMatrix = <double>[
-  0.574, -1.430, -0.144, 0, 255,
-  -0.426, -0.430, -0.144, 0, 255,
-  -0.426, -1.430, 0.856, 0, 255,
-  0, 0, 0, 1, 0,
-];
-
-/// Enveloppe toute l'application (dialogues et menus compris) quand le mode nuit est actif.
+/// Conservé pour compatibilité : plus aucun filtre n'est appliqué (le thème sombre est natif).
 class DarkModeScope extends StatelessWidget {
   final Widget child;
   const DarkModeScope({super.key, required this.child});
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-        valueListenable: ThemeStore.dark,
-        builder: (_, on, __) => on ? ColorFiltered(colorFilter: const ColorFilter.matrix(_kDarkMatrix), child: child) : child,
-      );
+  Widget build(BuildContext context) => child;
 }
 
-/// Les photos ne doivent pas être inversées : on réapplique la même matrice (deux inversions = identité).
 class DarkSafe extends StatelessWidget {
   final Widget child;
   const DarkSafe({super.key, required this.child});
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-        valueListenable: ThemeStore.dark,
-        builder: (_, on, __) => on ? ColorFiltered(colorFilter: const ColorFilter.matrix(_kDarkMatrix), child: child) : child,
-      );
+  Widget build(BuildContext context) => child;
 }
+
+// Fond de carte sombre : inversion de luminosité des tuiles, avec adoucissement (pas de blanc éclatant).
+const List<double> _kTileDark = <double>[
+  -0.62, -0.60, -0.20, 0, 232,
+  -0.20, -0.66, -0.16, 0, 238,
+  -0.20, -0.60, -0.22, 0, 236,
+  0, 0, 0, 1, 0,
+];
+
+Widget darkTileBuilder(BuildContext context, Widget tileWidget, TileImage tile) =>
+    ThemeStore.dark.value ? ColorFiltered(colorFilter: const ColorFilter.matrix(_kTileDark), child: tileWidget) : tileWidget;

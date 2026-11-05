@@ -64,6 +64,7 @@ Future<bool> _confirm(BuildContext c, String title, String text) async =>
 class AdminImpersonation {
   static final ValueNotifier<String?> active = ValueNotifier<String?>(null);
   static String? _adminRefreshToken;
+  static String? _targetId;
 
   static Future<void> start(BuildContext c, String userId, String label) async {
     final reason = await askText(c, 'Motif de la prise de contrôle', hint: 'Obligatoire (ex. ticket support #123)');
@@ -81,7 +82,9 @@ class AdminImpersonation {
       if (data is! Map || data['token_hash'] == null) throw 'Réponse invalide du serveur';
       _adminRefreshToken = _db.auth.currentSession?.refreshToken;
       await _db.auth.verifyOTP(tokenHash: '${data['token_hash']}', type: OtpType.magiclink);
+      _targetId = userId;
       active.value = label;
+      if (data['was_banned'] == true && c.mounted) toast(c, 'Compte bloqué/supprimé : accès temporaire de 20 minutes, blocage rétabli à la sortie.');
       if (c.mounted) Navigator.of(c).popUntil((r) => r.isFirst);
     } catch (e) {
       if (c.mounted) toast(c, Repo.err(e));
@@ -100,6 +103,13 @@ class AdminImpersonation {
       if (c.mounted) toast(c, 'Session admin expirée : reconnectez-vous. (${Repo.err(e)})');
       await _db.auth.signOut();
     }
+    final target = _targetId;
+    if (target != null) {
+      try {
+        await _db.rpc('admin_end_support_session', params: {'p_user': target});
+      } catch (_) {}
+    }
+    _targetId = null;
     _adminRefreshToken = null;
     active.value = null;
   }
@@ -122,7 +132,7 @@ class ImpersonationBanner extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(child: Text('Mode support : connecté en tant que $who', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
                     TextButton(
-                      style: TextButton.styleFrom(backgroundColor: Colors.white),
+                      style: TextButton.styleFrom(backgroundColor: C.card),
                       onPressed: () => AdminImpersonation.exit(context),
                       child: const Text('Quitter', style: TextStyle(color: Color(0xFFB3261E), fontWeight: FontWeight.w900)),
                     ),
@@ -158,7 +168,7 @@ class _LinePainter extends CustomPainter {
       }
     }
     if (maxV <= 0) maxV = 1;
-    final grid = Paint()..color = const Color(0xFFE6E8E3)..strokeWidth = 1;
+    final grid = Paint()..color = const C.line..strokeWidth = 1;
     for (var i = 0; i <= 4; i++) {
       final y = padT + h * i / 4;
       canvas.drawLine(Offset(padL, y), Offset(size.width, y), grid);
@@ -218,21 +228,21 @@ class _ChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = series.isEmpty ? 0.0 : series.first.values.fold<double>(0, (a, b) => a + b);
     return Card(
-      color: Colors.white,
+      color: C.card,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 15))),
-            Text(subtitle.isEmpty ? total.toStringAsFixed(0) : subtitle, style: const TextStyle(fontWeight: FontWeight.w800, color: C.green)),
+            Expanded(child: Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 15))),
+            Text(subtitle.isEmpty ? total.toStringAsFixed(0) : subtitle, style: TextStyle(fontWeight: FontWeight.w800, color: C.green)),
           ]),
           const SizedBox(height: 8),
           SizedBox(height: 150, width: double.infinity, child: CustomPaint(painter: _LinePainter(series, bars))),
           const SizedBox(height: 6),
           Row(children: [
-            Text(labels.isEmpty ? '' : labels.first, style: const TextStyle(fontSize: 11, color: C.muted)),
+            Text(labels.isEmpty ? '' : labels.first, style: TextStyle(fontSize: 11, color: C.muted)),
             const Spacer(),
-            Text(labels.isEmpty ? '' : labels.last, style: const TextStyle(fontSize: 11, color: C.muted)),
+            Text(labels.isEmpty ? '' : labels.last, style: TextStyle(fontSize: 11, color: C.muted)),
           ]),
           if (series.length > 1)
             Wrap(spacing: 12, children: [
@@ -240,7 +250,7 @@ class _ChartCard extends StatelessWidget {
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
                   const SizedBox(width: 4),
-                  Text(s.name, style: const TextStyle(fontSize: 11, color: C.muted)),
+                  Text(s.name, style: TextStyle(fontSize: 11, color: C.muted)),
                 ]),
             ]),
         ]),
@@ -253,20 +263,20 @@ class _Kpi extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-  final Color color;
-  const _Kpi(this.label, this.value, this.icon, {this.color = C.green});
+  final Color? color;
+  const _Kpi(this.label, this.value, this.icon, {this.color});
   @override
   Widget build(BuildContext context) => Container(
         width: 165,
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
         child: Row(children: [
-          Icon(icon, color: color),
+          Icon(icon, color: color ?? C.green),
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
-              Text(label, style: const TextStyle(fontSize: 11, color: C.muted)),
+              Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
+              Text(label, style: TextStyle(fontSize: 11, color: C.muted)),
             ]),
           ),
         ]),
@@ -402,10 +412,10 @@ class _AnalyticsPageState extends State<_AnalyticsPage> {
         onRefresh: () async => reload(),
         child: ListView(padding: const EdgeInsets.all(14), children: [
           Row(children: [
-            const Expanded(child: Text('Tableau de bord en temps réel', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink))),
+            Expanded(child: Text('Tableau de bord en temps réel', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink))),
             IconButton(onPressed: reload, icon: const Icon(Icons.refresh)),
           ]),
-          const Text('Chiffres issus de la base. « En ligne » = vu il y a moins de 3 minutes. Actualisation automatique toutes les 30 s.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Chiffres issus de la base. « En ligne » = vu il y a moins de 3 minutes. Actualisation automatique toutes les 30 s.', style: TextStyle(color: C.muted, fontSize: 12)),
           const SizedBox(height: 10),
           FutureBuilder<Map<String, dynamic>>(
             future: stats,
@@ -470,11 +480,11 @@ class _AnalyticsPageState extends State<_AnalyticsPage> {
               if (l == null || l.isEmpty) return const SizedBox.shrink();
               final mx = l.map((r) => _n(r['n']).toDouble()).reduce((a, b) => a > b ? a : b);
               return Card(
-                color: Colors.white,
+                color: C.card,
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Commandes par statut', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
+                    Text('Commandes par statut', style: TextStyle(fontWeight: FontWeight.w900, color: C.ink)),
                     const SizedBox(height: 8),
                     for (final r in l)
                       Padding(
@@ -569,11 +579,11 @@ class _ClientsPageState extends State<_ClientsPage> {
     final blocked = u['account_status'] != 'active' || u['suspended'] == true;
     final url = '${u['avatar_url'] ?? ''}';
     return Card(
-      color: blocked ? const Color(0xFFFFF1EC) : Colors.white,
+      color: blocked ? const C.tint : C.card,
       child: ListTile(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdminUserDetail(userId: u['id'] as String))).then((_) => search(reset: true)),
         leading: Stack(children: [
-          CircleAvatar(backgroundColor: C.mint, backgroundImage: url.startsWith('http') ? NetworkImage(url) : null, child: url.startsWith('http') ? null : const Icon(Icons.person, color: C.green)),
+          CircleAvatar(backgroundColor: C.mint, backgroundImage: url.startsWith('http') ? NetworkImage(url) : null, child: url.startsWith('http') ? null : Icon(Icons.person, color: C.green)),
           Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: online ? const Color(0xFF25D366) : Colors.grey, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
         ]),
         title: Text('${u['display_name'] ?? 'Sans nom'}', style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -700,11 +710,11 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
   }
 
   Widget section(String title, List<Widget> children) => Card(
-        color: Colors.white,
+        color: C.card,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 16)),
+            Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 16)),
             const SizedBox(height: 6),
             ...children,
           ]),
@@ -714,14 +724,14 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
   Widget kv(String k, Object? v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 130, child: Text(k, style: const TextStyle(color: C.muted))),
+          SizedBox(width: 130, child: Text(k, style: TextStyle(color: C.muted))),
           Expanded(child: SelectableText('${v ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600))),
         ]),
       );
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Fiche client 360°', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        appBar: AppBar(title: Text('Fiche client 360°', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
         body: FutureBuilder<Map<String, dynamic>>(
           future: f,
           builder: (_, s) {
@@ -739,11 +749,11 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 900),
                 child: ListView(padding: const EdgeInsets.all(14), children: [
-                  Text(label, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: C.ink)),
-                  Text('${d['email']}', style: const TextStyle(color: C.muted)),
+                  Text(label, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: C.ink)),
+                  Text('${d['email']}', style: TextStyle(color: C.muted)),
                   const SizedBox(height: 10),
                   Wrap(spacing: 8, runSpacing: 8, children: [
-                    FilledButton.icon(onPressed: isAdmin ? null : () => AdminImpersonation.start(context, widget.userId, label), icon: const Icon(Icons.login), label: const Text('Prendre le contrôle'), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))),
+                    FilledButton.icon(onPressed: isAdmin ? null : () => AdminImpersonation.start(context, widget.userId, label), icon: const Icon(Icons.login), label: Text(blocked ? 'Prendre le contrôle (accès temporaire 20 min)' : 'Prendre le contrôle'), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))),
                     OutlinedButton.icon(onPressed: () => edit(p), icon: const Icon(Icons.edit_outlined), label: const Text('Modifier')),
                     OutlinedButton.icon(onPressed: isAdmin ? null : () => ban(!blocked), icon: Icon(blocked ? Icons.lock_open : Icons.block), label: Text(blocked ? 'Réactiver' : 'Bloquer')),
                     OutlinedButton.icon(onPressed: phone.isEmpty ? null : () => launchUrl(Uri(scheme: 'tel', path: phone)), icon: const Icon(Icons.call), label: const Text('Appeler')),
@@ -789,28 +799,28 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
                         ]),
                         section('Adresses (${addr.length})', [
                           for (final a in addr) Text('• ${a['label']} — ${a['recipient']}, ${a['street'] ?? ''} ${a['quarter'] ?? ''}, ${a['commune']} ${a['phone'] ?? ''}'),
-                          if (addr.isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                          if (addr.isEmpty) Text('Aucune.', style: TextStyle(color: C.muted)),
                         ]),
                         section('Tickets support (${tickets.length})', [
                           for (final t in tickets) Text('• ${_date(t['created_at'])} — ${t['status']} — ${t['subject']}'),
-                          if (tickets.isEmpty) const Text('Aucun.', style: TextStyle(color: C.muted)),
+                          if (tickets.isEmpty) Text('Aucun.', style: TextStyle(color: C.muted)),
                         ]),
                         section('Journal admin concernant ce compte', [
                           for (final l in audit) Text('• ${_date(l['created_at'])} — ${l['action']} ${l['reason'] ?? ''}'),
-                          if (audit.isEmpty) const Text('Aucune action.', style: TextStyle(color: C.muted)),
+                          if (audit.isEmpty) Text('Aucune action.', style: TextStyle(color: C.muted)),
                         ]),
                       ]);
                     },
                   ),
                   section('Portefeuilles', [
-                    if ((d['wallets'] as List).isEmpty) const Text('Aucun portefeuille.', style: TextStyle(color: C.muted)),
+                    if ((d['wallets'] as List).isEmpty) Text('Aucun portefeuille.', style: TextStyle(color: C.muted)),
                     for (final w in d['wallets'] as List) kv('${w['currency']}', money(_n(w['balance_minor']), '${w['currency']}')),
                     kv('Dépensé HTG', money(_n(d['spent_htg']), 'HTG')),
                     kv('Dépensé USD', money(_n(d['spent_usd']), 'USD')),
                   ]),
                   section('Boutiques (${(d['shops'] as List).length})', [
                     for (final sh in d['shops'] as List) Text('• ${sh['name']} — ${sh['status']} (${sh['city'] ?? '—'})'),
-                    if ((d['shops'] as List).isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                    if ((d['shops'] as List).isEmpty) Text('Aucune.', style: TextStyle(color: C.muted)),
                     kv('Produits actifs', d['listings_count']),
                   ]),
                   if (d['courier'] != null)
@@ -823,15 +833,15 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
                     ]),
                   section('Commandes passées (${d['orders_count']})', [
                     for (final o in d['orders'] as List) Text('• ${_date(o['created_at'])} — ${o['status']} — ${money(_n(o['total_minor']), '${o['currency']}')} (${o['delivery_mode']})'),
-                    if ((d['orders'] as List).isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                    if ((d['orders'] as List).isEmpty) Text('Aucune.', style: TextStyle(color: C.muted)),
                   ]),
                   section('Ventes de ses boutiques', [
                     for (final o in d['sales'] as List) Text('• ${_date(o['created_at'])} — ${o['status']} — ${money(_n(o['total_minor']), '${o['currency']}')}'),
-                    if ((d['sales'] as List).isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                    if ((d['sales'] as List).isEmpty) Text('Aucune.', style: TextStyle(color: C.muted)),
                   ]),
                   section('Dernières écritures portefeuille', [
                     for (final t in d['transactions'] as List) Text('• ${_date(t['created_at'])} — ${t['kind']} — ${t['status']} — ${money(_n(t['amount_minor']), '${t['currency']}')}'),
-                    if ((d['transactions'] as List).isEmpty) const Text('Aucune.', style: TextStyle(color: C.muted)),
+                    if ((d['transactions'] as List).isEmpty) Text('Aucune.', style: TextStyle(color: C.muted)),
                   ]),
                 ]),
               ),
@@ -877,7 +887,7 @@ class _OrdersPageState extends State<_OrdersPage> {
             return Column(children: [
               for (final o in l)
                 Card(
-                  color: Colors.white,
+                  color: C.card,
                   child: ListTile(
                     title: Text('${money(_n(o['total_minor']), '${o['currency']}')} · ${o['status']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${o['shop_name']} ← ${o['customer_name'] ?? 'client'}\n${o['delivery_mode'] == 'delivery' ? 'Livraison ${money(_n(o['delivery_minor']), '${o['currency']}')} · livreur : ${o['courier_name'] ?? 'non affecté'}' : 'Retrait'} · ${_date(o['created_at'])}'),
@@ -897,7 +907,7 @@ class _OrdersPageState extends State<_OrdersPage> {
 class _CatalogPage extends StatelessWidget {
   const _CatalogPage();
   @override
-  Widget build(BuildContext context) => const DefaultTabController(
+  Widget build(BuildContext context) => DefaultTabController(
         length: 2,
         child: Column(children: [
           TabBar(labelColor: C.ink, indicatorColor: C.terracotta, tabs: [Tab(text: 'Produits & annonces'), Tab(text: 'Catégories')]),
@@ -948,7 +958,7 @@ class _ProductsAdminState extends State<_ProductsAdmin> {
             return Column(children: [
               for (final p in l)
                 Card(
-                  color: p['status'] == 'removed' ? const Color(0xFFF1F1F1) : Colors.white,
+                  color: p['status'] == 'removed' ? const C.soft : C.card,
                   child: ListTile(
                     title: Text('${p['name']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${p['shop_name']} · ${money(_n(p['price_minor']), '${p['currency']}')} · stock ${p['stock']} · ${p['status']}'),
@@ -1045,7 +1055,7 @@ class _CategoriesAdminState extends State<_CategoriesAdmin> {
             const SizedBox(height: 8),
             for (final c in l)
               Card(
-                color: Colors.white,
+                color: C.card,
                 child: ListTile(
                   title: Text('${c['name']}${c['active'] == false ? '  (inactive)' : ''}', style: TextStyle(fontWeight: FontWeight.w800, color: c['active'] == false ? C.muted : C.ink)),
                   subtitle: c['parent_id'] == null ? null : Text('Sous-catégorie de ${names[c['parent_id']] ?? '—'}'),
@@ -1110,8 +1120,8 @@ class _BroadcastPageState extends State<_BroadcastPage> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(14), children: [
-        const Text('Envoyer un message à vos utilisateurs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
-        const Text('Le message apparaît dans la cloche de notifications (image, lien et coupon inclus). Les notifications « push » système (téléphone verrouillé) nécessitent Firebase, non configuré dans ce projet.', style: TextStyle(color: C.muted, fontSize: 12)),
+        Text('Envoyer un message à vos utilisateurs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
+        Text('Le message apparaît dans la cloche de notifications (image, lien et coupon inclus). Les notifications « push » système (téléphone verrouillé) nécessitent Firebase, non configuré dans ce projet.', style: TextStyle(color: C.muted, fontSize: 12)),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(value: audience, decoration: const InputDecoration(labelText: 'Destinataires'), items: [for (final a in _audiences) DropdownMenuItem(value: a.$1, child: Text(a.$2))], onChanged: (v) => setState(() => audience = v ?? 'all')),
         TextField(controller: title, maxLength: 100, decoration: const InputDecoration(labelText: 'Titre')),
@@ -1143,8 +1153,8 @@ class _BroadcastPageState extends State<_BroadcastPage> {
           builder: (_, s) {
             final l = s.data ?? [];
             if (s.connectionState != ConnectionState.done) return const LinearProgressIndicator();
-            if (l.isEmpty) return const Text('Aucun envoi.', style: TextStyle(color: C.muted));
-            return Column(children: [for (final b in l) Card(color: Colors.white, child: ListTile(title: Text('${b['title']}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('${b['recipients']} destinataires · ${b['audience']}${b['coupon_code'] != null ? ' · coupon ${b['coupon_code']}' : ''} · ${_date(b['created_at'])}')))]);
+            if (l.isEmpty) return Text('Aucun envoi.', style: TextStyle(color: C.muted));
+            return Column(children: [for (final b in l) Card(color: C.card, child: ListTile(title: Text('${b['title']}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('${b['recipients']} destinataires · ${b['audience']}${b['coupon_code'] != null ? ' · coupon ${b['coupon_code']}' : ''} · ${_date(b['created_at'])}')))]);
           },
         ),
       ]);
@@ -1185,7 +1195,7 @@ class _SettingsPageState extends State<_SettingsPage> {
       builder: (d) => AlertDialog(
         title: Text(key),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (_help[key] != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_help[key]!, style: const TextStyle(color: C.muted))),
+          if (_help[key] != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_help[key]!, style: TextStyle(color: C.muted))),
           TextField(controller: c, autofocus: true, decoration: const InputDecoration(labelText: 'Valeur')),
         ]),
         actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, c.text.trim()), child: const Text('Enregistrer'))],
@@ -1218,7 +1228,7 @@ class _SettingsPageState extends State<_SettingsPage> {
             const SizedBox(height: 8),
             for (final r in l)
               Card(
-                color: Colors.white,
+                color: C.card,
                 child: ListTile(
                   title: Text('${r['key']} = ${r['value']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text('${_help['${r['key']}'] ?? 'Réglage personnalisé'}\nModifié : ${_date(r['updated_at'])}'),

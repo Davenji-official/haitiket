@@ -41,8 +41,8 @@ class _VariantsState extends State<VariantsEditor> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: C.mint.withValues(alpha: .45), borderRadius: BorderRadius.circular(20)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Variantes en stock', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
-          const Text('Chaque taille ou couleur a son propre stock. Les acheteurs ne peuvent commander que ce qui est disponible.', style: TextStyle(color: C.muted)),
+          Text('Variantes en stock', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Chaque taille ou couleur a son propre stock. Les acheteurs ne peuvent commander que ce qui est disponible.', style: TextStyle(color: C.muted)),
           const SizedBox(height: 10),
           if (widget.sizeOptions.isNotEmpty)
             Wrap(spacing: 6, children: [for (final o in widget.sizeOptions) ActionChip(label: Text(o), onPressed: () => setState(() => size.text = o))]),
@@ -124,8 +124,8 @@ class _TiersState extends State<TiersEditor> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: C.yellow.withValues(alpha: .18), borderRadius: BorderRadius.circular(20)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Tarifs par quantité (facultatif)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
-          const Text("Le prix à l'unité baisse dès la quantité indiquée. Le serveur applique automatiquement le bon tarif.", style: TextStyle(color: C.muted)),
+          Text('Tarifs par quantité (facultatif)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+          Text("Le prix à l'unité baisse dès la quantité indiquée. Le serveur applique automatiquement le bon tarif.", style: TextStyle(color: C.muted)),
           const SizedBox(height: 10),
           Wrap(spacing: 6, children: [for (final p in presets) ActionChip(label: Text(p.$1), onPressed: () => setState(() { qty.text = '${p.$2}'; label = p.$1; }))]),
           const SizedBox(height: 8),
@@ -282,8 +282,8 @@ class _ShopCouponsState extends State<ShopCouponsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Promotions de la boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
-        floatingActionButton: FloatingActionButton.extended(backgroundColor: C.ink, foregroundColor: Colors.white, onPressed: create, icon: const Icon(Icons.local_offer_outlined), label: const Text('Créer')),
+        appBar: AppBar(title: Text('Promotions de la boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
+        floatingActionButton: FloatingActionButton.extended(backgroundColor: C.deep, foregroundColor: Colors.white, onPressed: create, icon: const Icon(Icons.local_offer_outlined), label: const Text('Créer')),
         body: FutureBuilder<List<Map<String, dynamic>>>(
           future: f,
           builder: (_, s) {
@@ -309,11 +309,11 @@ class _ShopCouponsState extends State<ShopCouponsScreen> {
             final visibleCount = l.where((c) => c['visible'] == true).length;
             return ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 100), children: [
               Card(
-                color: Colors.white,
+                color: C.card,
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Résumé des promotions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
+                    Text('Résumé des promotions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.ink)),
                     const SizedBox(height: 10),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       Chip(avatar: const Icon(Icons.check_circle_outline, size: 18), label: Text('Valides : $activeCount')),
@@ -321,13 +321,13 @@ class _ShopCouponsState extends State<ShopCouponsScreen> {
                       Chip(avatar: const Icon(Icons.event_busy_outlined, size: 18), label: Text('Expirées : $expiredCount')),
                       Chip(avatar: const Icon(Icons.block_outlined, size: 18), label: Text('Quota atteint : $exhaustedCount')),
                     ]),
-                    const Text('Le statut « valide » tient compte de l’activation, de la date d’expiration et du quota. Vérifie les conditions avant de promouvoir un code.', style: TextStyle(fontSize: 12, color: C.muted)),
+                    Text('Le statut « valide » tient compte de l’activation, de la date d’expiration et du quota. Vérifie les conditions avant de promouvoir un code.', style: TextStyle(fontSize: 12, color: C.muted)),
                   ]),
                 ),
               ),
               for (final c in l)
                 Card(
-                  color: Colors.white,
+                  color: C.card,
                   child: ListTile(
                     title: Text('${c['code']} · ${c['kind'] == 'percent' ? '${c['value']} %' : money(c['value'] as num, 'HTG')}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('Utilisé ${c['used_count']}${c['max_uses'] == null ? '' : ' / ${c['max_uses']}'} fois · ${c['product_ids'] == null ? 'toute la boutique' : '${(c['product_ids'] as List).length} produit(s)'}${c['expires_at'] == null ? '' : '\nExpire le ${DateTime.tryParse('${c['expires_at']}')?.toIso8601String().substring(0, 10) ?? c['expires_at']}'}\n${effective(c) ? 'VALIDE' : expired(c) ? 'EXPIRÉE' : exhausted(c) ? 'QUOTA ATTEINT' : 'DÉSACTIVÉE'} · ${c['visible'] == true ? 'visible sur les produits' : 'non affichée publiquement'}'),

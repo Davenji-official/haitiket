@@ -24,9 +24,9 @@ Widget _promo(BuildContext context, String title, String text, String cta, IconD
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(28)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+        Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
         const SizedBox(height: 6),
-        Text(text, style: const TextStyle(fontSize: 16, color: C.green, height: 1.4, fontWeight: FontWeight.w600)),
+        Text(text, style: TextStyle(fontSize: 16, color: C.green, height: 1.4, fontWeight: FontWeight.w600)),
         const SizedBox(height: 14),
         PrimaryButton(label: cta, icon: icon, onPressed: onTap),
       ]),
@@ -38,9 +38,9 @@ Widget _mapButton(BuildContext context, String kind) => Pressable(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.map_outlined, color: C.ink, size: 20),
+          Icon(Icons.map_outlined, color: C.ink, size: 20),
           const SizedBox(width: 8),
-          Text(tr('Carte'), style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+          Text(tr('Carte'), style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
         ]),
       ),
     );
@@ -151,7 +151,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Public concerné', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+            Text('Public concerné', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
             SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
               chip('Tous', audienceFilter == null, () { audienceFilter = null; refresh(); }),
               for (final audience in const ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'])
@@ -162,7 +162,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
               Expanded(child: TextField(controller: minC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Prix min (HTG)', isDense: true))),
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: maxC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Prix max (HTG)', isDense: true))),
-              IconButton(onPressed: refresh, icon: const Icon(Icons.check_circle, color: C.green, size: 32)),
+              IconButton(onPressed: refresh, icon: Icon(Icons.check_circle, color: C.green, size: 32)),
             ]),
             const SizedBox(height: 8),
             Row(children: [
@@ -182,7 +182,7 @@ class _MarketplaceState extends State<MarketplaceScreen> {
               const Spacer(),
               FilterChip(avatar: const Icon(Icons.near_me, size: 18), label: Text(tr('Près de moi')), selected: nearby, onSelected: toggleNearby),
             ]),
-            if (q.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Résultats pour « $q »', style: const TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
+            if (q.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Résultats pour « $q »', style: TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
             const SizedBox(height: 14),
             if (!Config.configured)
               _notConfigured()
@@ -361,7 +361,7 @@ class _NetworkState extends State<NetworkScreen> {
         Field(zone, "Zone d'activité (ex. Delmas)"),
         ],
         const SizedBox(height: 20),
-        const Text('Vérification d’identité KYC', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+        Text('Vérification d’identité KYC', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
         Text(widget.kycOnly ? 'Obligatoire pour ouvrir une boutique ou publier au Bazar. Les documents sont privés et examinés par l’administration.' : 'Obligatoire avant l’approbation comme livreur et pour obtenir le badge de boutique vérifiée. Les documents sont privés et examinés par l’administration.'),
         OutlinedButton.icon(onPressed: () => chooseBirthDate(guardian: false), icon: const Icon(Icons.cake_outlined), label: Text(birthDate == null ? 'Choisir ma date de naissance' : 'Date de naissance : ${birthDate!.year}-${birthDate!.month.toString().padLeft(2, '0')}-${birthDate!.day.toString().padLeft(2, '0')}')),
         if (calculatedAge != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('Âge calculé : $calculatedAge ans${calculatedAge! < 18 ? ' · dossier mineur' : ' · dossier majeur'}', style: const TextStyle(fontWeight: FontWeight.w700))),
@@ -459,7 +459,7 @@ class _CartState extends State<CartScreen> {
             else ...[
               for (final x in l)
                 Card(
-                  color: Colors.white,
+                  color: C.card,
                   child: ListTile(
                     title: Text(x.variantLabel == null ? x.name : '${x.name} (${x.variantLabel})', style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text('${money(CartStore.unitFor(x), x.currency)} / unité${CartStore.unitFor(x) < x.basePrice ? ' · tarif quantité' : ''}'),
@@ -471,9 +471,9 @@ class _CartState extends State<CartScreen> {
                   ),
                 ),
               const SizedBox(height: 12),
-              Text('Total estimé : ${money(total, l.first.currency)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
+              Text('Total estimé : ${money(total, l.first.currency)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.ink)),
               const SizedBox(height: 4),
-              const Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
+              Text('Le total final est recalculé par le serveur (livraison, frais, réductions).', style: TextStyle(color: C.muted)),
               const SizedBox(height: 16),
               PrimaryButton(
                 label: tr('Passer commande'),
@@ -484,7 +484,7 @@ class _CartState extends State<CartScreen> {
                 },
               ),
               const SizedBox(height: 8),
-              const Text('Vos articles restent dans le panier tant qu\'ils ne sont pas payés. Le paiement se fait à la validation, avec votre portefeuille HTG ou USD. Seuls les achats payés apparaissent dans « Mes commandes ».', style: TextStyle(color: C.muted)),
+              Text('Vos articles restent dans le panier tant qu\'ils ne sont pas payés. Le paiement se fait à la validation, avec votre portefeuille HTG ou USD. Seuls les achats payés apparaissent dans « Mes commandes ».', style: TextStyle(color: C.muted)),
             ],
             FutureBuilder<List<Map<String, dynamic>>>(
               future: pending,
@@ -493,11 +493,11 @@ class _CartState extends State<CartScreen> {
                 if (items.isEmpty) return const SizedBox();
                 return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const SizedBox(height: 22),
-                  const Text('Réservations en attente de paiement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
-                  const Text('Ces articles sont réservés pour un temps limité. Payez-les ou annulez pour les remettre en vente.', style: TextStyle(color: C.muted)),
+                  Text('Réservations en attente de paiement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+                  Text('Ces articles sont réservés pour un temps limité. Payez-les ou annulez pour les remettre en vente.', style: TextStyle(color: C.muted)),
                   for (final o in items)
                     Card(
-                      color: Colors.white,
+                      color: C.card,
                       child: ListTile(
                         title: Text('${(o['shops'] as Map?)?['name'] ?? 'Boutique'} · ${money((o['total_minor'] as num?) ?? 0, '${o['currency'] ?? 'HTG'}')}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text([for (final it in (o['order_items'] as List? ?? const [])) '${(it as Map)['qty']} × ${it['name']}'].join(', ')),
@@ -527,9 +527,9 @@ class AccountScreen extends StatelessWidget {
       if (!Config.configured)
         _notConfigured()
       else if (u != null) ...[
-        Text(u.email ?? '', style: const TextStyle(fontSize: 18, color: C.ink)),
+        Text(u.email ?? '', style: TextStyle(fontSize: 18, color: C.ink)),
         const SizedBox(height: 8),
-        const Text('Retrouvez votre profil, vos adresses et la suppression de compte dans « Mon profil » (menu).', style: TextStyle(color: C.muted)),
+        Text('Retrouvez votre profil, vos adresses et la suppression de compte dans « Mon profil » (menu).', style: TextStyle(color: C.muted)),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () async {

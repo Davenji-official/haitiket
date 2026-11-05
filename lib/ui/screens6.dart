@@ -30,12 +30,12 @@ class PlanCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: valid ? C.mint : const Color(0xFFFFF1EC), borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: valid ? C.mint : const C.tint, borderRadius: BorderRadius.circular(18)),
       child: FutureBuilder<double?>(
         future: Repo.quoteWalletFeeUsd('shop_plan'),
         builder: (_, s) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(valid ? "Abonnement actif jusqu’au ${until!.substring(0, 10)}" : 'Abonnement boutique non payé', style: const TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
-          Text('Tarif mensuel : ${usdFeeText(s.data, '20')}', style: const TextStyle(color: C.muted)),
+          Text(valid ? "Abonnement actif jusqu’au ${until!.substring(0, 10)}" : 'Abonnement boutique non payé', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Tarif mensuel : ${usdFeeText(s.data, '20')}', style: TextStyle(color: C.muted)),
           const SizedBox(height: 8),
           PrimaryButton(
             label: valid ? 'Abonnement actif' : "Payer l'abonnement avec le portefeuille USD",
@@ -53,7 +53,7 @@ class PlanCard extends StatelessWidget {
           FutureBuilder<double?>(
             future: Repo.quoteWalletFeeUsd('shop_plan_yearly'),
             builder: (_, annual) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Tarif annuel : ${usdFeeText(annual.data, '200')} USD', style: const TextStyle(color: C.muted)),
+              Text('Tarif annuel : ${usdFeeText(annual.data, '200')} USD', style: TextStyle(color: C.muted)),
               const SizedBox(height: 6),
               PrimaryButton(
                 label: valid ? 'Abonnement actif' : 'Payer l’abonnement annuel (365 jours)',
@@ -69,7 +69,7 @@ class PlanCard extends StatelessWidget {
               ),
             ]),
           ),
-          const Text('Le débit est effectué côté serveur. Aucun change automatique depuis le portefeuille HTG. Le renouvellement anticipé est désactivé tant que l’abonnement est actif.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Le débit est effectué côté serveur. Aucun change automatique depuis le portefeuille HTG. Le renouvellement anticipé est désactivé tant que l’abonnement est actif.', style: TextStyle(color: C.muted, fontSize: 12)),
         ]),
       ),
     );
@@ -128,7 +128,7 @@ class _BrandingState extends State<BrandingEditor> {
   @override
   Widget build(BuildContext context) => ExpansionTile(
         tilePadding: EdgeInsets.zero,
-        title: const Text('Personnaliser ma boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+        title: Text('Personnaliser ma boutique', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
         children: [
           const Align(alignment: Alignment.centerLeft, child: Text('Logo', style: TextStyle(fontWeight: FontWeight.w700))),
           ImageUploadField(onUrl: (u) => logo = u),
@@ -238,31 +238,31 @@ class _WalletScreenState extends State<WalletScreen> {
     if (mounted) setState(() => busy = false);
   }
 
-  Widget card(String title, String value) => Container(margin: const EdgeInsets.only(bottom: 12),padding: const EdgeInsets.all(18),decoration: BoxDecoration(color: Colors.white,borderRadius: BorderRadius.circular(20),border: Border.all(color:C.line)),child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.w800,color:C.ink)),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:C.green))]));
+  Widget card(String title, String value) => Container(margin: const EdgeInsets.only(bottom: 12),padding: const EdgeInsets.all(18),decoration: BoxDecoration(color: C.card,borderRadius: BorderRadius.circular(20),border: Border.all(color:C.line)),child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:TextStyle(fontWeight:FontWeight.w800,color:C.ink)),const SizedBox(height:8),Text(value,style:TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:C.green))]));
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
     const MascotHeader(mascot: Mascot.wallet, title: 'Portefeuille HAITIKET', subtitle: 'Ajoutez, gardez et retirez votre argent en sécurité.'),
     if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
       FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};String bal(String c)=>money(((balances[c] as num?)??0),c);return Column(children:[card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);}),
-      const SizedBox(height:8), const Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
+      const SizedBox(height:8), Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
       DropdownButtonFormField<String>(value:topupCurrency,decoration:const InputDecoration(labelText:'Devise à créditer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>topupCurrency=v??'HTG')),
       Field(amount,'Montant à créditer en $topupCurrency'),
-      if (topupCurrency == 'USD') FutureBuilder<double?>(future:rateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(amount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?(value*rate):null;return Container(margin:const EdgeInsets.only(top:6,bottom:8),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:C.mint,borderRadius:BorderRadius.circular(12)),child:Text(rateState.connectionState!=ConnectionState.done?'Chargement du taux officiel HAITIKET…':rate==null?'Taux USD → HTG non configuré. La recharge USD est indisponible.': 'Taux fixé par l’administration : 1 USD = ${rate.toStringAsFixed(4)} HTG\nMontant estimé payé en HTG : ${converted==null?'—':converted.toStringAsFixed(2)} HTG. Le montant final est calculé côté serveur.',style:const TextStyle(color:C.ink,height:1.4)));}),
+      if (topupCurrency == 'USD') FutureBuilder<double?>(future:rateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(amount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?(value*rate):null;return Container(margin:const EdgeInsets.only(top:6,bottom:8),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:C.mint,borderRadius:BorderRadius.circular(12)),child:Text(rateState.connectionState!=ConnectionState.done?'Chargement du taux officiel HAITIKET…':rate==null?'Taux USD → HTG non configuré. La recharge USD est indisponible.': 'Taux fixé par l’administration : 1 USD = ${rate.toStringAsFixed(4)} HTG\nMontant estimé payé en HTG : ${converted==null?'—':converted.toStringAsFixed(2)} HTG. Le montant final est calculé côté serveur.',style:TextStyle(color:C.ink,height:1.4)));}),
       DropdownButtonFormField<String>(value:method,decoration:const InputDecoration(labelText:'Méthode de paiement'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash — page de paiement')),DropdownMenuItem(value:'natcash',child:Text('NatCash — page de paiement')),DropdownMenuItem(value:'moncash_ussd',child:Text('MonCash USSD')),DropdownMenuItem(value:'natcash_ussd',child:Text('NatCash USSD'))],onChanged:(v)=>setState(()=>method=v??'moncash')),
       if(method.endsWith('_ussd')) Field(phone,'Téléphone haïtien (509XXXXXXXX)'),
       const SizedBox(height:10),PrimaryButton(label:busy?'Préparation…':'Ajouter de l’argent',icon:Icons.add_card,onPressed:busy?null:topup),
       const SizedBox(height:22),
-      const Text('Retirer vers MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
+      Text('Retirer vers MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
       const SizedBox(height:6),
-      const Text('Le retrait USD est converti en HTG au taux configuré par l’administration. Minimum : 1 USD ou 50 HTG. Le fournisseur doit confirmer le transfert et disposer du solde marchand nécessaire.',style:TextStyle(color:C.muted,height:1.4)),
+      Text('Le retrait USD est converti en HTG au taux configuré par l’administration. Minimum : 1 USD ou 50 HTG. Le fournisseur doit confirmer le transfert et disposer du solde marchand nécessaire.',style:TextStyle(color:C.muted,height:1.4)),
       DropdownButtonFormField<String>(value:withdrawCurrency,decoration:const InputDecoration(labelText:'Devise à retirer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>withdrawCurrency=v??'HTG')),
       Field(withdrawAmount,'Montant à retirer ($withdrawCurrency)'),
-      if (withdrawCurrency == 'USD') FutureBuilder<double?>(future:withdrawRateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(withdrawAmount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?value*rate:null;return Padding(padding:const EdgeInsets.only(top:4,bottom:8),child:Text(rate==null?'Taux USD → HTG pour les retraits non configuré.': 'Taux de retrait : 1 USD = ${rate.toStringAsFixed(4)} HTG\nMontant estimé reçu en HTG : ${converted?.toStringAsFixed(2) ?? '—'} HTG',style:const TextStyle(color:C.muted)));}),
+      if (withdrawCurrency == 'USD') FutureBuilder<double?>(future:withdrawRateFuture,builder:(context,rateState){final rate=rateState.data;final value=double.tryParse(withdrawAmount.text.replaceAll(',', '.'));final converted=rate!=null&&value!=null&&value>0?value*rate:null;return Padding(padding:const EdgeInsets.only(top:4,bottom:8),child:Text(rate==null?'Taux USD → HTG pour les retraits non configuré.': 'Taux de retrait : 1 USD = ${rate.toStringAsFixed(4)} HTG\nMontant estimé reçu en HTG : ${converted?.toStringAsFixed(2) ?? '—'} HTG',style:TextStyle(color:C.muted)));}),
       Field(withdrawPhone,'Numéro destinataire (509XXXXXXXX)',type:TextInputType.phone),
       DropdownButtonFormField<String>(value:withdrawMethod,decoration:const InputDecoration(labelText:'Recevoir par'),items:const [DropdownMenuItem(value:'moncash',child:Text('MonCash')),DropdownMenuItem(value:'natcash',child:Text('NatCash'))],onChanged:(v)=>setState(()=>withdrawMethod=v??'moncash')),
       const SizedBox(height:10),PrimaryButton(label:busy?'Traitement…':'Demander un retrait',icon:Icons.payments_outlined,onPressed:busy?null:withdraw),
       const SizedBox(height:10),
-      const Text('Les achats, abonnements et revenus des ventes/livraisons doivent encore être reliés au portefeuille dans les flux métier. Ne considère pas le portefeuille comme prêt à la production avant validation du rapprochement Plop Plop et des tests réels.',style:TextStyle(color:C.muted,height:1.45)),
+      Text('Les achats, abonnements et revenus des ventes/livraisons doivent encore être reliés au portefeuille dans les flux métier. Ne considère pas le portefeuille comme prêt à la production avant validation du rapprochement Plop Plop et des tests réels.',style:TextStyle(color:C.muted,height:1.45)),
       const SizedBox(height:10),OutlinedButton.icon(onPressed:reload,icon:const Icon(Icons.refresh),label:const Text('Actualiser le portefeuille')),
     ]
   ]);
