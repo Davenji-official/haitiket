@@ -1,3 +1,4 @@
+import 'admin_ops.dart';
 import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import '../theme.dart';
@@ -507,6 +508,7 @@ class _OfficialShopAdminTabState extends State<OfficialShopAdminTab> {
         FilledButton.icon(onPressed: busy ? null : save, icon: const Icon(Icons.save_outlined), label: Text(busy ? 'Enregistrement…' : shop == null ? 'Créer la boutique officielle' : 'Enregistrer les paramètres')),
         if (shop != null) ...[
           const SizedBox(height: 12),
+          const OfficialShopOwnerCard(),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),

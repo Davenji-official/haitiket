@@ -1,3 +1,4 @@
+import '../media_formats.dart';
 import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
@@ -217,15 +218,15 @@ class _ImageUploadState extends State<ImageUploadField> {
 
   Future<void> pick() async {
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+      // Pas de recompression : le format d'origine (JPEG/JPG, PNG, WebP, AVIF, GIF) est conservé.
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (x == null) return;
-      final ext = x.name.contains('.') ? x.name.split('.').last.toLowerCase() : 'jpg';
-      const mimes = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'};
-      final mime = mimes[ext];
-      if (mime == null) throw 'Format non pris en charge (JPEG, PNG ou WebP).';
+      final ext = MediaFormats.ext(x.name).isEmpty ? 'jpg' : MediaFormats.ext(x.name);
+      final mime = MediaFormats.imageMimes[ext];
+      if (mime == null) throw 'Format non pris en charge (${MediaFormats.imageHelp}).';
       setState(() => busy = true);
       final bytes = await x.readAsBytes();
-      if (bytes.length > 3 * 1024 * 1024) throw 'Photo trop lourde (3 Mo maximum).';
+      if (bytes.length > 10 * 1024 * 1024) throw 'Photo trop lourde (10 Mo maximum).';
       final u = await Repo.uploadImage(bytes, ext, mime);
       setState(() => url = u);
       widget.onUrl(u);

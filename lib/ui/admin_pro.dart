@@ -1,3 +1,4 @@
+import '../media_formats.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
 import '../theme.dart';
+import 'admin_finance.dart';
 import 'admin_ops.dart';
+import 'live_charts.dart';
 import 'admin_screen.dart';
 import 'fx.dart';
 import 'screens5.dart';
@@ -156,118 +159,17 @@ class ImpersonationBanner extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Graphiques (sans dépendance externe)
 // ---------------------------------------------------------------------------
-class _Series {
-  final String name;
-  final Color color;
-  final List<double> values;
-  const _Series(this.name, this.color, this.values);
-}
-
-class _LinePainter extends CustomPainter {
-  final List<_Series> series;
-  final bool bars;
-  _LinePainter(this.series, this.bars);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const padL = 6.0, padB = 4.0, padT = 6.0;
-    final w = size.width - padL, h = size.height - padB - padT;
-    var maxV = 0.0;
-    for (final s in series) {
-      for (final v in s.values) {
-        if (v > maxV) maxV = v;
-      }
-    }
-    if (maxV <= 0) maxV = 1;
-    final grid = Paint()..color = C.line..strokeWidth = 1;
-    for (var i = 0; i <= 4; i++) {
-      final y = padT + h * i / 4;
-      canvas.drawLine(Offset(padL, y), Offset(size.width, y), grid);
-    }
-    final count = series.isEmpty ? 0 : series.first.values.length;
-    if (count == 0) return;
-    for (var si = 0; si < series.length; si++) {
-      final s = series[si];
-      if (bars) {
-        final slot = w / count;
-        final bw = (slot * .7) / series.length;
-        for (var i = 0; i < count; i++) {
-          final bh = h * s.values[i] / maxV;
-          final x = padL + slot * i + slot * .15 + bw * si;
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(Rect.fromLTWH(x, padT + h - bh, bw, bh), const Radius.circular(2)),
-            Paint()..color = s.color,
-          );
-        }
-      } else {
-        final path = Path();
-        final fill = Path();
-        for (var i = 0; i < count; i++) {
-          final x = padL + (count == 1 ? w / 2 : w * i / (count - 1));
-          final y = padT + h - h * s.values[i] / maxV;
-          if (i == 0) {
-            path.moveTo(x, y);
-            fill.moveTo(x, padT + h);
-            fill.lineTo(x, y);
-          } else {
-            path.lineTo(x, y);
-            fill.lineTo(x, y);
-          }
-          if (i == count - 1) {
-            fill.lineTo(x, padT + h);
-            fill.close();
-          }
-        }
-        canvas.drawPath(fill, Paint()..color = s.color.withValues(alpha: .12));
-        canvas.drawPath(path, Paint()..color = s.color..style = PaintingStyle.stroke..strokeWidth = 2.4..strokeJoin = StrokeJoin.round);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _LinePainter old) => old.series != series || old.bars != bars;
-}
+typedef _Series = ChartSeries;
 
 class _ChartCard extends StatelessWidget {
   final String title, subtitle;
-  final List<_Series> series;
+  final List<ChartSeries> series;
   final bool bars;
   final List<String> labels;
   const _ChartCard({required this.title, required this.series, required this.labels, this.subtitle = '', this.bars = false});
 
   @override
-  Widget build(BuildContext context) {
-    final total = series.isEmpty ? 0.0 : series.first.values.fold<double>(0, (a, b) => a + b);
-    return Card(
-      color: C.card,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: C.ink, fontSize: 15))),
-            Text(subtitle.isEmpty ? total.toStringAsFixed(0) : subtitle, style: TextStyle(fontWeight: FontWeight.w800, color: C.green)),
-          ]),
-          const SizedBox(height: 8),
-          SizedBox(height: 150, width: double.infinity, child: CustomPaint(painter: _LinePainter(series, bars))),
-          const SizedBox(height: 6),
-          Row(children: [
-            Text(labels.isEmpty ? '' : labels.first, style: TextStyle(fontSize: 11, color: C.muted)),
-            const Spacer(),
-            Text(labels.isEmpty ? '' : labels.last, style: TextStyle(fontSize: 11, color: C.muted)),
-          ]),
-          if (series.length > 1)
-            Wrap(spacing: 12, children: [
-              for (final s in series)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
-                  const SizedBox(width: 4),
-                  Text(s.name, style: TextStyle(fontSize: 11, color: C.muted)),
-                ]),
-            ]),
-        ]),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => LiveChart(title: title, subtitle: subtitle, series: series, labels: labels, bars: bars);
 }
 
 class _Kpi extends StatelessWidget {
@@ -307,6 +209,8 @@ class _AdminProState extends State<AdminPro> {
   int idx = 0;
   static const _items = <(String, IconData)>[
     ('Analytique', Icons.insights_outlined),
+    ('Revenus', Icons.payments_outlined),
+    ('Commissions', Icons.percent),
     ('Carte live', Icons.map_outlined),
     ('Clients', Icons.people_alt_outlined),
     ('Commandes', Icons.receipt_long_outlined),
@@ -323,20 +227,24 @@ class _AdminProState extends State<AdminPro> {
       case 0:
         return const _AnalyticsPage();
       case 1:
-        return const AdminLiveMapPage();
+        return const AdminRevenuePage();
       case 2:
-        return const _ClientsPage();
+        return const AdminCommissionsPage();
       case 3:
-        return const _OrdersPage();
+        return const AdminLiveMapPage();
       case 4:
-        return const _CatalogPage();
+        return const _ClientsPage();
       case 5:
-        return const AdminLogisticsPage();
+        return const _OrdersPage();
       case 6:
-        return const AdminFraudPage();
+        return const _CatalogPage();
       case 7:
-        return const _BroadcastPage();
+        return const AdminLogisticsPage();
       case 8:
+        return const AdminFraudPage();
+      case 9:
+        return const _BroadcastPage();
+      case 10:
         return const _SettingsPage();
       default:
         return const AdminScreen();
@@ -392,6 +300,8 @@ class _AnalyticsPage extends StatefulWidget {
 class _AnalyticsPageState extends State<_AnalyticsPage> {
   int days = 30;
   Timer? timer;
+  List<Map<String, dynamic>>? lastSeries;
+  Map<String, dynamic>? lastStats;
   late Future<Map<String, dynamic>> stats = _obj('admin_online_stats');
   late Future<List<Map<String, dynamic>>> series = _rows('admin_timeseries', {'p_days': days});
   late Future<List<Map<String, dynamic>>> breakdown = _rows('admin_order_status_breakdown');
@@ -399,8 +309,14 @@ class _AnalyticsPageState extends State<_AnalyticsPage> {
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => stats = _obj('admin_online_stats'));
+    timer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {
+          stats = _obj('admin_online_stats');
+          series = _rows('admin_timeseries', {'p_days': days});
+          breakdown = _rows('admin_order_status_breakdown');
+        });
+      }
     });
   }
 
@@ -432,7 +348,8 @@ class _AnalyticsPageState extends State<_AnalyticsPage> {
             future: stats,
             builder: (_, s) {
               if (s.hasError) return EmptyState(title: 'Accès refusé', text: Repo.err(s.error!));
-              final d = s.data;
+              if (s.data != null) lastStats = s.data;
+              final d = s.data ?? lastStats;
               if (d == null) return const LinearProgressIndicator();
               String v(String k) => '${_n(d[k]).toInt()}';
               return Wrap(spacing: 10, runSpacing: 10, children: [
@@ -464,8 +381,9 @@ class _AnalyticsPageState extends State<_AnalyticsPage> {
           FutureBuilder<List<Map<String, dynamic>>>(
             future: series,
             builder: (_, s) {
-              if (s.hasError) return Text(Repo.err(s.error!));
-              final l = s.data;
+              if (s.hasError && lastSeries == null) return Text(Repo.err(s.error!));
+              if (s.data != null) lastSeries = s.data;
+              final l = s.data ?? lastSeries;
               if (l == null) return const LinearProgressIndicator();
               final labels = [for (final r in l) '${r['day']}'.length >= 10 ? '${r['day']}'.substring(5, 10) : '${r['day']}'];
               double sum(String k, {double div = 1}) => col(l, k, div: div).fold(0.0, (a, b) => a + b);
@@ -1140,12 +1058,13 @@ class _BroadcastPageState extends State<_BroadcastPage> {
 
   Future<void> pickImage() async {
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (x == null) return;
       final bytes = await x.readAsBytes();
-      final name = x.name.toLowerCase();
-      final ext = name.endsWith('.png') ? 'png' : (name.endsWith('.webp') ? 'webp' : 'jpg');
-      final url = await Repo.uploadImage(bytes, ext, 'image/${ext == 'jpg' ? 'jpeg' : ext}');
+      final ext = MediaFormats.ext(x.name).isEmpty ? 'jpg' : MediaFormats.ext(x.name);
+      final mime = MediaFormats.imageMimes[ext];
+      if (mime == null) throw 'Format non pris en charge (${MediaFormats.imageHelp}).';
+      final url = await Repo.uploadImage(bytes, ext, mime);
       setState(() => image.text = url);
     } catch (e) {
       if (mounted) toast(context, 'Téléversement impossible (${Repo.err(e)}). Collez plutôt une adresse https:// d’image.');

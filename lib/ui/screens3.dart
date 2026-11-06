@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';
+import 'chat_extras.dart';
 import 'contacts_widget.dart';
+import 'screens.dart' show NetworkScreen;
 import 'qr_scan.dart';
 import 'tours_widget.dart';
 import '../data/repo.dart';
@@ -145,6 +147,7 @@ class _ChatState extends State<ChatScreen> {
   String title = 'Conversation';
   Map<String, Map<String, dynamic>> people = {};
   Set<String> hidden = <String>{};
+  String? ctxProduct;
 
   Map<String, dynamic>? get other {
     final me = currentUser()?.id;
@@ -161,6 +164,9 @@ class _ChatState extends State<ChatScreen> {
       if (mounted) setState(() => title = t);
     }).catchError((_) {});
     loadPeople();
+    ChatMedia.context(widget.cid).then((c) {
+      if (c != null && c.kind == 'product' && mounted) setState(() => ctxProduct = c.id);
+    });
   }
 
   Future<void> loadPeople() async {
@@ -230,6 +236,8 @@ class _ChatState extends State<ChatScreen> {
         ]),
       ),
       body: Column(children: [
+        if (ctxProduct != null)
+          ConstrainedBox(constraints: const BoxConstraints(maxHeight: 250), child: SingleChildScrollView(child: ChatProductCard(productId: ctxProduct!, banner: true))),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: stream,
@@ -264,7 +272,7 @@ class _ChatState extends State<ChatScreen> {
                               decoration: BoxDecoration(color: mine ? C.deep : C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
                               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                                 if (!mine && senderName.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(senderName, style: TextStyle(color: C.green, fontWeight: FontWeight.w800, fontSize: 12))),
-                                Text(deleted ? 'Message supprimé' : '${m['body']}', style: TextStyle(color: mine ? Colors.white : C.ink, fontSize: 16, fontStyle: deleted ? FontStyle.italic : FontStyle.normal)),
+                                deleted ? Text('Message supprimé', style: TextStyle(color: mine ? Colors.white : C.ink, fontSize: 16, fontStyle: FontStyle.italic)) : ChatMessageBody(m: m, mine: mine),
                                 Padding(padding: const EdgeInsets.only(top: 3), child: Text(_chatWhen(m['created_at']), style: TextStyle(color: mine ? Colors.white60 : C.muted, fontSize: 10))),
                               ]),
                             ),
@@ -283,6 +291,7 @@ class _ChatState extends State<ChatScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
             child: Row(children: [
+              IconButton(tooltip: 'Joindre un fichier, une photo, une vidéo ou un produit', onPressed: () => chatAttach(context, widget.cid), icon: Icon(Icons.attach_file, color: C.green)),
               Expanded(child: TextField(controller: input, maxLength: 2000, buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null, onSubmitted: (_) => send(), decoration: const InputDecoration(hintText: 'Votre message'))),
               const SizedBox(width: 8),
               IconButton.filled(onPressed: send, style: IconButton.styleFrom(backgroundColor: C.deep), icon: const Icon(Icons.send, color: Colors.white)),
@@ -500,7 +509,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   Future<void> withdrawCourierRole() async {
     final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
       title: const Text('Arrêter définitivement les livraisons ?'),
-      content: const Text('Votre candidature sera marquée comme retirée et l’historique sera conservé. Vous pourrez contacter le support si vous souhaitez revenir plus tard.'),
+      content: const Text('Vous ne recevrez plus de missions. Votre historique est conservé et vous pourrez redevenir livreur à tout moment en déposant une nouvelle candidature. (Impossible si une mission est en cours.)'),
       actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Retirer ma candidature'))],
     ));
     if (ok != true) return;
@@ -536,6 +545,17 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
               final d = s.data!;
               final app = d['app'] as Map<String, dynamic>?;
               if (app == null) return const EmptyState(title: 'Aucune candidature', text: "Déposez votre candidature dans « HAITIKET Network » pour devenir livreur.");
+              if (app['status'] == 'withdrawn') {
+                return Column(children: [
+                  const EmptyState(title: 'Vous avez arrêté les livraisons', text: 'Votre historique est conservé. Vous pouvez redevenir livreur à tout moment en déposant une nouvelle candidature.'),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NetworkScreen())).then((_) => reload()),
+                    icon: const Icon(Icons.two_wheeler),
+                    label: const Text('Redevenir livreur'),
+                  ),
+                ]);
+              }
               if (app['status'] != 'approved') return EmptyState(title: 'Candidature en cours', text: 'Statut : ${app['status']}. Vous recevrez des missions après approbation.');
               final avail = d['avail'] as bool;
               if (!_availabilityChecked) {

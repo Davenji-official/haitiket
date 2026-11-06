@@ -123,6 +123,8 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
   String? selectedId;
   double zoom = 10.5;
   List<LatLng> route = [];
+  List<Map<String, dynamic>> steps = [];
+  int stepIdx = 1;
   Map<String, dynamic>? routeInfo;
   bool follow = false, arrived = false;
   String mode = 'moto'; // walk | moto | car (estimation du temps)
@@ -216,6 +218,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     setState(() {
       selectedId = s['id'] as String;
       route = [];
+      steps = [];
       routeInfo = null;
     });
     final i = visible.indexWhere((x) => x['id'] == s['id']);
@@ -274,7 +277,76 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     if (route.isNotEmpty && selectedId != null) updateProgress(np);
   }
 
+  static const _modFr = {
+    'left': 'à gauche',
+    'right': 'à droite',
+    'slight left': 'légèrement à gauche',
+    'slight right': 'légèrement à droite',
+    'sharp left': 'franchement à gauche',
+    'sharp right': 'franchement à droite',
+    'straight': 'tout droit',
+    'uturn': 'demi-tour',
+  };
+
+  LatLng stepPoint(Map<String, dynamic> st) {
+    final loc = (st['maneuver'] as Map)['location'] as List;
+    return LatLng((loc[1] as num).toDouble(), (loc[0] as num).toDouble());
+  }
+
+  String stepText(Map<String, dynamic> st) {
+    final man = Map<String, dynamic>.from(st['maneuver'] as Map);
+    final type = '${man['type']}';
+    final mod = '${man['modifier'] ?? ''}';
+    final name = '${st['name'] ?? ''}'.trim();
+    final on = name.isEmpty ? '' : ' sur $name';
+    if (type == 'arrive') return 'Vous arrivez à destination';
+    if (type == 'roundabout' || type == 'rotary' || type == 'roundabout turn') return 'Au rond-point, ${man['exit'] != null ? 'prenez la ${man['exit']}e sortie' : 'continuez'}$on';
+    if (mod == 'uturn') return 'Faites demi-tour$on';
+    if (mod == 'straight' || type == 'continue' || type == 'new name') return 'Continuez tout droit$on';
+    if (type == 'depart') return 'Démarrez$on';
+    return 'Tournez ${_modFr[mod] ?? mod}$on';
+  }
+
+  IconData stepIcon(Map<String, dynamic> st) {
+    final man = Map<String, dynamic>.from(st['maneuver'] as Map);
+    final type = '${man['type']}';
+    final mod = '${man['modifier'] ?? ''}';
+    if (type == 'arrive') return Icons.flag;
+    if (type == 'roundabout' || type == 'rotary') return Icons.roundabout_left;
+    switch (mod) {
+      case 'left':
+        return Icons.turn_left;
+      case 'right':
+        return Icons.turn_right;
+      case 'slight left':
+        return Icons.turn_slight_left;
+      case 'slight right':
+        return Icons.turn_slight_right;
+      case 'sharp left':
+        return Icons.turn_sharp_left;
+      case 'sharp right':
+        return Icons.turn_sharp_right;
+      case 'uturn':
+        return Icons.u_turn_left;
+      default:
+        return Icons.straight;
+    }
+  }
+
+  /// Avance dans la liste des manœuvres quand l'utilisateur dépasse le point de virage (moins de 30 m).
+  void advanceStep(Position np) {
+    while (stepIdx < steps.length - 1) {
+      final p = stepPoint(steps[stepIdx]);
+      if (distKm(np.latitude, np.longitude, p.latitude, p.longitude) < 0.03) {
+        stepIdx++;
+      } else {
+        break;
+      }
+    }
+  }
+
   void updateProgress(Position np) {
+    if (steps.isNotEmpty) advanceStep(np);
     final dest = route.last;
     double remaining, off = 0;
     if (routeDotted || route.length < 2) {
@@ -314,14 +386,18 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
     final start = LatLng(me!.latitude, me!.longitude);
     setState(() => routing = true);
     try {
-      final url = '$_routeBase/route/v1/driving/${start.longitude},${start.latitude};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson';
+      final url = '$_routeBase/route/v1/driving/${start.longitude},${start.latitude};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson&steps=true';
       final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 9));
       final d = jsonDecode(r.body) as Map<String, dynamic>;
       final rt = (d['routes'] as List).first as Map<String, dynamic>;
       final pts = [for (final c in (rt['geometry']['coordinates'] as List)) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())];
+      final legs = (rt['legs'] as List?) ?? const [];
+      final st = legs.isEmpty ? <Map<String, dynamic>>[] : [for (final x in (legs.first['steps'] as List)) Map<String, dynamic>.from(x as Map)];
       if (!mounted) return;
       setState(() {
         route = pts;
+        steps = st;
+        stepIdx = st.length > 1 ? 1 : 0;
         routeDotted = false;
         routeInfo = {'km': (rt['distance'] as num) / 1000, 'min': ((rt['duration'] as num) / 60).round(), 'road': true};
         remainKm = (rt['distance'] as num) / 1000;
@@ -332,6 +408,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         route = [start, dest];
+        steps = [];
         routeDotted = true;
         routeInfo = {'km': distKm(start.latitude, start.longitude, dest.latitude, dest.longitude), 'min': null, 'road': false};
       });
@@ -457,6 +534,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
         kind = value;
         selectedId = null;
         route = [];
+        steps = [];
         routeInfo = null;
         WidgetsBinding.instance.addPostFrameCallback((_) => fitAll());
       }),
@@ -539,6 +617,22 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(color: C.deep, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 14)]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          if (!arrived && steps.isNotEmpty && stepIdx < steps.length)
+            Builder(builder: (_) {
+              final st = steps[stepIdx];
+              final p = stepPoint(st);
+              final dm = me == null ? 0.0 : distKm(me!.latitude, me!.longitude, p.latitude, p.longitude) * 1000;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                child: Row(children: [
+                  Icon(stepIcon(st), color: C.deep, size: 34),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('${dm < 1000 ? 'Dans ${(dm / 10).round() * 10} m' : 'Dans ${(dm / 1000).toStringAsFixed(1)} km'} · ${stepText(st)}', style: TextStyle(color: C.deep, fontWeight: FontWeight.w900, fontSize: 15))),
+                ]),
+              );
+            }),
           Text(arrived ? 'Vous êtes arrivé à ${t.first['name']}' : 'Vers ${t.first['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
           if (!arrived)
             Text('${fmtKm(km)} · ~$eta min · arrivée ${two(at.hour)}:${two(at.minute)}${speedKmh >= 3 ? ' · ${speedKmh.round()} km/h' : ''}', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
@@ -653,6 +747,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
               setState(() {
                 selectedId = null;
                 route = [];
+                steps = [];
                 routeInfo = null;
               });
               fitAll();

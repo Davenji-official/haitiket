@@ -1,3 +1,4 @@
+import '../media_formats.dart';
 import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,16 +23,16 @@ class MediaPickerField extends StatefulWidget {
 
 class _MediaPickerState extends State<MediaPickerField> {
   bool busy = false;
-  static const imgMime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'};
+  static const imgMime = MediaFormats.imageMimes;
   static const vidMime = {'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime'};
 
   Future<void> add(XFile x, bool video) async {
     final ext = x.name.contains('.') ? x.name.split('.').last.toLowerCase() : (video ? 'mp4' : 'jpg');
     final mime = (video ? vidMime : imgMime)[ext];
-    if (mime == null) throw video ? 'Format vidéo non pris en charge (MP4, WebM ou MOV).' : 'Format non pris en charge (JPEG, PNG, WebP ou GIF).';
+    if (mime == null) throw video ? 'Format vidéo non pris en charge (MP4, WebM ou MOV).' : 'Format non pris en charge (${MediaFormats.imageHelp}).';
     final bytes = await x.readAsBytes();
-    final limit = video ? 20 * 1024 * 1024 : 3 * 1024 * 1024;
-    if (bytes.length > limit) throw video ? 'Vidéo trop lourde (20 Mo maximum).' : 'Photo trop lourde (3 Mo maximum).';
+    final limit = video ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (bytes.length > limit) throw video ? 'Vidéo trop lourde (20 Mo maximum).' : 'Photo trop lourde (10 Mo maximum).';
     final url = await Repo.uploadImage(bytes, ext, mime);
     widget.items.add({'url': url, 'kind': video ? 'video' : 'image'});
   }

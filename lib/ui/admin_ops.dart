@@ -497,3 +497,73 @@ class _AdminFraudPageState extends State<AdminFraudPage> {
         ),
       ]);
 }
+
+// ---------------------------------------------------------------------------
+// Boutique officielle : propriétaire visible et transférable entre administrateurs
+// ---------------------------------------------------------------------------
+class OfficialShopOwnerCard extends StatefulWidget {
+  const OfficialShopOwnerCard({super.key});
+  @override
+  State<OfficialShopOwnerCard> createState() => _OfficialShopOwnerCardState();
+}
+
+class _OfficialShopOwnerCardState extends State<OfficialShopOwnerCard> {
+  late Future<Map<String, dynamic>?> f = load();
+
+  Future<Map<String, dynamic>?> load() async {
+    final r = await _db.rpc('admin_official_shop_owner');
+    return r == null ? null : Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<void> transfer(String userId) async {
+    try {
+      await _db.rpc('admin_set_official_shop_owner', params: {'p_user': userId});
+      if (mounted) toast(context, 'Propriété transférée. La boutique apparaît maintenant dans l’espace vendeur du nouveau propriétaire.');
+      setState(() => f = load());
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  Future<void> chooseAdmin() async {
+    try {
+      final l = await _rows('admin_list_admins');
+      if (!mounted) return;
+      final pick = await showDialog<String>(
+        context: context,
+        builder: (d) => SimpleDialog(
+          title: const Text('Transférer à…'),
+          children: [for (final a in l) SimpleDialogOption(onPressed: () => Navigator.pop(d, '${a['user_id']}'), child: Text('${a['name'] ?? 'Admin'} · ${a['email']}'))],
+        ),
+      );
+      if (pick != null) await transfer(pick);
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>?>(
+        future: f,
+        builder: (_, s) {
+          final o = s.data;
+          if (o == null) return const SizedBox.shrink();
+          final me = o['is_me'] == true;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.line)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Propriétaire de la boutique officielle', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
+              const SizedBox(height: 4),
+              Text(me ? 'C’est vous : la boutique apparaît dans votre espace vendeur et vous confirmez ses remises (codes PIN/QR).' : '${o['owner_name'] ?? 'Administrateur'} (${o['owner_email']}) — la boutique officielle apparaît dans SON espace vendeur, pas dans le vôtre. Seul le propriétaire confirme les remises ; vous pouvez aussi forcer une remise depuis Admin → Commandes.', style: TextStyle(color: C.muted)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                if (!me) FilledButton.icon(onPressed: () async { final id = _db.auth.currentUser?.id; if (id != null) await transfer(id); }, icon: const Icon(Icons.verified_user_outlined), label: const Text('Devenir le propriétaire')),
+                OutlinedButton.icon(onPressed: chooseAdmin, icon: const Icon(Icons.swap_horiz), label: const Text('Transférer à un autre admin')),
+              ]),
+            ]),
+          );
+        },
+      );
+}
