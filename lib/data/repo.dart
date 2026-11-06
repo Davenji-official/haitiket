@@ -259,10 +259,11 @@ class Repo {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  static Future<Map<String, dynamic>> productById(String id) async {
+  static Future<Map<String, dynamic>> productById(String id, {bool requireStock = true}) async {
     if (!Config.configured) throw StateError('Catalogue indisponible.');
-    final row = await _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,is_featured,unit_label,attributes,category_id,audience,audiences,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind,is_official,official_badge_label,verified_at)')
-      .eq('id', id).eq('status', 'published').gt('stock', 0).single();
+    final q = _c.from('products').select('id,name,price_minor,currency,description,image_url,stock,source,paid_until,is_featured,unit_label,attributes,category_id,audience,audiences,categories(name),shop_id,product_tiers(min_qty,unit_price_minor,label),product_variants(id,size,color_name,color_hex,stock,audience,sku,unit_label,price_minor,attributes),shops(id,name,lat,lng,kind,is_official,official_badge_label,verified_at)')
+      .eq('id', id).eq('status', 'published');
+    final row = await (requireStock ? q.gt('stock', 0) : q).single();
     return Map<String, dynamic>.from(row);
   }
 
@@ -611,7 +612,16 @@ class Repo {
   static Future<void> withdrawCourier() async {
     final u = currentUser();
     if (u == null) throw StateError('Connectez-vous pour gérer votre candidature livreur.');
-    await _c.rpc('courier_withdraw_self_v53');
+    try {
+      await _c.rpc('courier_withdraw_self_v78');
+    } on PostgrestException catch (e) {
+      // Migration 0069 non appliquée : repli sur l'ancienne fonction.
+      if (e.code == 'PGRST202' || e.message.contains('courier_withdraw_self_v78')) {
+        await _c.rpc('courier_withdraw_self_v53');
+      } else {
+        rethrow;
+      }
+    }
     try { await setCourierAvailable(false); } catch (_) {}
   }
 
