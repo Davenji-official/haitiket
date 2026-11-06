@@ -1,3 +1,4 @@
+import 'dark_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -243,7 +244,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
     const MascotHeader(mascot: Mascot.wallet, title: 'Portefeuille HAITIKET', subtitle: 'Ajoutez, gardez et retirez votre argent en sécurité.'),
     if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
-      FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};String bal(String c)=>money(((balances[c] as num?)??0),c);return Column(children:[card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);}),
+      FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};return ValueListenableBuilder<bool>(valueListenable:BalancePrivacy.hidden,builder:(context,hid,_){String bal(String c)=>hid?'••••••':money(((balances[c] as num?)??0),c);return Column(children:[Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>BalancePrivacy.set(!hid),icon:Icon(hid?Icons.visibility_outlined:Icons.visibility_off_outlined,size:20),label:Text(hid?'Afficher les soldes':'Masquer les soldes'))),card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);});}),
       const SizedBox(height:8), Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
       DropdownButtonFormField<String>(value:topupCurrency,decoration:const InputDecoration(labelText:'Devise à créditer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>topupCurrency=v??'HTG')),
       Field(amount,'Montant à créditer en $topupCurrency'),

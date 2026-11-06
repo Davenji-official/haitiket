@@ -1,3 +1,4 @@
+import 'qr_scan.dart';
 import 'dark_mode.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -955,9 +956,26 @@ class _ShopPanelState extends State<ShopPanel> {
         return;
       }
       if (v == 'handover') {
-        final pin = await askText(context, 'Code donné par le client', type: TextInputType.number);
-        if (pin == null || pin.isEmpty) return;
-        final ok = await Repo.confirmHandover(id, pin);
+        final mode = await showModalBottomSheet<String>(
+          context: context,
+          builder: (c) => SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(leading: const Icon(Icons.qr_code_scanner), title: const Text('Scanner le QR code du client'), onTap: () => Navigator.pop(c, 'qr')),
+              ListTile(leading: const Icon(Icons.pin_outlined), title: const Text('Saisir le code à 6 chiffres'), onTap: () => Navigator.pop(c, 'pin')),
+            ]),
+          ),
+        );
+        if (mode == null || !mounted) return;
+        bool ok;
+        if (mode == 'qr') {
+          final payload = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QrScanScreen(title: 'QR du client')));
+          if (payload == null) return;
+          ok = await Repo.confirmHandoverQr(id, payload);
+        } else {
+          final pin = await askText(context, 'Code donné par le client', type: TextInputType.number);
+          if (pin == null || pin.isEmpty) return;
+          ok = await Repo.confirmHandover(id, pin);
+        }
         if (mounted) toast(context, ok ? 'Remise confirmée.' : 'Code incorrect.');
         reload();
         return;

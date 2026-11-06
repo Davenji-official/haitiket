@@ -86,6 +86,17 @@ class AdminImpersonation {
       active.value = label;
       if (data['was_banned'] == true && c.mounted) toast(c, 'Compte bloqué/supprimé : accès temporaire de 20 minutes, blocage rétabli à la sortie.');
       if (c.mounted) Navigator.of(c).popUntil((r) => r.isFirst);
+    } on FunctionException catch (e) {
+      final d = e.details;
+      var msg = d is Map && d['error'] != null ? '${d['error']}' : '$d';
+      if (e.status == 404) {
+        msg = 'La fonction « admin-impersonate » n’est pas déployée sur Supabase (commande : supabase functions deploy admin-impersonate).';
+      } else if (msg.contains('admin_begin_support_session') || msg.contains('admin_log_impersonation')) {
+        msg = 'La migration SQL 0067 n’a pas été exécutée dans Supabase.';
+      } else if (msg.contains('verrouill') || msg.contains('admin_console_locked')) {
+        msg = 'Console admin verrouillée : déverrouillez-la avec votre code.';
+      }
+      if (c.mounted) toast(c, msg);
     } catch (e) {
       if (c.mounted) toast(c, Repo.err(e));
     }
@@ -742,6 +753,7 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
             final roles = List<String>.from((d['roles'] as List).map((e) => '$e'));
             final isAdmin = roles.contains('admin');
             final blocked = p['account_status'] != 'active' || p['suspended'] == true;
+            final selfAccount = _db.auth.currentUser?.id == widget.userId;
             final label = '${p['display_name'] ?? d['email']}';
             final phone = '${p['phone'] ?? ''}';
             final wa = '${p['whatsapp'] ?? ''}'.isEmpty ? phone : '${p['whatsapp']}';
@@ -753,17 +765,27 @@ class _AdminUserDetailState extends State<AdminUserDetail> {
                   Text('${d['email']}', style: TextStyle(color: C.muted)),
                   const SizedBox(height: 10),
                   Wrap(spacing: 8, runSpacing: 8, children: [
-                    FilledButton.icon(onPressed: isAdmin ? null : () => AdminImpersonation.start(context, widget.userId, label), icon: const Icon(Icons.login), label: Text(blocked ? 'Prendre le contrôle (accès temporaire 20 min)' : 'Prendre le contrôle'), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))),
+                    FilledButton.icon(onPressed: (isAdmin || selfAccount) ? null : () => AdminImpersonation.start(context, widget.userId, label), icon: const Icon(Icons.login), label: Text(blocked ? 'Prendre le contrôle (accès temporaire 20 min)' : 'Prendre le contrôle'), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))),
                     OutlinedButton.icon(onPressed: () => edit(p), icon: const Icon(Icons.edit_outlined), label: const Text('Modifier')),
-                    OutlinedButton.icon(onPressed: isAdmin ? null : () => ban(!blocked), icon: Icon(blocked ? Icons.lock_open : Icons.block), label: Text(blocked ? 'Réactiver' : 'Bloquer')),
+                    OutlinedButton.icon(onPressed: selfAccount ? null : () => ban(!blocked), icon: Icon(blocked ? Icons.lock_open : Icons.block), label: Text(blocked ? 'Réactiver' : 'Bloquer')),
                     OutlinedButton.icon(onPressed: phone.isEmpty ? null : () => launchUrl(Uri(scheme: 'tel', path: phone)), icon: const Icon(Icons.call), label: const Text('Appeler')),
                     OutlinedButton.icon(onPressed: wa.isEmpty ? null : () { final n = wa.replaceAll(RegExp(r'[^0-9]'), ''); launchUrl(Uri.parse('https://wa.me/${n.length == 8 ? '509$n' : n}'), mode: LaunchMode.externalApplication); }, icon: const Icon(Icons.chat), label: const Text('WhatsApp')),
                     OutlinedButton.icon(onPressed: notifyUser, icon: const Icon(Icons.notifications_active_outlined), label: const Text('Message')),
                     OutlinedButton.icon(onPressed: () => resetPassword('${d['email']}'), icon: const Icon(Icons.lock_reset), label: const Text('Mot de passe')),
-                    OutlinedButton.icon(onPressed: isAdmin ? null : softDelete, icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent), label: const Text('Supprimer')),
+                    OutlinedButton.icon(onPressed: selfAccount ? null : softDelete, icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent), label: const Text('Supprimer')),
                     OutlinedButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: widget.userId)).then((_) { if (mounted) toast(context, 'Identifiant copié.'); }), icon: const Icon(Icons.copy), label: const Text('ID')),
                   ]),
                   const SizedBox(height: 10),
+                  if (selfAccount || isAdmin)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        selfAccount
+                            ? 'C’est VOTRE compte administrateur : prise de contrôle, blocage et suppression sont désactivés (sécurité). Ouvrez la fiche d’un autre client pour les utiliser.'
+                            : 'Ce compte est administrateur : la prise de contrôle est interdite (retirez d’abord son rôle admin ci-dessous). Le blocage reste possible.',
+                        style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700),
+                      ),
+                    ),
                   section('Identité', [
                     kv('Statut', blocked ? 'BLOQUÉ — ${p['suspended_reason'] ?? p['account_status_reason'] ?? ''}' : 'Actif'),
                     kv('Téléphone', p['phone']),
@@ -869,6 +891,26 @@ class _OrdersPageState extends State<_OrdersPage> {
   Future<List<Map<String, dynamic>>> load() => _rows('admin_search_orders', {'p_q': q.text.trim(), 'p_status': status, 'p_limit': 60});
   void reload() => setState(() => f = load());
 
+  Future<void> orderMenu(Map<String, dynamic> o, String v) async {
+    final id = '${o['id']}';
+    if (v == 'copy') {
+      await Clipboard.setData(ClipboardData(text: id));
+      if (mounted) toast(context, 'N° de commande copié.');
+      return;
+    }
+    final force = v == 'force';
+    final reason = await askText(context, force ? 'Motif de la remise forcée' : 'Motif du déblocage', hint: force ? '10 caractères minimum' : '5 caractères minimum');
+    if (reason == null || !mounted) return;
+    if (force && !await _confirm(context, 'Forcer la remise ?', 'La commande passera à « livrée/terminée » et le règlement vendeur/livreur sera déclenché. Action tracée dans le journal admin.')) return;
+    try {
+      final r = await _db.rpc(force ? 'admin_force_handover' : 'admin_reset_order_code', params: force ? {'p_order': id, 'p_reason': reason} : {'p_order': id, 'p_reason': reason});
+      if (mounted) toast(context, force ? 'Remise forcée : $r.' : 'Code débloqué : le livreur/vendeur peut réessayer.');
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(14), children: [
         Row(children: [
@@ -892,7 +934,14 @@ class _OrdersPageState extends State<_OrdersPage> {
                     title: Text('${money(_n(o['total_minor']), '${o['currency']}')} · ${o['status']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${o['shop_name']} ← ${o['customer_name'] ?? 'client'}\n${o['delivery_mode'] == 'delivery' ? 'Livraison ${money(_n(o['delivery_minor']), '${o['currency']}')} · livreur : ${o['courier_name'] ?? 'non affecté'}' : 'Retrait'} · ${_date(o['created_at'])}'),
                     isThreeLine: true,
-                    trailing: IconButton(icon: const Icon(Icons.copy), tooltip: 'Copier le n°', onPressed: () => Clipboard.setData(ClipboardData(text: '${o['id']}'))),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (v) => orderMenu(o, v),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'copy', child: Text('Copier le n° de commande')),
+                        PopupMenuItem(value: 'reset', child: Text('Débloquer le code (5 erreurs)')),
+                        PopupMenuItem(value: 'force', child: Text('Forcer la remise (livrée / terminée)')),
+                      ],
+                    ),
                   ),
                 ),
             ]);

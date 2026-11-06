@@ -64,3 +64,24 @@ const List<double> _kTileDark = <double>[
 
 Widget darkTileBuilder(BuildContext context, Widget tileWidget, TileImage tile) =>
     ThemeStore.dark.value ? ColorFiltered(colorFilter: const ColorFilter.matrix(_kTileDark), child: tileWidget) : tileWidget;
+
+/// Masquage des soldes (portefeuille, menu) : préférence mémorisée sur l'appareil, conservée entre les écrans et les lancements.
+class BalancePrivacy {
+  static final ValueNotifier<bool> hidden = ValueNotifier<bool>(false);
+  static const _key = 'haitiket_hide_balances';
+
+  static Future<void> restore() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      hidden.value = p.getBool(_key) ?? false;
+    } catch (_) {}
+  }
+
+  static Future<void> set(bool v) async {
+    hidden.value = v;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(_key, v);
+    } catch (_) {}
+  }
+}

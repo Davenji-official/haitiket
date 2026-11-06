@@ -50,7 +50,10 @@ class _ShellState extends State<Shell> {
   Timer? presenceTimer;
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
-  bool hideDrawerBalances = false;
+  bool get hideDrawerBalances => BalancePrivacy.hidden.value;
+  void _onPrivacy() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void initState() {
@@ -75,6 +78,7 @@ class _ShellState extends State<Shell> {
     if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) sec = Sec.wallet;
     if (Config.configured) {
       Repo.touchPresence();
+      BalancePrivacy.hidden.addListener(_onPrivacy);
       PushService.init();
       presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
         if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) Repo.touchPresence();
@@ -94,6 +98,7 @@ class _ShellState extends State<Shell> {
   void dispose() {
     authSub?.cancel();
     presenceTimer?.cancel();
+    BalancePrivacy.hidden.removeListener(_onPrivacy);
     super.dispose();
   }
 
@@ -255,7 +260,7 @@ class _ShellState extends State<Shell> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [Icon(Icons.account_balance_wallet_outlined, color: C.green, size: 18), const SizedBox(width: 7), Expanded(child: Text('Mes soldes', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink))),
                               IconButton(visualDensity: VisualDensity.compact, constraints: const BoxConstraints(), padding: EdgeInsets.zero,
-                                onPressed: () => setState(() => hideDrawerBalances = !hideDrawerBalances),
+                                onPressed: () => BalancePrivacy.set(!hideDrawerBalances),
                                 icon: Icon(hideDrawerBalances ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 19, color: C.green)),
                             ]),
                             if (snap.connectionState != ConnectionState.done) const LinearProgressIndicator(minHeight: 2)
