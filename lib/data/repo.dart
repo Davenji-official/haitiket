@@ -304,6 +304,7 @@ class Repo {
     return r as String?;
   }
 
+  static Future<bool> confirmHandoverQr(String orderId, String payload) async => (await _c.rpc('confirm_handover_qr', params: {'p_order': orderId, 'p_payload': payload})) == true;
   static Future<bool> confirmHandover(String orderId, String pin) async => (await _c.rpc('confirm_handover', params: {'p_order': orderId, 'p_pin': pin})) == true;
   static Future<bool> confirmPickupQr(String jobId, String payload) async => (await _c.rpc('confirm_pickup_qr', params: {'p_job': jobId, 'p_payload': payload})) == true;
   static Future<bool> confirmDeliveryQr(String jobId, String payload) async => (await _c.rpc('confirm_delivery_qr', params: {'p_job': jobId, 'p_payload': payload})) == true;
