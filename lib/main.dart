@@ -19,6 +19,7 @@ Future<void> main() async {
 
   await loadLang();
   await ThemeStore.restore();
+  await BalancePrivacy.restore();
   await CartStore.restore();
   CartStore.lines.addListener(CartStore.persist);
   runApp(const HaitiketApp());
