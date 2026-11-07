@@ -512,6 +512,55 @@ Deno.serve(async (req: Request) => {
       return response({ status: "successful", reference });
     }
 
+    // ---------------------------------------------------------
+    // ACTION 3 : RAPPROCHEMENT ADMINISTRATEUR (recharges payées chez Plop Plop mais non créditées)
+    // ---------------------------------------------------------
+    if (action === "reconcile_topups") {
+      const { data: isAdmin } = await userClient.rpc("admin_unlocked");
+      if (isAdmin !== true) {
+        return response({ error: "Accès administrateur requis (console déverrouillée)." }, 403);
+      }
+      const onlyRef = body.reference ? String(body.reference) : null;
+      if (onlyRef !== null && !validReference(onlyRef)) {
+        return response({ error: "Référence invalide." }, 400);
+      }
+      let query = admin
+        .from("wallet_transactions")
+        .select("id,reference,amount_minor,currency,status,metadata,provider_transaction_id")
+        .eq("kind", "topup")
+        .eq("provider", "plopplop")
+        .in("status", ["pending", "review", "processing"])
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (onlyRef) query = query.eq("reference", onlyRef);
+      const { data: rows, error: listError } = await query;
+      if (listError) return response({ error: "Lecture des recharges impossible." }, 500);
+
+      const results: JsonObject[] = [];
+      for (const t of rows ?? []) {
+        const reference = String(t.reference);
+        try {
+          const v = await providerRequest("api/paiement-verify", { client_id: clientId, refference_id: reference });
+          if (!v.ok || v.data.status !== true) { results.push({ reference, result: "non_verifie" }); continue; }
+          if (String(v.data.trans_status ?? "") !== "ok") { results.push({ reference, result: "non_paye_chez_plopplop", provider_status: String(v.data.trans_status ?? "") }); continue; }
+          const meta = (t.metadata ?? {}) as JsonObject;
+          const expected = Number(meta.provider_amount_minor ?? t.amount_minor);
+          const got = Math.round(Number(v.data.montant) * 100);
+          if (!Number.isSafeInteger(got) || got !== expected) { results.push({ reference, result: "montant_different", attendu: expected, recu: got }); continue; }
+          const providerTx = String(v.data.transaction_id ?? t.provider_transaction_id ?? "");
+          if (!providerTx) { results.push({ reference, result: "identifiant_fournisseur_manquant" }); continue; }
+          if (t.status !== "pending" && t.status !== "processing") {
+            await admin.from("wallet_transactions").update({ status: "pending", updated_at: new Date().toISOString() }).eq("id", t.id);
+          }
+          const { error: cErr } = await admin.rpc("confirm_wallet_topup", { p_reference: reference, p_provider_transaction_id: providerTx, p_provider_amount_minor: got });
+          results.push(cErr ? { reference, result: "erreur", detail: cErr.message } : { reference, result: "credite" });
+        } catch {
+          results.push({ reference, result: "indisponible" });
+        }
+      }
+      return response({ checked: results.length, credited: results.filter((x) => x.result === "credite").length, results });
+    }
+
     return response({ error: "Action inconnue." }, 400);
   } catch {
     // Ne pas exposer les erreurs internes, les secrets ou les détails serveur.
