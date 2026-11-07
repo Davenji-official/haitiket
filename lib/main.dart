@@ -5,6 +5,7 @@ import 'data/repo.dart';
 import 'i18n.dart';
 import 'theme.dart';
 import 'ui/dark_mode.dart';
+import 'ui/notif_router.dart';
 import 'ui/splash.dart';
 
 Future<void> main() async {
@@ -35,6 +36,7 @@ class HaitiketApp extends StatelessWidget {
           title: 'HAITIKET',
           debugShowCheckedModeBanner: false,
           theme: buildTheme(),
+          navigatorKey: appNavKey,
           home: const SplashGate(),
         ),
       );

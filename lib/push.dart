@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
+import 'ui/notif_router.dart';
 
 @pragma('vm:entry-point')
 Future<void> haitiketBackgroundHandler(RemoteMessage message) async {
@@ -37,10 +38,19 @@ class PushService {
       final token = await fm.getToken();
       if (token != null) await _register(token);
       _refreshSub ??= fm.onTokenRefresh.listen(_register);
+      // Toucher une notification push ouvre l'écran concerné (produit, commande, conversation, portefeuille…).
+      FirebaseMessaging.onMessageOpenedApp.listen(_open);
+      final initial = await fm.getInitialMessage();
+      if (initial != null) Future<void>.delayed(const Duration(seconds: 1), () => _open(initial));
       _ready = true;
     } catch (e) {
       debugPrint('Push non initialisé : $e');
     }
+  }
+
+  static void _open(RemoteMessage m) {
+    final d = m.data;
+    openNotificationTarget(kind: '${d['kind'] ?? ''}', ref: '${d['ref'] ?? ''}', link: '${d['link_url'] ?? ''}');
   }
 
   static Future<void> _register(String token) async {
