@@ -327,3 +327,110 @@ class _AdminCommissionsPageState extends State<AdminCommissionsPage> {
         ),
       ]);
 }
+
+// ---------------------------------------------------------------------------
+// Recharges Plop Plop : rapprochement et journal du webhook
+// ---------------------------------------------------------------------------
+class AdminTopupsPage extends StatefulWidget {
+  const AdminTopupsPage({super.key});
+  @override
+  State<AdminTopupsPage> createState() => _AdminTopupsPageState();
+}
+
+class _AdminTopupsPageState extends State<AdminTopupsPage> {
+  String status = 'all';
+  bool busy = false;
+  late Future<List<Map<String, dynamic>>> topups = _rows('admin_list_topups', {'p_status': status});
+  late Future<List<Map<String, dynamic>>> events = _rows('admin_list_webhook_events', {'p_limit': 30});
+
+  void reload() => setState(() {
+        topups = _rows('admin_list_topups', {'p_status': status});
+        events = _rows('admin_list_webhook_events', {'p_limit': 30});
+      });
+
+  static const _resultLabels = {
+    'credite': 'Crédité ✔',
+    'non_paye_chez_plopplop': 'Pas encore payé chez Plop Plop',
+    'montant_different': 'Montant différent : à examiner',
+    'non_verifie': 'Plop Plop n’a pas confirmé',
+    'indisponible': 'Plop Plop indisponible',
+    'erreur': 'Erreur de crédit',
+    'identifiant_fournisseur_manquant': 'Identifiant Plop Plop manquant',
+  };
+
+  Future<void> reconcile({String? reference}) async {
+    setState(() => busy = true);
+    try {
+      final r = await Repo.reconcileTopups(reference: reference);
+      final res = ((r['results'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (mounted) {
+        final credited = _n(r['credited']).toInt();
+        toast(context, credited > 0 ? '$credited recharge(s) créditée(s).' : (res.isEmpty ? 'Aucune recharge à rapprocher.' : _resultLabels['${res.first['result']}'] ?? '${res.first['result']}'));
+      }
+      reload();
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  Color statusColor(String s) => s == 'successful' ? const Color(0xFF1B8A4B) : (s == 'failed' ? Colors.redAccent : (s == 'review' ? C.terracotta : C.yellow));
+
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(14), children: [
+        Text('Recharges Plop Plop', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.ink)),
+        Text('Une recharge payée chez Plop Plop mais restée « en attente » ou « à revoir » se corrige ici : le serveur revérifie auprès de Plop Plop (montant, devise, référence) puis crédite UNE seule fois.', style: TextStyle(color: C.muted, fontSize: 12)),
+        const SizedBox(height: 8),
+        FilledButton.icon(onPressed: busy ? null : () => reconcile(), icon: const Icon(Icons.sync), label: Text(busy ? 'Vérification…' : 'Vérifier et créditer toutes les recharges en attente')),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, children: [
+          for (final f in const [('all', 'Toutes'), ('pending', 'En attente'), ('review', 'À revoir'), ('successful', 'Créditées'), ('failed', 'Échouées')])
+            ChoiceChip(label: Text(f.$2), selected: status == f.$1, onSelected: (_) { status = f.$1; reload(); }),
+        ]),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: topups,
+          builder: (_, s) {
+            if (s.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+            if (s.hasError) return EmptyState(title: 'Erreur', text: '${Repo.err(s.error!)}\n(Exécutez la migration 0070 dans Supabase.)');
+            final l = s.data ?? [];
+            if (l.isEmpty) return const EmptyState(title: 'Aucune recharge', text: 'Rien à afficher pour ce filtre.');
+            return Column(children: [
+              for (final t in l)
+                Card(
+                  color: C.card,
+                  child: ListTile(
+                    leading: Icon(Icons.circle, size: 14, color: statusColor('${t['status']}')),
+                    title: Text('${(_n(t['amount_minor']) / 100).toStringAsFixed(2)} ${t['currency']} · ${t['status']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text('${t['user_name'] ?? t['email'] ?? 'client'} · ${'${t['created_at']}'.length >= 16 ? '${t['created_at']}'.substring(0, 16).replaceFirst('T', ' ') : ''}\n${t['reference']}${t['reason'] != null ? '\nCause : ${t['reason']}' : ''}'),
+                    isThreeLine: true,
+                    trailing: t['status'] == 'successful' || t['status'] == 'failed'
+                        ? null
+                        : IconButton(tooltip: 'Vérifier chez Plop Plop et créditer', icon: Icon(Icons.sync, color: C.green), onPressed: busy ? null : () => reconcile(reference: '${t['reference']}')),
+                  ),
+                ),
+            ]);
+          },
+        ),
+        const Divider(height: 30),
+        Text('Journal du webhook Plop Plop', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: C.ink)),
+        Text('Chaque appel reçu de Plop Plop apparaît ici. Liste vide après un paiement = Plop Plop n’atteint pas votre fonction (adresse du webhook, ou « Verify JWT » encore activé).', style: TextStyle(color: C.muted, fontSize: 12)),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: events,
+          builder: (_, s) {
+            final l = s.data ?? [];
+            if (s.connectionState != ConnectionState.done) return const LinearProgressIndicator();
+            if (l.isEmpty) return Padding(padding: const EdgeInsets.all(12), child: Text('Aucun appel reçu pour l’instant.', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700)));
+            return Column(children: [
+              for (final e in l)
+                ListTile(
+                  dense: true,
+                  leading: Icon(e['outcome'] == 'credite' ? Icons.check_circle : (e['http_status'] == 200 ? Icons.info_outline : Icons.error_outline), color: e['outcome'] == 'credite' ? const Color(0xFF1B8A4B) : (e['http_status'] == 200 ? C.muted : Colors.redAccent)),
+                  title: Text('${e['outcome']} · ${e['event'] ?? ''}'),
+                  subtitle: Text('${'${e['created_at']}'.length >= 16 ? '${e['created_at']}'.substring(0, 16).replaceFirst('T', ' ') : ''} ${e['reference'] ?? ''}\n${e['detail'] ?? ''}'),
+                  isThreeLine: e['detail'] != null,
+                ),
+            ]);
+          },
+        ),
+      ]);
+}

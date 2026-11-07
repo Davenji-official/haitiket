@@ -7,6 +7,7 @@ import 'auth_screens.dart';
 import '../theme.dart';
 import '../push.dart';
 import 'dark_mode.dart';
+import 'notif_router.dart';
 import 'admin_pro.dart';
 import 'guides_screen.dart';
 import 'fx.dart';
@@ -51,6 +52,16 @@ class _ShellState extends State<Shell> {
   int logoTaps = 0;
   DateTime lastTap = DateTime(2000);
   bool get hideDrawerBalances => BalancePrivacy.hidden.value;
+  void _onNavRequest() {
+    final name = ShellNav.request.value;
+    if (name == null || !mounted) return;
+    ShellNav.request.value = null;
+    final target = Sec.values.asNameMap()[name];
+    if (target == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    setState(() => sec = target);
+  }
+
   void _onPrivacy() {
     if (mounted) setState(() {});
   }
@@ -79,6 +90,7 @@ class _ShellState extends State<Shell> {
     if (Config.configured) {
       Repo.touchPresence();
       BalancePrivacy.hidden.addListener(_onPrivacy);
+      ShellNav.request.addListener(_onNavRequest);
       PushService.init();
       presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
         if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) Repo.touchPresence();
@@ -99,6 +111,7 @@ class _ShellState extends State<Shell> {
     authSub?.cancel();
     presenceTimer?.cancel();
     BalancePrivacy.hidden.removeListener(_onPrivacy);
+    ShellNav.request.removeListener(_onNavRequest);
     super.dispose();
   }
 

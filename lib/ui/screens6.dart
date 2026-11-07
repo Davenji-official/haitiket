@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dark_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -176,7 +177,21 @@ class _WalletScreenState extends State<WalletScreen> {
     // Retour de la page de paiement : vérification automatique des recharges en attente.
     if (Uri.base.path.contains('/payment/') || Uri.base.queryParameters.containsKey('refference_id') || Uri.base.queryParameters.containsKey('id_transaction')) {
       _afterPaymentReturn();
+    } else {
+      _silentCheck();
     }
+    // Filet de sécurité : tant qu'une recharge est en attente, on la revérifie toutes les 15 s (le webhook peut être en retard).
+    pendingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _silentCheck());
+  }
+  Timer? pendingTimer;
+  Future<void> _silentCheck() async {
+    try {
+      final n = await Repo.checkPendingTopups();
+      if (n > 0 && mounted) {
+        reload();
+        toast(context, 'Recharge confirmée : votre solde est à jour.');
+      }
+    } catch (_) {}
   }
   Future<void> _afterPaymentReturn() async {
     try {
@@ -188,7 +203,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
   void _amountChanged() { if (mounted) setState(() {}); }
   @override
-  void dispose() { amount.removeListener(_amountChanged); amount.dispose(); phone.dispose(); withdrawAmount.dispose(); withdrawPhone.dispose(); super.dispose(); }
+  void dispose() { pendingTimer?.cancel(); amount.removeListener(_amountChanged); amount.dispose(); phone.dispose(); withdrawAmount.dispose(); withdrawPhone.dispose(); super.dispose(); }
   void reload() => setState(() { future = Repo.myWalletV2(); rateFuture = Repo.walletExchangeRate(); withdrawRateFuture = Repo.walletWithdrawExchangeRate(); });
   Future<void> topup() async {
     final v = double.tryParse(amount.text.replaceAll(',', '.'));

@@ -211,6 +211,7 @@ class _AdminProState extends State<AdminPro> {
     ('Analytique', Icons.insights_outlined),
     ('Revenus', Icons.payments_outlined),
     ('Commissions', Icons.percent),
+    ('Recharges', Icons.sync_alt),
     ('Carte live', Icons.map_outlined),
     ('Clients', Icons.people_alt_outlined),
     ('Commandes', Icons.receipt_long_outlined),
@@ -231,20 +232,22 @@ class _AdminProState extends State<AdminPro> {
       case 2:
         return const AdminCommissionsPage();
       case 3:
-        return const AdminLiveMapPage();
+        return const AdminTopupsPage();
       case 4:
-        return const _ClientsPage();
+        return const AdminLiveMapPage();
       case 5:
-        return const _OrdersPage();
+        return const _ClientsPage();
       case 6:
-        return const _CatalogPage();
+        return const _OrdersPage();
       case 7:
-        return const AdminLogisticsPage();
+        return const _CatalogPage();
       case 8:
-        return const AdminFraudPage();
+        return const AdminLogisticsPage();
       case 9:
-        return const _BroadcastPage();
+        return const AdminFraudPage();
       case 10:
+        return const _BroadcastPage();
+      case 11:
         return const _SettingsPage();
       default:
         return const AdminScreen();

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'notif_router.dart';
 import 'dark_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -158,6 +159,9 @@ class _NotificationsState extends State<NotificationsScreen> {
         'job' => Icons.two_wheeler_outlined,
         'shop' => Icons.storefront_outlined,
         'courier' => Icons.badge_outlined,
+        'wallet' => Icons.account_balance_wallet_outlined,
+        'offer' => Icons.local_offer_outlined,
+        'mention' => Icons.alternate_email,
         _ => Icons.notifications_none,
       };
 
@@ -183,6 +187,7 @@ class _NotificationsState extends State<NotificationsScreen> {
                         leading: Icon(icon(items[i]['kind'] as String), color: C.green),
                         title: Text('${items[i]['title']}', style: const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: _notifBody(items[i]),
+                        onTap: () => openNotificationTarget(kind: '${items[i]['kind']}', ref: items[i]['ref']?.toString(), link: items[i]['link_url']?.toString()),
                         trailing: IconButton(tooltip: 'Supprimer cette notification', icon: const Icon(Icons.delete_outline), onPressed: () async {
                           try { await Repo.deleteNotification(items[i]['id'] as String); reload(); } catch (e) { if (context.mounted) toast(context, Repo.err(e)); }
                         }),
