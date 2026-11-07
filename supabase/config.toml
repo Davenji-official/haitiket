@@ -1,0 +1,11 @@
+# Déploiement des fonctions Edge : les webhooks reçoivent des appels de services externes (sans jeton Supabase).
+project_id = "ntroqvxeotifsmdzrwyo"
+
+[functions.plopplop-webhook]
+verify_jwt = false
+
+[functions.bazik-webhook]
+verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
