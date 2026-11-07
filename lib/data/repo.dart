@@ -323,7 +323,7 @@ class Repo {
   static Future<List<Map<String, dynamic>>> myNotifications() async {
     final u = currentUser();
     if (u == null) return [];
-    final rows = await _c.from('notifications').select('id,kind,title,body,created_at,read_at,image_url,link_url,coupon_code').eq('user_id', u.id).order('created_at', ascending: false).limit(60);
+    final rows = await _c.from('notifications').select('id,kind,title,body,ref,created_at,read_at,image_url,link_url,coupon_code').eq('user_id', u.id).order('created_at', ascending: false).limit(60);
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -1336,6 +1336,15 @@ class Repo {
     final r = await _c.functions.invoke('plopplop-wallet', body: {'action':'topup','amount_minor':amountMinor,'currency':currency,'method':method,'phone':phone});
     if (r.data is! Map || (r.data as Map)['reference'] == null) throw StateError((r.data is Map ? (r.data as Map)['error'] : null)?.toString() ?? 'Recharge impossible.');
     return Map<String,dynamic>.from(r.data as Map);
+  }
+
+  /// Administrateur : revérifie auprès de Plop Plop les recharges en attente/à revoir et crédite celles réellement payées.
+  static Future<Map<String, dynamic>> reconcileTopups({String? reference}) async {
+    final r = await _c.functions.invoke('plopplop-wallet', body: {'action': 'reconcile_topups', if (reference != null) 'reference': reference});
+    if (r.data is! Map) throw StateError('Réponse de rapprochement invalide.');
+    final m = Map<String, dynamic>.from(r.data as Map);
+    if (m['error'] != null) throw StateError('${m['error']}');
+    return m;
   }
 
   static Future<String> checkWalletTopup(String reference) async {
