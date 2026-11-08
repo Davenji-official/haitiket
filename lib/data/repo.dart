@@ -1171,10 +1171,51 @@ class Repo {
     await _c.rpc('set_courier_available', params: {'p_available': v});
   }
 
+  static bool _missing(PostgrestException e, String fn) => e.code == 'PGRST202' || e.message.contains(fn);
+
   static Future<List<Map<String, dynamic>>> openJobs() async {
-    final r = await _c.rpc('list_open_jobs');
-    return List<Map<String, dynamic>>.from(r as List);
+    try {
+      final r = await _c.rpc('list_open_jobs_v80');
+      return List<Map<String, dynamic>>.from(r as List);
+    } on PostgrestException catch (e) {
+      if (!_missing(e, 'list_open_jobs_v80')) rethrow;
+      final r = await _c.rpc('list_open_jobs');
+      return List<Map<String, dynamic>>.from(r as List);
+    }
   }
+
+  /// Pourquoi ne vois-je aucune mission ? (GPS, disponibilité, position des boutiques…)
+  static Future<Map<String, dynamic>?> courierDiagnostic() async {
+    try {
+      final r = await _c.rpc('courier_mission_diagnostic');
+      return Map<String, dynamic>.from(r as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> acceptFixedPriceJob(String jobId) async => _c.rpc('accept_fixed_price_job', params: {'p_job': jobId});
+
+  static Future<Map<String, dynamic>> orderFullDetails(String orderId) async =>
+      Map<String, dynamic>.from(await _c.rpc('order_full_details', params: {'p_order': orderId}) as Map);
+
+  static Future<String?> jobOrderId(String jobId) async {
+    try {
+      final r = await _c.rpc('job_order_id', params: {'p_job': jobId});
+      return r?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Coordonnées obligatoires, type d'adresse, vitesse de livraison ; renvoie le prix fixé par le vendeur le cas échéant.
+  static Future<Map<String, dynamic>> setOrderDeliveryDetails(String orderId, String kind, String landmark, String recipient, String phone, String whatsapp, String speed) async =>
+      Map<String, dynamic>.from(await _c.rpc('set_order_delivery_details', params: {
+        'p_order': orderId, 'p_kind': kind, 'p_landmark': landmark, 'p_recipient': recipient, 'p_phone': phone, 'p_whatsapp': whatsapp, 'p_speed': speed,
+      }) as Map);
+
+  static Future<void> sellerSetDeliverySettings(String shopId, int prepMinutes, bool immediate, int? feeHtgMinor, int? feeUsdMinor) async =>
+      _c.rpc('seller_set_delivery_settings', params: {'p_shop': shopId, 'p_prep_minutes': prepMinutes, 'p_immediate': immediate, 'p_fee_htg_minor': feeHtgMinor, 'p_fee_usd_minor': feeUsdMinor});
 
   static Future<void> acceptJob(String id) async {
     await _c.rpc('accept_job', params: {'p_job': id});
@@ -1182,8 +1223,14 @@ class Repo {
 
   static Future<List<Map<String, dynamic>>> myJobs() async {
     if (currentUser() == null) return [];
-    final r = await _c.rpc('my_jobs');
-    return List<Map<String, dynamic>>.from(r as List);
+    try {
+      final r = await _c.rpc('my_jobs_v80');
+      return List<Map<String, dynamic>>.from(r as List);
+    } on PostgrestException catch (e) {
+      if (!_missing(e, 'my_jobs_v80')) rethrow;
+      final r = await _c.rpc('my_jobs');
+      return List<Map<String, dynamic>>.from(r as List);
+    }
   }
 
   static Future<Map<String, dynamic>?> getProfile() async {
