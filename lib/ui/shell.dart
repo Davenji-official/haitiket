@@ -7,6 +7,7 @@ import 'auth_screens.dart';
 import '../theme.dart';
 import '../push.dart';
 import 'dark_mode.dart';
+import 'community_links.dart';
 import 'notif_router.dart';
 import 'admin_pro.dart';
 import 'guides_screen.dart';
@@ -301,6 +302,7 @@ class _ShellState extends State<Shell> {
                       onChanged: (v) => ThemeStore.set(v),
                     ),
                   ),
+                  const CommunityLinks(compact: true),
                   ListTile(
                     leading: Icon(Icons.menu_book_outlined, color: C.green),
                     title: Text(tr("Guides d'utilisation"), style: TextStyle(fontWeight: FontWeight.w600, color: C.ink, fontSize: 17)),

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import '../config.dart';
 import 'chat_extras.dart';
 import 'contacts_widget.dart';
+import 'order_details.dart';
 import 'screens.dart' show NetworkScreen;
 import 'qr_scan.dart';
 import 'tours_widget.dart';
@@ -579,15 +580,34 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                 if (!avail)
                   Text('Activez votre disponibilité pour voir les missions.', style: TextStyle(color: C.muted))
                 else if (open.isEmpty)
-                  Text('Aucune mission disponible pour le moment.', style: TextStyle(color: C.muted))
+                  const MissionDiagnostic()
                 else
                   for (final j in open)
                     Card(
                       color: C.card,
-                      child: ListTile(
-                        title: Text('Départ : ${j['pickup_area']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('Proposez votre tarif · ${j['currency'] ?? 'HTG'}', style: TextStyle(color: C.green, fontWeight: FontWeight.w800)),
-                        trailing: FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: Text('${j['shop_name'] ?? ''} · ${j['pickup_area']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
+                            if (j['delivery_speed'] == 'immediate') Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: C.terracotta, borderRadius: BorderRadius.circular(10)), child: const Text('IMMÉDIAT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11))),
+                          ]),
+                          if (j['distance_km'] != null) Text('À ${j['distance_km']} km de vous', style: TextStyle(color: C.muted)),
+                          if (j['items_preview'] != null) Text('${j['items_count']} article(s) : ${j['items_preview']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                          Text('${deliveryKindLabel(j['delivery_kind'])}${j['promised_minutes'] != null ? ' · ~${j['promised_minutes']} min' : ''}', style: TextStyle(color: C.muted)),
+                          Text(
+                            (j['delivery_speed'] == 'immediate' && ((j['pay_minor'] as num?) ?? 0) > 0) ? 'Prix fixé par le vendeur : ${money(j['pay_minor'] as num, '${j['currency']}')}' : 'Proposez votre tarif · ${j['currency'] ?? 'HTG'}',
+                            style: TextStyle(color: C.green, fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(spacing: 8, runSpacing: 6, children: [
+                            if (j['order_id'] != null) OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen('${j['order_id']}'))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Voir la commande')),
+                            if (j['delivery_speed'] == 'immediate' && ((j['pay_minor'] as num?) ?? 0) > 0)
+                              FilledButton(onPressed: () => run(() async { await Repo.acceptFixedPriceJob('${j['id']}'); if (mounted) toast(context, 'Mission acceptée au prix du vendeur.'); }), child: const Text('Accepter ce prix'))
+                            else
+                              FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
+                          ]),
+                        ]),
                       ),
                     ),
                 const MyToursCard(),
@@ -619,6 +639,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                               )
                             : null,
                       ),
+                      if (j['order_id'] != null) Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen('${j['order_id']}'))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Ouvrir la commande (adresse, photos, contacts)'))),
                       if (j['status'] == 'assigned' || j['status'] == 'picked_up') ContactsCard(jobId: j['id'].toString()),
                       ]),
                     ),
@@ -626,4 +647,42 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
             },
           ),
       ]);
+}
+
+
+/// Explique au livreur POURQUOI aucune mission n'apparaît (au lieu d'un message vide).
+class MissionDiagnostic extends StatelessWidget {
+  const MissionDiagnostic({super.key});
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>?>(
+        future: Repo.courierDiagnostic(),
+        builder: (_, s) {
+          final d = s.data;
+          final lines = <String>[];
+          if (d != null) {
+            final age = d['gps_age_s'] as num?;
+            final maxAge = (d['gps_max_s'] as num?) ?? 600;
+            if (d['approved'] != true) lines.add('Votre candidature livreur n’est pas encore approuvée.');
+            if (d['available'] != true) lines.add('Vous êtes marqué indisponible : activez « Disponible ».');
+            if (d['has_gps'] != true) {
+              lines.add('Aucune position GPS reçue : autorisez la localisation et gardez cet écran ouvert.');
+            } else if (age != null && age > maxAge) {
+              lines.add('Votre position date de ${(age / 60).round()} min (maximum ${(maxAge / 60).round()} min) : gardez cet écran ouvert avec le GPS actif.');
+            }
+            final total = (d['open_jobs_total'] as num?) ?? 0;
+            if (total == 0) lines.add('Aucune commande en livraison n’attend de livreur pour le moment.');
+            if (((d['open_jobs_out_of_radius'] as num?) ?? 0) > 0) lines.add('${d['open_jobs_out_of_radius']} mission(s) existent mais à plus de 25 km de vous.');
+            if (((d['open_jobs_shop_without_position'] as num?) ?? 0) > 0) lines.add('${d['open_jobs_shop_without_position']} mission(s) viennent de boutiques sans position : elles sont visibles quand votre GPS est actif.');
+          }
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(14)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Aucune mission disponible pour le moment.', style: TextStyle(fontWeight: FontWeight.w800, color: C.ink)),
+              if (d == null && s.connectionState == ConnectionState.done) Text('Diagnostic indisponible (migration SQL 0071 non appliquée ?).', style: TextStyle(color: C.muted)),
+              for (final l in lines) Padding(padding: const EdgeInsets.only(top: 4), child: Text('• $l', style: TextStyle(color: C.muted))),
+            ]),
+          );
+        },
+      );
 }

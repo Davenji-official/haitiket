@@ -1,3 +1,4 @@
+import 'community_links.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -99,6 +100,8 @@ class _HomeState extends State<HomeScreen> {
         chip(Icons.storefront_outlined, tr('Vendeurs vérifiés')),
         chip(Icons.location_on_outlined, tr('Près de chez vous')),
       ]),
+      const SizedBox(height: 22),
+      const CommunityLinks(),
       const SizedBox(height: 40),
       FutureBuilder<int>(
         future: Repo.activeShops(),

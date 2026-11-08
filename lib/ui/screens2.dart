@@ -1,3 +1,5 @@
+import 'community_links.dart';
+import 'order_details.dart';
 import 'qr_scan.dart';
 import 'dark_mode.dart';
 import 'dart:async';
@@ -67,7 +69,23 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutState extends State<CheckoutScreen> {
   String mode = 'pickup';
+  String kind = 'home';
+  String speed = 'standard';
   final address = TextEditingController();
+  final phone = TextEditingController(), whatsapp = TextEditingController(), landmark = TextEditingController(), recipient = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    Repo.getProfile().then((p) {
+      if (p == null || !mounted) return;
+      setState(() {
+        if (phone.text.isEmpty) phone.text = '${p['phone'] ?? ''}';
+        if (whatsapp.text.isEmpty) whatsapp.text = '${p['whatsapp'] ?? ''}';
+        if (recipient.text.isEmpty) recipient.text = '${p['display_name'] ?? ''}';
+      });
+    });
+  }
   final coupon = TextEditingController();
   late Future<List<Map<String, dynamic>>> addrs = Repo.myAddresses();
   bool busy = false;
@@ -176,14 +194,38 @@ class _CheckoutState extends State<CheckoutScreen> {
   Future<void> submit() async {
     final lines = CartStore.lines.value.values.toList();
     if (lines.isEmpty) return;
-    if (mode == 'delivery' && address.text.trim().isEmpty) {
-      toast(context, 'Indiquez une destination ou choisissez un point sur la carte avant de commander.');
+    final ph = phone.text.replaceAll(RegExp(r'[^0-9+]'), '');
+    final wa = whatsapp.text.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (ph.length < 8 || wa.length < 8) {
+      toast(context, 'Numéro d’appel ET numéro WhatsApp obligatoires (8 chiffres minimum) : le vendeur et le livreur en ont besoin pour vous joindre.');
+      return;
+    }
+    if (mode == 'delivery' && address.text.trim().length < 5) {
+      toast(context, 'Adresse de livraison obligatoire : indiquez la commune, le quartier et un repère, ou choisissez un point sur la carte.');
       return;
     }
     setState(() => busy = true);
     try {
       await Repo.cancelMyPendingOrders(); // libère d'anciennes réservations non payées avant de recommencer
       final orders = await Repo.createOrders(lines, mode, address.text.trim(), coupon.text);
+      // Coordonnées, type d'adresse et vitesse : enregistrés AVANT le paiement (obligatoires côté serveur).
+      try {
+        for (final o in orders) {
+          final r = await Repo.setOrderDeliveryDetails(o['id'].toString(), mode == 'delivery' ? kind : 'pickup', landmark.text.trim(), recipient.text.trim(), ph, wa, mode == 'delivery' ? speed : 'standard');
+          if (r['fixed_fee'] == true) {
+            final old = (o['delivery_minor'] as num?) ?? 0;
+            o['total_minor'] = ((o['total_minor'] as num) - old + (r['delivery_minor'] as num)).toInt();
+            o['delivery_minor'] = r['delivery_minor'];
+          }
+        }
+      } catch (e) {
+        for (final o in orders) {
+          try {
+            await Repo.cancelOrder('${o['id']}');
+          } catch (_) {}
+        }
+        rethrow;
+      }
       var locationSaved = true;
       final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
       if (mode == 'delivery' && deliveryLat != null && deliveryLng != null && coordinatesMatchAddress) {
@@ -252,6 +294,31 @@ class _CheckoutState extends State<CheckoutScreen> {
               RadioListTile<String>(value: 'delivery', title: Text('Livraison HAITIKET')),
             ]),
           ),
+          const SizedBox(height: 8),
+          Text('Vos coordonnées (obligatoires)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+          Text('Le vendeur et le livreur vous appellent ou vous écrivent sur WhatsApp pendant la livraison.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Field(phone, 'Numéro d’appel (509XXXXXXXX)', type: TextInputType.phone),
+          Field(whatsapp, 'Numéro WhatsApp (509XXXXXXXX)', type: TextInputType.phone),
+          if (mode == 'delivery') ...[
+            const SizedBox(height: 6),
+            Text('Livraison', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+            DropdownButtonFormField<String>(
+              value: kind,
+              decoration: const InputDecoration(labelText: 'Type de lieu de livraison'),
+              items: [for (final e in kDeliveryKindLabels.entries.where((e) => !const ['pickup', 'center'].contains(e.key))) DropdownMenuItem(value: e.key, child: Text(e.value))],
+              onChanged: (v) => setState(() => kind = v ?? 'home'),
+            ),
+            RadioGroup<String>(
+              groupValue: speed,
+              onChanged: (v) => setState(() => speed = v ?? 'standard'),
+              child: Column(children: [
+                RadioListTile<String>(value: 'standard', title: const Text('Livraison standard'), subtitle: const Text('Le vendeur prépare selon son délai, puis les livreurs proposent leur prix : vous choisissez.')),
+                RadioListTile<String>(value: 'immediate', title: const Text('Livraison immédiate (~45 min)'), subtitle: const Text('Objectif indicatif, sans garantie. Prix fixé par le vendeur s’il en a défini un, sinon proposé par les livreurs.')),
+              ]),
+            ),
+            Field(landmark, 'Repère / précisions pour le livreur (facultatif)'),
+            Field(recipient, 'Nom de la personne qui réceptionne'),
+          ],
           if (mode == 'delivery') ...[
             FutureBuilder<List<Map<String, dynamic>>>(
               future: addrs,
@@ -1093,6 +1160,7 @@ class _ShopPanelState extends State<ShopPanel> {
             {'active': 'Boutique active', 'pending': 'En attente de vérification', 'draft': 'Brouillon', 'suspended': widget.shop['deletion_review_status'] == 'pending_admin' || widget.shop['deletion_review_status'] == 'approved' ? 'Suppression demandée : en examen par l’administration (délai minimal de 30 jours). Votre boutique reste suspendue.' : 'Boutique suspendue.', 'closed': 'Boutique fermée définitivement'}[widget.shop['status']] ?? 'Statut : ${widget.shop['status']}',
             style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700),
           ),
+          if (active) SellerDeliverySettingsCard(shopId: '${widget.shop['id']}'),
           if (!official && widget.shop['status'] != 'closed') Wrap(spacing: 8, runSpacing: 4, children: [
             OutlinedButton.icon(onPressed: () => manageShop('rename'), icon: const Icon(Icons.edit_outlined), label: const Text('Modifier le nom')),
             if (widget.shop['status'] == 'active') OutlinedButton.icon(onPressed: () => manageShop('suspend'), icon: const Icon(Icons.pause_circle_outline), label: const Text('Suspendre')),
@@ -1245,7 +1313,9 @@ class _ShopPanelState extends State<ShopPanel> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                 trailing: PopupMenuButton<String>(
-                      onSelected: (v) => v == 'contacts'
+                      onSelected: (v) => v == 'details'
+                          ? Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen(o['id'].toString())))
+                          : v == 'contacts'
                           ? showModalBottomSheet<void>(context: context, builder: (_) => SafeArea(child: Padding(padding: const EdgeInsets.all(12), child: ContactsCard(orderId: o['id'].toString()))))
                           : orderAction(o, v),
                       itemBuilder: (_) {
@@ -1253,6 +1323,7 @@ class _ShopPanelState extends State<ShopPanel> {
                         final dm = o['delivery_mode'];
                         return [
                           const PopupMenuItem(value: 'chat', child: Text('Écrire au client')),
+                          const PopupMenuItem(value: 'details', child: Text('Ouvrir la commande (adresse, photos, contacts)')),
                           const PopupMenuItem(value: 'contacts', child: Text('Appeler / WhatsApp (client, livreur)')),
                           if (const ['CANCELLED', 'REFUNDED', 'COMPLETED'].contains(st)) const PopupMenuItem(value: 'hide', child: Text('Retirer de ma liste')),
                           if (st == 'PAID') const PopupMenuItem(value: 'CONFIRMED', child: Text('Confirmer la commande')),
@@ -1742,6 +1813,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
                   ),
                 ),
               ],
+              OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen(widget.orderId))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Voir les détails de la commande')),
               ContactsCard(orderId: widget.orderId),
               const Text('Offres des coursiers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               if (_offersLoading && _offers.isEmpty) const LinearProgressIndicator(),

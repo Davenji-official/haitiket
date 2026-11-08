@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/repo.dart';
+import 'order_details.dart';
 import 'product_detail.dart';
 import 'screens2.dart';
 import 'screens3.dart';
@@ -57,9 +58,23 @@ Future<void> openNotificationTarget({required String kind, String? ref, String? 
           }
         } catch (_) {}
       }
-      ShellNav.go('dashboard'); // vendeur : tableau de bord des commandes
+      if (cleanRef != null) {
+        // vendeur ou livreur affecté : fiche complète (adresse, photos, contacts)
+        nav.push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen(cleanRef)));
+      } else {
+        ShellNav.go('dashboard');
+      }
       return;
     case 'job':
+      if (cleanRef != null) {
+        final oid = await Repo.jobOrderId(cleanRef);
+        if (oid != null) {
+          nav.push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen(oid)));
+          return;
+        }
+      }
+      ShellNav.go('courier');
+      return;
     case 'courier':
       ShellNav.go('courier');
       return;
