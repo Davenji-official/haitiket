@@ -800,7 +800,14 @@ class Repo {
   }
 
   static Future<List<Map<String, dynamic>>> shopOrders(String shopId) async {
-    final rows = await _c.from('orders').select('id,status,delivery_due_at,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)').eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
+    const base = 'id,status,delivery_due_at,total_minor,items_minor,commission_minor,seller_net_minor,currency,delivery_mode,created_at,order_items(name,qty,variant_label)';
+    List rows;
+    try {
+      // V81 : type de commande (immédiate / standard) et délai annoncé
+      rows = await _c.from('orders').select('$base,delivery_speed,promised_minutes').eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
+    } on PostgrestException {
+      rows = await _c.from('orders').select(base).eq('shop_id', shopId).order('created_at', ascending: false).limit(80);
+    }
     return _onlyRealOrders(List<Map<String, dynamic>>.from(rows));
   }
 
@@ -1214,8 +1221,41 @@ class Repo {
         'p_order': orderId, 'p_kind': kind, 'p_landmark': landmark, 'p_recipient': recipient, 'p_phone': phone, 'p_whatsapp': whatsapp, 'p_speed': speed,
       }) as Map);
 
-  static Future<void> sellerSetDeliverySettings(String shopId, int prepMinutes, bool immediate, int? feeHtgMinor, int? feeUsdMinor) async =>
-      _c.rpc('seller_set_delivery_settings', params: {'p_shop': shopId, 'p_prep_minutes': prepMinutes, 'p_immediate': immediate, 'p_fee_htg_minor': feeHtgMinor, 'p_fee_usd_minor': feeUsdMinor});
+  static Future<void> sellerSetDeliverySettings(String shopId, int prepMinutes, bool immediate, int? feeHtgMinor, int? feeUsdMinor, {int immediatePrepMinutes = 20}) async {
+    try {
+      await _c.rpc('seller_set_delivery_settings_v81', params: {'p_shop': shopId, 'p_prep_minutes': prepMinutes, 'p_immediate': immediate, 'p_immediate_prep': immediatePrepMinutes, 'p_fee_htg_minor': feeHtgMinor, 'p_fee_usd_minor': feeUsdMinor});
+    } on PostgrestException catch (e) {
+      if (!_missing(e, 'seller_set_delivery_settings_v81')) rethrow;
+      await _c.rpc('seller_set_delivery_settings', params: {'p_shop': shopId, 'p_prep_minutes': prepMinutes.clamp(1, 1440), 'p_immediate': immediate, 'p_fee_htg_minor': feeHtgMinor, 'p_fee_usd_minor': feeUsdMinor});
+    }
+  }
+
+  /// Produit : commande immédiate possible + délai de préparation standard (minutes).
+  static Future<void> sellerSetProductOrderOptions(String productId, bool immediateOk, int? prepMinutes) async =>
+      _c.rpc('seller_set_product_order_options', params: {'p_product': productId, 'p_immediate_ok': immediateOk, 'p_prep_minutes': prepMinutes});
+
+  static Future<Map<String, dynamic>?> productOrderOptions(String productId) async {
+    try {
+      return await _c.from('products').select('immediate_ok,prep_minutes').eq('id', productId).maybeSingle();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Avant de commander : l'immédiat est-il possible pour chaque boutique du panier, et quel délai estimé (préparation + trajet + livreurs) ?
+  static Future<List<Map<String, dynamic>>> estimateDeliveryOptions(List<CartLine> lines, String mode, {double? lat, double? lng}) async {
+    try {
+      final r = await _c.rpc('estimate_delivery_options', params: {
+        'p_items': [for (final l in lines) {'product_id': l.productId, 'qty': l.qty}],
+        'p_mode': mode,
+        'p_lat': lat,
+        'p_lng': lng,
+      });
+      return List<Map<String, dynamic>>.from((r as List).map((e) => Map<String, dynamic>.from(e as Map)));
+    } catch (_) {
+      return [];
+    }
+  }
 
   static Future<void> acceptJob(String id) async {
     await _c.rpc('accept_job', params: {'p_job': id});
