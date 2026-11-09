@@ -135,6 +135,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
   Map<String, dynamic>? variant;
   int quantity = 1;
   late final Future<List<Map<String, dynamic>>> promos = Repo.productPromos(p['id'] as String);
+  late final Future<Map<String, dynamic>?> orderOpts = Repo.productOrderOptions(p['id'] as String);
 
   List<Map<String, dynamic>> get variants => List<Map<String, dynamic>>.from(((p['product_variants'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
   List<Map<String, dynamic>> get tiers {
@@ -283,6 +284,23 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         ]),
         const SizedBox(height: 6),
         Text('${money((variant?['price_minor'] as num?) ?? (p['price_minor'] as num), (p['currency'] ?? 'HTG') as String)}${(variant?['unit_label'] as String? ?? unit) == 'unité' ? '' : ' / ${(variant?['unit_label'] as String? ?? unit)}'}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
+        FutureBuilder<Map<String, dynamic>?>(
+          future: orderOpts,
+          builder: (_, o) {
+            final d = o.data;
+            if (d == null || bazar) return const SizedBox.shrink();
+            final prep = (d['prep_minutes'] as num?)?.toInt();
+            String fmt(int m) => m < 90 ? '$m min' : (m < 60 * 48 ? '${(m / 60).toStringAsFixed(m % 60 == 0 ? 0 : 1)} h' : '${(m / 1440).toStringAsFixed(1)} jours');
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(spacing: 8, runSpacing: 6, children: [
+                if (d['immediate_ok'] == true)
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: C.terracotta, borderRadius: BorderRadius.circular(14)), child: const Text('⚡ Commande immédiate possible (~45 min)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(14)), child: Text(prep == null ? 'Commande standard : délai du vendeur' : 'Commande standard : préparation ~${fmt(prep)}', style: TextStyle(color: C.ink, fontWeight: FontWeight.w700, fontSize: 12))),
+              ]),
+            );
+          },
+        ),
         const SizedBox(height: 10),
         FutureBuilder<Map<String, dynamic>>(
           future: loadStats(shopId),

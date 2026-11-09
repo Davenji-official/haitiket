@@ -70,7 +70,29 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutState extends State<CheckoutScreen> {
   String mode = 'pickup';
   String kind = 'home';
-  String speed = 'standard';
+  String speed = 'standard'; // type de commande : immediate | standard (valable pour le retrait ET la livraison)
+  List<Map<String, dynamic>> estimates = [];
+  bool estimating = false;
+  String? _estKey;
+
+  Future<void> refreshEstimates() async {
+    final lines = CartStore.lines.value.values.toList();
+    final key = '$mode|${deliveryLat?.toStringAsFixed(4)}|${deliveryLng?.toStringAsFixed(4)}|${lines.map((l) => l.productId).join(',')}';
+    if (key == _estKey || lines.isEmpty) return;
+    _estKey = key;
+    setState(() => estimating = true);
+    final r = await Repo.estimateDeliveryOptions(lines, mode, lat: deliveryLat, lng: deliveryLng);
+    if (!mounted) return;
+    setState(() {
+      estimates = r;
+      estimating = false;
+      if (speed == 'immediate' && !immediateAvailable) speed = 'standard';
+    });
+  }
+
+  bool get immediateAvailable => estimates.isNotEmpty && estimates.every((e) => e['immediate_available'] == true);
+  int get immediateMinutes => estimates.fold<int>(0, (a, e) => ((e['immediate_minutes'] as num?)?.toInt() ?? 0) > a ? (e['immediate_minutes'] as num).toInt() : a);
+  int get standardMinutes => estimates.fold<int>(0, (a, e) => ((e['standard_minutes'] as num?)?.toInt() ?? 0) > a ? (e['standard_minutes'] as num).toInt() : a);
   final address = TextEditingController();
   final phone = TextEditingController(), whatsapp = TextEditingController(), landmark = TextEditingController(), recipient = TextEditingController();
 
@@ -208,10 +230,21 @@ class _CheckoutState extends State<CheckoutScreen> {
     try {
       await Repo.cancelMyPendingOrders(); // libère d'anciennes réservations non payées avant de recommencer
       final orders = await Repo.createOrders(lines, mode, address.text.trim(), coupon.text);
+      var locationSaved = true;
+      final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
+      if (mode == 'delivery' && deliveryLat != null && deliveryLng != null && coordinatesMatchAddress) {
+        for (final order in orders) {
+          try {
+            await Repo.setOrderDeliveryLocation(order['id'].toString(), deliveryLat!, deliveryLng!, accuracyM: deliveryAccuracyM);
+          } catch (_) {
+            locationSaved = false;
+          }
+        }
+      }
       // Coordonnées, type d'adresse et vitesse : enregistrés AVANT le paiement (obligatoires côté serveur).
       try {
         for (final o in orders) {
-          final r = await Repo.setOrderDeliveryDetails(o['id'].toString(), mode == 'delivery' ? kind : 'pickup', landmark.text.trim(), recipient.text.trim(), ph, wa, mode == 'delivery' ? speed : 'standard');
+          final r = await Repo.setOrderDeliveryDetails(o['id'].toString(), mode == 'delivery' ? kind : 'pickup', landmark.text.trim(), recipient.text.trim(), ph, wa, speed);
           if (r['fixed_fee'] == true) {
             final old = (o['delivery_minor'] as num?) ?? 0;
             o['total_minor'] = ((o['total_minor'] as num) - old + (r['delivery_minor'] as num)).toInt();
@@ -225,17 +258,6 @@ class _CheckoutState extends State<CheckoutScreen> {
           } catch (_) {}
         }
         rethrow;
-      }
-      var locationSaved = true;
-      final coordinatesMatchAddress = coordinateAddressSnapshot != null && address.text == coordinateAddressSnapshot;
-      if (mode == 'delivery' && deliveryLat != null && deliveryLng != null && coordinatesMatchAddress) {
-        for (final order in orders) {
-          try {
-            await Repo.setOrderDeliveryLocation(order['id'].toString(), deliveryLat!, deliveryLng!, accuracyM: deliveryAccuracyM);
-          } catch (_) {
-            locationSaved = false;
-          }
-        }
       }
       if (!mounted) return;
       final paidIds = await offerPayment(orders);
@@ -294,6 +316,41 @@ class _CheckoutState extends State<CheckoutScreen> {
               RadioListTile<String>(value: 'delivery', title: Text('Livraison HAITIKET')),
             ]),
           ),
+          Builder(builder: (_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => refreshEstimates());
+            String fmt(int m) => m < 90 ? '$m min' : (m < 60 * 48 ? '${(m / 60).toStringAsFixed(m % 60 == 0 ? 0 : 1)} h' : '${(m / 1440).toStringAsFixed(1)} jours');
+            final blockers = <String>[for (final e in estimates) ...((e['blockers'] as List?) ?? const []).map((b) => '${e['shop_name']} : $b')];
+            final noCourier = mode == 'delivery' && estimates.isNotEmpty && estimates.any((e) => ((e['couriers_available'] as num?) ?? 0) == 0);
+            return Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Type de commande', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
+                if (estimating) const LinearProgressIndicator(minHeight: 2),
+                RadioGroup<String>(
+                  groupValue: speed,
+                  onChanged: (v) => setState(() => speed = (v == 'immediate' && !immediateAvailable) ? 'standard' : (v ?? 'standard')),
+                  child: Column(children: [
+                    RadioListTile<String>(
+                      value: 'standard',
+                      title: const Text('Standard'),
+                      subtitle: Text(estimates.isEmpty ? 'Le vendeur prépare selon son délai annoncé.' : 'Préparation selon le vendeur · estimation ~${fmt(standardMinutes)}${mode == 'delivery' ? ' (avec livraison)' : ''}. Indicatif.'),
+                    ),
+                    RadioListTile<String>(
+                      value: 'immediate',
+                      enabled: immediateAvailable,
+                      title: Text(immediateAvailable ? '⚡ Immédiate (~45 min)' : '⚡ Immédiate (indisponible)'),
+                      subtitle: Text(immediateAvailable
+                          ? 'Prête dès que possible · estimation ~${fmt(immediateMinutes)}${immediateMinutes > 45 ? ' (au-delà de l’objectif de 45 min)' : ''}. Objectif indicatif, sans garantie.${mode == 'delivery' ? ' Prix de livraison fixé par le vendeur s’il en a défini un, sinon proposé par les livreurs.' : ' À retirer chez le vendeur.'}'
+                          : (blockers.isEmpty ? 'Vérification en cours…' : blockers.join('\n'))),
+                    ),
+                  ]),
+                ),
+                if (noCourier) Text('Aucun livreur disponible près de la boutique en ce moment : l’estimation inclut une attente supplémentaire.', style: TextStyle(color: C.terracotta, fontSize: 12, fontWeight: FontWeight.w700)),
+              ]),
+            );
+          }),
           const SizedBox(height: 8),
           Text('Vos coordonnées (obligatoires)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
           Text('Le vendeur et le livreur vous appellent ou vous écrivent sur WhatsApp pendant la livraison.', style: TextStyle(color: C.muted, fontSize: 12)),
@@ -307,14 +364,6 @@ class _CheckoutState extends State<CheckoutScreen> {
               decoration: const InputDecoration(labelText: 'Type de lieu de livraison'),
               items: [for (final e in kDeliveryKindLabels.entries.where((e) => !const ['pickup', 'center'].contains(e.key))) DropdownMenuItem(value: e.key, child: Text(e.value))],
               onChanged: (v) => setState(() => kind = v ?? 'home'),
-            ),
-            RadioGroup<String>(
-              groupValue: speed,
-              onChanged: (v) => setState(() => speed = v ?? 'standard'),
-              child: Column(children: [
-                RadioListTile<String>(value: 'standard', title: const Text('Livraison standard'), subtitle: const Text('Le vendeur prépare selon son délai, puis les livreurs proposent leur prix : vous choisissez.')),
-                RadioListTile<String>(value: 'immediate', title: const Text('Livraison immédiate (~45 min)'), subtitle: const Text('Objectif indicatif, sans garantie. Prix fixé par le vendeur s’il en a défini un, sinon proposé par les livreurs.')),
-              ]),
             ),
             Field(landmark, 'Repère / précisions pour le livreur (facultatif)'),
             Field(recipient, 'Nom de la personne qui réceptionne'),
@@ -828,6 +877,9 @@ class _ShopPanelState extends State<ShopPanel> {
     final statusOptions = ['published', 'paused', 'draft'];
     String productStatus = statusOptions.contains(p['status']) ? p['status'] as String : 'published';
     String? editCategory = p['category_id'] as String?;
+    final orderOpts = await Repo.productOrderOptions(p['id'] as String);
+    var immediateOk = orderOpts?['immediate_ok'] == true;
+    final prepC = TextEditingController(text: orderOpts?['prep_minutes']?.toString() ?? '');
     final categories = await Repo.categories();
     final audienceOptions = ['Homme', 'Femme', 'Enfant', 'Adolescent', 'Unisexe'];
     final initialAudiences = (p['audiences'] as List?)?.map((x) => '$x').toSet() ?? <String>{};
@@ -859,6 +911,8 @@ class _ShopPanelState extends State<ShopPanel> {
             TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix (HTG)')),
             TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock total')),
             TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unité de vente (ex. unité, paire, lot, kg)')),
+            SwitchListTile(contentPadding: EdgeInsets.zero, value: immediateOk, onChanged: (v) => setDialogState(() => immediateOk = v), title: const Text('Commande immédiate possible (~45 min)'), subtitle: const Text('Seulement si disponible tout de suite chez vous.')),
+            TextField(controller: prepC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Préparation standard en minutes (60 = 1 h, 1440 = 1 jour ; vide = réglage boutique)')),
             const Padding(padding: EdgeInsets.only(top: 10, bottom: 4), child: Text('Publics concernés (plusieurs choix possibles)', style: TextStyle(fontWeight: FontWeight.w800))),
             Wrap(spacing: 6, runSpacing: 2, children: [
               for (final a in audienceOptions)
@@ -924,6 +978,11 @@ class _ShopPanelState extends State<ShopPanel> {
       }
       if (colorList.isNotEmpty) attrsOut['colors'] = colorList;
       attrsOut.removeWhere((k, v) => v == null || (v is List && v.isEmpty) || (v is String && v.isEmpty));
+      try {
+        await Repo.sellerSetProductOrderOptions(p['id'] as String, immediateOk, int.tryParse(prepC.text.trim()));
+      } catch (e) {
+        if (mounted) toast(context, 'Options immédiat/préparation non enregistrées : ${Repo.err(e)}');
+      }
       await Repo.updateProduct(p['id'] as String, {
         'name': n.text.trim(),
         'price_minor': (v * 100).round(),
@@ -1336,7 +1395,7 @@ class _ShopPanelState extends State<ShopPanel> {
                       },
                     ),
                     title: Text('${(o['order_items'] as List).map((i) => '${i['qty']}× ${i['name']}${i['variant_label'] == null ? '' : ' (${i['variant_label']})'}').join(', ')}${sellerDue(o)}'),
-                    subtitle: Text('${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
+                    subtitle: Text('${o['delivery_speed'] == 'immediate' ? '⚡ IMMÉDIATE (~${o['promised_minutes'] ?? 45} min) · ' : (o['promised_minutes'] != null ? 'Standard (prép. ~${_fmtMinutes(o['promised_minutes'] as num)}) · ' : '')}${o['delivery_mode'] == 'pickup' ? 'Retrait · ' : 'Livraison · '}${statusFr(o['status'] as String)} · net vendeur ${money(o['seller_net_minor'] as num, o['currency'] as String)} (commission ${money(o['commission_minor'] as num, o['currency'] as String)})'),
                   ),
               ]);
             },
@@ -1877,4 +1936,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
           ),
         ]),
       );
+}
+
+
+String _fmtMinutes(num m) {
+  final v = m.toInt();
+  if (v < 90) return '$v min';
+  if (v < 60 * 48) return '${(v / 60).toStringAsFixed(v % 60 == 0 ? 0 : 1)} h';
+  return '${(v / 1440).toStringAsFixed(1)} j';
 }

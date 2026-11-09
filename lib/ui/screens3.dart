@@ -398,6 +398,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
   }
 
   Set<String>? _seenJobs;
+  final Set<String> declinedJobs = <String>{};
 
   Future<Map<String, dynamic>> load() async {
     final app = await Repo.myCourierApplication();
@@ -582,7 +583,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                 else if (open.isEmpty)
                   const MissionDiagnostic()
                 else
-                  for (final j in open)
+                  for (final j in open.where((x) => !declinedJobs.contains('${x['id']}')))
                     Card(
                       color: C.card,
                       child: Padding(
@@ -606,6 +607,7 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                               FilledButton(onPressed: () => run(() async { await Repo.acceptFixedPriceJob('${j['id']}'); if (mounted) toast(context, 'Mission acceptée au prix du vendeur.'); }), child: const Text('Accepter ce prix'))
                             else
                               FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
+                            TextButton(onPressed: () => setState(() => declinedJobs.add('${j['id']}')), child: const Text('Ignorer')),
                           ]),
                         ]),
                       ),

@@ -222,6 +222,15 @@ class _NewProductState extends State<NewProductScreen> {
   final tiers = <Map<String, dynamic>>[];
   final zone = TextEditingController();
   String currency = 'HTG';
+  bool immediateOk = false;
+  final prepValue = TextEditingController();
+  String prepUnit = 'min';
+  int? get prepMinutes {
+    final v = double.tryParse(prepValue.text.trim().replaceAll(',', '.'));
+    if (v == null || v <= 0) return null;
+    return (v * (prepUnit == 'j' ? 1440 : (prepUnit == 'h' ? 60 : 1))).round();
+  }
+
   late final Future<double?> bazarFee = Repo.quoteWalletFeeUsd('bazar_listing');
   bool busy = false;
 
@@ -250,6 +259,13 @@ class _NewProductState extends State<NewProductScreen> {
       final id = await Repo.addProduct(widget.shopId, name.text.trim(), (p * 100).round(), st, cover, !widget.bazar,
           description: desc.text, categoryId: cat?['id'] as String?, source: widget.bazar ? 'bazar' : 'marketplace', attributes: attrs, unitLabel: unit, audience: audiences.length == 1 ? audiences.first : null, audiences: audiences.toList()..sort(), currency: currency);
       if (media.isNotEmpty) await Repo.addProductMedia(id, media);
+      if (!widget.bazar && (immediateOk || prepMinutes != null)) {
+        try {
+          await Repo.sellerSetProductOrderOptions(id, immediateOk, prepMinutes);
+        } catch (_) {
+          if (mounted) toast(context, 'Produit créé, mais les options de commande immédiate/préparation n’ont pas pu être enregistrées (migration SQL 0072 ?).');
+        }
+      }
       await Repo.addVariants(id, variants);
       await Repo.addTiers(id, tiers);
       if (mounted) Navigator.of(context).pop(id);
@@ -342,6 +358,21 @@ class _NewProductState extends State<NewProductScreen> {
           if (variants.isEmpty) Field(stock, widget.bazar ? 'Quantité disponible' : 'Quantité en stock', type: TextInputType.number),
           if (variants.isNotEmpty) Text('Le stock est géré par variante (voir plus bas).', style: TextStyle(color: C.muted)),
         ]),
+        if (!widget.bazar)
+          section('Commande immédiate et préparation', Icons.timer_outlined, [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: immediateOk,
+              onChanged: (v) => setState(() => immediateOk = v),
+              title: const Text('Commande immédiate possible (prête en ~45 min)'),
+              subtitle: const Text('Activez seulement si ce produit est disponible tout de suite chez vous. La boutique doit aussi accepter l’immédiat (Espace vendeur).'),
+            ),
+            Row(children: [
+              Expanded(child: Field(prepValue, 'Délai de préparation standard (vide = réglage de la boutique)', type: const TextInputType.numberWithOptions(decimal: true))),
+              const SizedBox(width: 10),
+              DropdownButton<String>(value: prepUnit, items: const [DropdownMenuItem(value: 'min', child: Text('minutes')), DropdownMenuItem(value: 'h', child: Text('heures')), DropdownMenuItem(value: 'j', child: Text('jours'))], onChanged: (v) => setState(() => prepUnit = v ?? 'min')),
+            ]),
+          ], hint: 'Commande standard : le client voit votre délai (ex. 2 jours pour un produit fabriqué sur commande). Commande immédiate : objectif indicatif de 45 min, sans garantie.'),
         if (widget.bazar)
           section('État et lieu', Icons.place_outlined, [
             if (!hasCondition) ...[

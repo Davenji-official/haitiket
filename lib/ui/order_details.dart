@@ -95,8 +95,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   card('Commande', [
                     kv('Statut', d['status']),
                     kv('Type', isDelivery ? 'Livraison HAITIKET' : 'Retrait chez le vendeur'),
-                    if (isDelivery) kv('Vitesse', immediate ? 'IMMÉDIATE — objectif indicatif ~${d['promised_minutes'] ?? 45} min (sans garantie)' : 'Standard — préparation ~${d['promised_minutes'] ?? shop['prep_minutes'] ?? 30} min, puis livraison'),
-                    if (!isDelivery) kv('Préparation', '~${d['promised_minutes'] ?? shop['prep_minutes'] ?? 30} min'),
+                    kv('Type de commande', immediate ? '⚡ IMMÉDIATE — à préparer maintenant, délai estimé ~${d['promised_minutes'] ?? 45} min (objectif indicatif 45 min, sans garantie)' : 'Standard — délai estimé ~${_fmt(d['promised_minutes'] ?? shop['prep_minutes'] ?? 30)} (préparation du vendeur${isDelivery ? ' + livraison' : ''})'),
                     kv('Articles', money(d['items_minor'] as num, cur)),
                     kv('Livraison', isDelivery ? (_n(d['delivery_minor']) > 0 ? money(d['delivery_minor'] as num, cur) : 'Prix proposé par les livreurs') : null),
                     kv('Total', money(d['total_minor'] as num, cur)),
@@ -144,6 +143,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       );
 
   static num _n(Object? v) => v is num ? v : (num.tryParse('$v') ?? 0);
+
+  static String _fmt(Object? m) {
+    final v = _n(m).toInt();
+    if (v < 90) return '$v min';
+    if (v < 60 * 48) return '${(v / 60).toStringAsFixed(v % 60 == 0 ? 0 : 1)} h';
+    return '${(v / 1440).toStringAsFixed(1)} jours';
+  }
 }
 
 /// Réglages vendeur : délai de préparation, livraison immédiate et prix fixé par le vendeur pour l'immédiat.
@@ -155,7 +161,7 @@ class SellerDeliverySettingsCard extends StatefulWidget {
 }
 
 class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard> {
-  final prep = TextEditingController(text: '30'), feeHtg = TextEditingController(), feeUsd = TextEditingController();
+  final prep = TextEditingController(text: '30'), immPrep = TextEditingController(text: '20'), feeHtg = TextEditingController(), feeUsd = TextEditingController();
   bool immediate = true, loaded = false, busy = false;
 
   @override
@@ -166,11 +172,12 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
 
   Future<void> load() async {
     try {
-      final r = await Supabase.instance.client.from('shops').select('prep_minutes,immediate_delivery_enabled,immediate_fee_htg_minor,immediate_fee_usd_minor').eq('id', widget.shopId).maybeSingle();
+      final r = await Supabase.instance.client.from('shops').select('prep_minutes,immediate_delivery_enabled,immediate_prep_minutes,immediate_fee_htg_minor,immediate_fee_usd_minor').eq('id', widget.shopId).maybeSingle();
       if (r != null && mounted) {
         setState(() {
           prep.text = '${r['prep_minutes'] ?? 30}';
-          immediate = r['immediate_delivery_enabled'] != false;
+          immPrep.text = '${r['immediate_prep_minutes'] ?? 20}';
+          immediate = r['immediate_delivery_enabled'] == true;
           feeHtg.text = r['immediate_fee_htg_minor'] == null ? '' : (((r['immediate_fee_htg_minor'] as num) / 100).toString());
           feeUsd.text = r['immediate_fee_usd_minor'] == null ? '' : (((r['immediate_fee_usd_minor'] as num) / 100).toString());
           loaded = true;
@@ -188,10 +195,12 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
 
   Future<void> save() async {
     final p = int.tryParse(prep.text.trim());
-    if (p == null || p < 1 || p > 1440) return toast(context, 'Délai de préparation : 1 à 1440 minutes.');
+    final ip = int.tryParse(immPrep.text.trim()) ?? 20;
+    if (p == null || p < 1 || p > 1440) return toast(context, 'Délai de préparation standard : 1 à 1440 minutes (pour plus long, réglez-le produit par produit).');
+    if (ip < 5 || ip > 240) return toast(context, 'Préparation immédiate : 5 à 240 minutes.');
     setState(() => busy = true);
     try {
-      await Repo.sellerSetDeliverySettings(widget.shopId, p, immediate, minor(feeHtg.text), minor(feeUsd.text));
+      await Repo.sellerSetDeliverySettings(widget.shopId, p, immediate, minor(feeHtg.text), minor(feeUsd.text), immediatePrepMinutes: ip);
       if (mounted) toast(context, 'Réglages enregistrés.');
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -205,14 +214,15 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Préparation et livraison immédiate', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
-          Text('Votre délai de préparation est montré au client. La livraison immédiate vise ~45 min (indicatif, sans garantie). Si vous fixez un prix d’immédiat, il s’applique ; sinon les livreurs proposent leur prix.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Commandes immédiates et standard', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
+          Text('Standard : vous annoncez votre délai de préparation (réglable aussi produit par produit). Immédiate : le client est servi dès que possible, objectif indicatif ~45 min, sans garantie, en retrait comme en livraison. Vous choisissez les produits concernés dans leur fiche.', style: TextStyle(color: C.muted, fontSize: 12)),
           if (!loaded) const LinearProgressIndicator(),
-          Field(prep, 'Délai de préparation (minutes)', type: TextInputType.number),
-          SwitchListTile(contentPadding: EdgeInsets.zero, value: immediate, onChanged: (v) => setState(() => immediate = v), title: const Text('Proposer la livraison immédiate')),
+          Field(prep, 'Délai de préparation standard par défaut (minutes)', type: TextInputType.number),
+          SwitchListTile(contentPadding: EdgeInsets.zero, value: immediate, onChanged: (v) => setState(() => immediate = v), title: const Text('Accepter les commandes immédiates (retrait et livraison)')),
           if (immediate) ...[
-            Field(feeHtg, 'Prix livraison immédiate en HTG (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
-            Field(feeUsd, 'Prix livraison immédiate en USD (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
+            Field(immPrep, 'Temps de préparation en immédiat (minutes)', type: TextInputType.number),
+            Field(feeHtg, 'Prix de livraison immédiate en HTG (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
+            Field(feeUsd, 'Prix de livraison immédiate en USD (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
           ],
           const SizedBox(height: 6),
           FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Enregistrement…' : 'Enregistrer')),
