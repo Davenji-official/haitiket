@@ -68,3 +68,47 @@ L'écran existait (Accueil → bouton Guides) mais ouvrait des PDF sur `github.c
 * Prise de contrôle : comptes bloqués/supprimés par l'admin (session de support 20 min, rétablissement automatique) — migration 0067 + fonction Edge mise à jour.
 * Mode nuit : vrai thème sombre (palette dynamique C.*, reconstruction complète à la bascule) à la place du filtre « négatif ». Fond de carte sombre par filtre de tuiles.
 * Carte client : GPS direct au chargement, cap, cercle de précision, suivi caméra, panneau de navigation (distance, durée, heure d'arrivée, vitesse), réacheminement automatique hors itinéraire, durée par mode (marche/moto/voiture).
+
+## V77
+* Fiche 360° : explications claires quand prise de contrôle/blocage sont désactivés (son propre compte, compte administrateur) ; blocage/suppression possibles sur un autre admin ; messages d'erreur précis (fonction non déployée, migration manquante, console verrouillée).
+* Masquage des soldes : mémorisé sur l'appareil, partagé entre le menu et l'écran Portefeuille (bouton Masquer/Afficher).
+* Retrait en boutique : le vendeur peut scanner le QR du client (`confirm_handover_qr`).
+* Admin → Commandes : « Débloquer le code » et « Forcer la remise » (motif obligatoire, journalisé) — migration 0068.
+
+## V78
+* Commissions par produit / catégorie / boutique (priorité produit > catégorie > boutique > défaut), calculées ligne par ligne dans `create_orders` ; écran Admin → Commissions. Boutique officielle exemptable (règle boutique à 0 %).
+* Revenus de HAITIKET en direct (commissions gagnées/à venir, abonnements, Bazar, boutique officielle), actualisés toutes les 10 s ; graphiques interactifs (survol/toucher, animation, point « en direct »).
+* Boutique officielle : propriétaire visible et transférable (Admin → Modules → Boutique officielle).
+* Livreur : arrêt fiable (`courier_withdraw_self_v78`) et bouton « Redevenir livreur ».
+* Messagerie : carte produit (photo, prix, stock, caractéristiques, bouton « Voir le produit »), partage de produit, pièces jointes photo/vidéo/fichier (bucket privé `chat-media`).
+* Formats d'image : JPEG/JPG, PNG, WebP, AVIF, GIF acceptés (AVIF : affichage selon l'appareil).
+* Carte : directions virage par virage (OSRM), distance au prochain virage, avancement automatique.
+
+## V79
+* Recharges Plop Plop : rapprochement administrateur (Admin > Recharges), journal de chaque appel du webhook, vérification automatique toutes les 15 s dans le Portefeuille, notifications « Recharge confirmée / Retrait effectué », config.toml (verify_jwt=false pour les webhooks).
+* Notifications : un toucher ouvre l'écran concerné (produit, boutique, commande/suivi, conversation, portefeuille, mission, support, lien) — liste de notifications et notifications push.
+
+## V80
+* Missions livreur : créées dès le PAIEMENT (plus seulement à la confirmation du vendeur), position de la boutique facultative, GPS valide 10 min (réglage `courier_gps_max_minutes`), rattrapage des commandes déjà payées, diagnostic « pourquoi aucune mission » dans l'espace livreur.
+* Coordonnées obligatoires (appel + WhatsApp) et adresse de livraison obligatoire (garde serveur avant paiement), type de lieu (domicile, adresse précise, point de rencontre, école, travail, autre), repère, destinataire.
+* Livraison immédiate (~45 min indicatif) vs standard (délai de préparation du vendeur) ; prix d'immédiat fixé par le vendeur (acceptation par le livreur) ou offres des livreurs.
+* Fiche complète de commande pour client, vendeur et livreur affecté (photos/vidéos, adresse, contacts) ; aperçu pour les livreurs non affectés.
+* Liens Telegram et chaîne WhatsApp (accueil + menu).
+* Paiements : délai de création 40 s (NatCash/MonCash), message du fournisseur affiché en cas de refus.
+
+## V81 — Commande IMMÉDIATE / STANDARD (retrait et livraison)
+* Type de commande choisi au panier, pour le retrait COMME pour la livraison. Immédiate : objectif indicatif 45 min, sans garantie, uniquement si la boutique accepte l'immédiat ET si tous les produits sont marqués « immédiat possible ». Standard : délai de préparation annoncé par le vendeur (par produit ou par défaut boutique, de la minute à plusieurs jours).
+* Estimation affichée avant de commander = préparation + trajet (distance boutique→destination) + attente éventuelle de livreur (disponibilité réelle) ; dépassement de l'objectif signalé honnêtement.
+* Vendeur : réglages boutique (délai standard, accepter l'immédiat, préparation immédiate, prix de livraison immédiate) + options par produit ; alerte prioritaire « Commande IMMÉDIATE » ; badge sur la liste des commandes.
+* Livreur : missions immédiates en premier et signalées ; bouton « Ignorer » ; alerte « Aucun livreur pour l'instant » envoyée au client (délai réglable).
+* Retards : échéance de remboursement immédiate = 4 h (réglage `late_immediate_hours`) ; standard = préparation annoncée + délai habituel.
+
+## V82
+* Migration 0071 corrigée (erreur de parenthèses SQL) ; contrôleur de syntaxe passé sur 0060-0073.
+* Prix de livraison = TOUJOURS proposé par les livreurs (client choisit). Le vendeur peut fixer uniquement un SUPPLÉMENT d'immédiat. Standard = prix normal des articles.
+* Délai de préparation standard en minutes/heures/jours (jusqu'à 10 jours).
+* Réaffectation du livreur (libération par le livreur, demande du client, réouverture admin) avec remboursement tracé du prix de livraison ; refus de mission persistant ; références comptables uniques par offre.
+* Codes PIN/QR : génération aléatoire forte + validité (réglage pin_validity_hours, 48 h) avec renouvellement automatique.
+* Conversion HTG <-> USD entre portefeuilles au taux de l'administration (usd_htg_convert_rate, frais optionnels) ; taux USD propre à chaque boutique (paiement en gourdes d'une commande en USD, conversion tracée).
+* Boutique : rayons par catégorie ; badge « OFFICIELLE » sur la carte.
+* Plop Plop : vérification des recharges limitée (45 min, 3 max, toutes les 30 s) pour ne pas saturer le fournisseur.
