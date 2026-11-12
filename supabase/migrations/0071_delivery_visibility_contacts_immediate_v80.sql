@@ -337,15 +337,15 @@ end $$;
 -- =====================================================================
 create or replace function public.order_full_details(p_order uuid) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare uid uuid := auth.uid(); o public.orders; s public.shops; j public.delivery_jobs; full boolean; preview boolean := false; items jsonb;
+declare uid uuid := auth.uid(); o public.orders; s public.shops; j public.delivery_jobs; v_full boolean; preview boolean := false; items jsonb;
 begin
   if uid is null then raise exception 'Connexion requise'; end if;
   select * into o from public.orders where id = p_order;
   if o.id is null then raise exception 'Commande introuvable'; end if;
   select * into s from public.shops where id = o.shop_id;
   select * into j from public.delivery_jobs where order_id = o.id;
-  full := o.customer_id = uid or s.owner_id = uid or (j.courier_id is not null and j.courier_id = uid) or public.admin_unlocked();
-  if not full then
+  v_full := o.customer_id = uid or s.owner_id = uid or (j.courier_id is not null and j.courier_id = uid) or public.admin_unlocked();
+  if not v_full then
     if j.id is not null and j.status = 'open' and public._is_approved_courier() and o.status in ('PAID','CONFIRMED','PREPARING','READY_FOR_PICKUP') then preview := true;
     else raise exception 'Accès refusé'; end if;
   end if;
