@@ -46,9 +46,10 @@ function validReference(value: string): boolean {
 async function providerRequest(
   path: string,
   body: JsonObject,
+  timeoutMs = 15000,
 ): Promise<{ ok: boolean; status: number; data: JsonObject }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const result = await fetch(new URL(path, BASE_URL), {
@@ -228,6 +229,7 @@ Deno.serve(async (req: Request) => {
         providerResult = await providerRequest(
           "api/paiement-marchand",
           payload,
+          40000,
         );
       } catch {
         // Ne pas déclarer le paiement réussi ou échoué sans confirmation.
@@ -276,6 +278,7 @@ Deno.serve(async (req: Request) => {
               reason: "provider_creation_unconfirmed",
               method,
               provider_http_status: providerResult.status,
+              provider_message: String(providerData.message ?? providerData.error ?? "").slice(0, 200),
               provider_amount_minor: providerAmountMinor,
               payment_currency: "HTG",
               wallet_currency: currency,
@@ -288,7 +291,7 @@ Deno.serve(async (req: Request) => {
         return response(
           {
             error:
-              "La création du paiement n'a pas pu être confirmée. Vérification nécessaire avant toute nouvelle tentative.",
+              `Plop Plop a refusé ou n'a pas confirmé la création du paiement${providerData.message ? ` : ${String(providerData.message).slice(0, 160)}` : ` (code ${providerResult.status})`}. Si votre téléphone a reçu une demande, ne la validez pas et réessayez dans une minute ; sinon contactez le support avec la référence ci-dessous.`,
             reference,
             status: "review",
           },
