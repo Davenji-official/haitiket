@@ -596,18 +596,12 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                           if (j['distance_km'] != null) Text('À ${j['distance_km']} km de vous', style: TextStyle(color: C.muted)),
                           if (j['items_preview'] != null) Text('${j['items_count']} article(s) : ${j['items_preview']}', maxLines: 2, overflow: TextOverflow.ellipsis),
                           Text('${deliveryKindLabel(j['delivery_kind'])}${j['promised_minutes'] != null ? ' · ~${j['promised_minutes']} min' : ''}', style: TextStyle(color: C.muted)),
-                          Text(
-                            (j['delivery_speed'] == 'immediate' && ((j['pay_minor'] as num?) ?? 0) > 0) ? 'Prix fixé par le vendeur : ${money(j['pay_minor'] as num, '${j['currency']}')}' : 'Proposez votre tarif · ${j['currency'] ?? 'HTG'}',
-                            style: TextStyle(color: C.green, fontWeight: FontWeight.w800),
-                          ),
+                          Text('Prix de livraison : proposez le vôtre (le client choisit l’offre la plus raisonnable)', style: TextStyle(color: C.green, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 6),
                           Wrap(spacing: 8, runSpacing: 6, children: [
                             if (j['order_id'] != null) OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen('${j['order_id']}'))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Voir la commande')),
-                            if (j['delivery_speed'] == 'immediate' && ((j['pay_minor'] as num?) ?? 0) > 0)
-                              FilledButton(onPressed: () => run(() async { await Repo.acceptFixedPriceJob('${j['id']}'); if (mounted) toast(context, 'Mission acceptée au prix du vendeur.'); }), child: const Text('Accepter ce prix'))
-                            else
-                              FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
-                            TextButton(onPressed: () => setState(() => declinedJobs.add('${j['id']}')), child: const Text('Ignorer')),
+                            FilledButton(onPressed: () => proposePrice(j), child: const Text('Proposer un prix')),
+                            TextButton(onPressed: () => run(() async { await Repo.declineJob('${j['id']}'); if (mounted) toast(context, 'Mission refusée : elle ne vous sera plus proposée.'); }), child: const Text('Refuser')),
                           ]),
                         ]),
                       ),
@@ -642,6 +636,25 @@ class _CourierState extends State<CourierScreen> with WidgetsBindingObserver {
                             : null,
                       ),
                       if (j['order_id'] != null) Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen('${j['order_id']}'))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Ouvrir la commande (adresse, photos, contacts)'))),
+                      if (j['status'] == 'assigned')
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              final ok = await showDialog<bool>(
+                                context: context,
+                                builder: (d) => AlertDialog(
+                                  title: const Text('Libérer cette mission ?'),
+                                  content: const Text('Le client sera remboursé du prix de votre livraison et pourra choisir un autre livreur. À utiliser seulement si vous ne pouvez vraiment pas la faire.'),
+                                  actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Libérer'))],
+                                ),
+                              );
+                              if (ok == true) await run(() async { await Repo.courierReleaseJob('${j['id']}'); if (mounted) toast(context, 'Mission libérée.'); });
+                            },
+                            icon: const Icon(Icons.undo, color: Colors.redAccent),
+                            label: const Text('Je ne peux plus la faire (libérer)', style: TextStyle(color: Colors.redAccent)),
+                          ),
+                        ),
                       if (j['status'] == 'assigned' || j['status'] == 'picked_up') ContactsCard(jobId: j['id'].toString()),
                       ]),
                     ),

@@ -68,6 +68,21 @@ class _Pin extends StatelessWidget {
             decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, border: Border.all(color: accent, width: selected ? 4 : 3), boxShadow: [BoxShadow(color: accent.withValues(alpha: .55), blurRadius: selected ? 18 : 7)]),
             child: logo != null ? DarkSafe(child: Image.network(logo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.storefront, color: accent))) : Icon(official ? Icons.verified : (pro ? Icons.storefront : Icons.person_pin_circle), color: accent, size: selected ? 30 : 24),
           ),
+          if (official)
+            Positioned(
+              right: 0,
+              top: 2,
+              child: Container(padding: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: C.card, shape: BoxShape.circle), child: Icon(Icons.verified, size: 20, color: C.green)),
+            ),
+          if (official)
+            Positioned(
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: C.green, borderRadius: BorderRadius.circular(8)),
+                child: const Text('OFFICIELLE', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .3)),
+              ),
+            ),
         ]),
       ),
     );
@@ -569,7 +584,17 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${s['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: primary)),
+                Row(children: [
+                  Flexible(child: Text('${s['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: primary))),
+                  if (official) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(color: C.green, borderRadius: BorderRadius.circular(10)),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.verified, size: 12, color: Colors.white), SizedBox(width: 3), Text('OFFICIELLE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))]),
+                    ),
+                  ],
+                ]),
                 Text(slogan, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted)),
               ]),
             ),
@@ -579,7 +604,7 @@ class _MapState extends State<MapScreen> with TickerProviderStateMixin {
           if (isSel && routeInfo != null)
             Text(routeInfo!['road'] == true ? '${(routeInfo!['km'] as num).toStringAsFixed(1)} km · environ ${routeInfo!['min']} min en voiture (estimation)' : "${fmtKm((routeInfo!['km'] as num).toDouble())} à vol d'oiseau", style: TextStyle(color: C.green, fontWeight: FontWeight.w800))
           else
-            Text('${pro ? 'Boutique professionnelle' : 'Vendeur du Bazar'}${me != null ? ' · ~${etaMin(dist(s) * 1.3)} min' : ''}', style: TextStyle(color: C.muted)),
+            Text('${official ? 'Boutique officielle HAITIKET' : (pro ? 'Boutique professionnelle' : 'Vendeur du Bazar')}${me != null ? ' · ~${etaMin(dist(s) * 1.3)} min' : ''}', style: TextStyle(color: C.muted)),
           const Spacer(),
           Row(children: [
             Expanded(child: OutlinedButton.icon(onPressed: routing ? null : () => routeTo(s), icon: const Icon(Icons.directions, size: 20), label: Text(routing && isSel ? '…' : 'Itinéraire'))),

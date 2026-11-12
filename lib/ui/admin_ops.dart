@@ -112,6 +112,13 @@ class _AdminLiveMapPageState extends State<AdminLiveMapPage> {
         ]),
       ),
       if (error != null) Padding(padding: const EdgeInsets.all(8), child: Text(error!, style: const TextStyle(color: Colors.redAccent))),
+      if (data != null && !shops.any((x) => x['kind'] == 'platform'))
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: C.tint, borderRadius: BorderRadius.circular(12)),
+          child: Text('La boutique officielle HAITIKET n’apparaît pas sur la carte : définissez sa position dans Admin → Modules → Boutique officielle → « Position sur la carte ».', style: TextStyle(color: C.terracotta, fontWeight: FontWeight.w700, fontSize: 12)),
+        ),
       const Padding(
         padding: EdgeInsets.symmetric(horizontal: 14),
         child: Wrap(spacing: 12, children: [

@@ -211,13 +211,48 @@ class _ShopState extends State<ShopScreen> {
   late final Future<Map<String, dynamic>> f = load();
   bool? following;
   int followDelta = 0;
+  String? rayon;
+
+  /// Produits classés par rayon (catégorie), comme dans un magasin : chaque visiteur trouve tout de suite le bon rayon.
+  Widget rayons(List<Map<String, dynamic>> products) {
+    const other = 'Autres produits';
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final p in products) {
+      final name = ((p['categories'] as Map?)?['name'] ?? other) as String;
+      groups.putIfAbsent(name, () => []).add(p);
+    }
+    final names = groups.keys.toList()..sort((a, b) => a == other ? 1 : (b == other ? -1 : a.compareTo(b)));
+    final shown = rayon != null && groups.containsKey(rayon) ? [rayon!] : names;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (names.length > 1)
+        SizedBox(
+          height: 46,
+          child: ListView(scrollDirection: Axis.horizontal, children: [
+            Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text('Tous les rayons (${products.length})'), selected: rayon == null, onSelected: (_) => setState(() => rayon = null))),
+            for (final n in names) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text('$n (${groups[n]!.length})'), selected: rayon == n, onSelected: (_) => setState(() => rayon = n))),
+          ]),
+        ),
+      for (final n in shown) ...[
+        Padding(
+          padding: const EdgeInsets.only(top: 14, bottom: 8),
+          child: Row(children: [
+            Icon(Icons.category_outlined, color: C.green, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(n, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.ink))),
+            Text('${groups[n]!.length} produit(s)', style: TextStyle(color: C.muted, fontSize: 12)),
+          ]),
+        ),
+        ProductGrid(groups[n]!),
+      ],
+    ]);
+  }
 
   Future<Map<String, dynamic>> load() async {
     final id = widget.shopId;
     final info = await Repo.shopInfo(id);
     final rating = await Repo.shopRating(id);
     final stats = await Repo.shopStats(id);
-    final products = await Repo.products(shopId: id, limit: 40);
+    final products = await Repo.products(shopId: id, limit: 200);
     final reviews = await Repo.shopReviews(id);
     final fol = await Repo.isFollowing(id);
     return {'info': info, 'rating': rating, 'stats': stats, 'products': products, 'reviews': reviews, 'following': fol};
@@ -315,7 +350,7 @@ class _ShopState extends State<ShopScreen> {
                   const SizedBox(height: 22),
                   Text('Produits', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                   const SizedBox(height: 10),
-                  if (products.isEmpty) Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else ProductGrid(products),
+                  if (products.isEmpty) Text('Aucun produit disponible.', style: TextStyle(color: C.muted)) else rayons(products),
                   const SizedBox(height: 24),
                   Text('Avis des clients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: C.ink)),
                   const SizedBox(height: 10),

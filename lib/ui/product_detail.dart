@@ -136,6 +136,7 @@ class _ProductDetailState extends State<ProductDetailScreen> {
   int quantity = 1;
   late final Future<List<Map<String, dynamic>>> promos = Repo.productPromos(p['id'] as String);
   late final Future<Map<String, dynamic>?> orderOpts = Repo.productOrderOptions(p['id'] as String);
+  late final Future<Map<String, dynamic>?> usdRate = p['currency'] == 'USD' && (p['shop_id'] ?? (p['shops'] as Map?)?['id']) != null ? Repo.shopUsdRate('${p['shop_id'] ?? (p['shops'] as Map?)?['id']}') : Future.value(null);
 
   List<Map<String, dynamic>> get variants => List<Map<String, dynamic>>.from(((p['product_variants'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)));
   List<Map<String, dynamic>> get tiers {
@@ -284,6 +285,19 @@ class _ProductDetailState extends State<ProductDetailScreen> {
         ]),
         const SizedBox(height: 6),
         Text('${money((variant?['price_minor'] as num?) ?? (p['price_minor'] as num), (p['currency'] ?? 'HTG') as String)}${(variant?['unit_label'] as String? ?? unit) == 'unité' ? '' : ' / ${(variant?['unit_label'] as String? ?? unit)}'}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.green)),
+        FutureBuilder<Map<String, dynamic>?>(
+          future: usdRate,
+          builder: (_, r) {
+            final d = r.data;
+            if (d == null || d['rate'] == null) return const SizedBox.shrink();
+            final rate = (d['rate'] as num).toDouble();
+            final usd = (p['price_minor'] as num) / 100;
+            return Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('≈ ${(usd * rate).toStringAsFixed(0)} HTG au taux ${d['own'] == true ? 'de la boutique' : 'de la plateforme'} (1 USD = ${rate.toStringAsFixed(2)} HTG)', style: TextStyle(color: C.muted, fontSize: 12)),
+            );
+          },
+        ),
         FutureBuilder<Map<String, dynamic>?>(
           future: orderOpts,
           builder: (_, o) {

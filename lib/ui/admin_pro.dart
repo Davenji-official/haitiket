@@ -820,12 +820,13 @@ class _OrdersPageState extends State<_OrdersPage> {
       return;
     }
     final force = v == 'force';
-    final reason = await askText(context, force ? 'Motif de la remise forcée' : 'Motif du déblocage', hint: force ? '10 caractères minimum' : '5 caractères minimum');
+    final reopen = v == 'reopen';
+    final reason = await askText(context, force ? 'Motif de la remise forcée' : (reopen ? 'Motif de la réaffectation' : 'Motif du déblocage'), hint: force ? '10 caractères minimum' : '5 caractères minimum');
     if (reason == null || !mounted) return;
     if (force && !await _confirm(context, 'Forcer la remise ?', 'La commande passera à « livrée/terminée » et le règlement vendeur/livreur sera déclenché. Action tracée dans le journal admin.')) return;
     try {
-      final r = await _db.rpc(force ? 'admin_force_handover' : 'admin_reset_order_code', params: force ? {'p_order': id, 'p_reason': reason} : {'p_order': id, 'p_reason': reason});
-      if (mounted) toast(context, force ? 'Remise forcée : $r.' : 'Code débloqué : le livreur/vendeur peut réessayer.');
+      final r = await _db.rpc(force ? 'admin_force_handover' : (reopen ? 'admin_reopen_job' : 'admin_reset_order_code'), params: {'p_order': id, 'p_reason': reason});
+      if (mounted) toast(context, force ? 'Remise forcée : $r.' : (reopen ? 'Mission rouverte : le client choisira un nouveau livreur (ancien livreur remboursé côté client).' : 'Code débloqué : le livreur/vendeur peut réessayer.'));
       reload();
     } catch (e) {
       if (mounted) toast(context, Repo.err(e));
@@ -861,6 +862,7 @@ class _OrdersPageState extends State<_OrdersPage> {
                         PopupMenuItem(value: 'copy', child: Text('Copier le n° de commande')),
                         PopupMenuItem(value: 'reset', child: Text('Débloquer le code (5 erreurs)')),
                         PopupMenuItem(value: 'force', child: Text('Forcer la remise (livrée / terminée)')),
+                        PopupMenuItem(value: 'reopen', child: Text('Rouvrir la mission (nouveau livreur)')),
                       ],
                     ),
                   ),
@@ -1157,6 +1159,15 @@ class _SettingsPageState extends State<_SettingsPage> {
     'shop_fee_yearly_usd': 'Abonnement boutique annuel (USD).',
     'enforce_shop_plan': '1 = abonnement obligatoire pour vendre.',
     'referral_reward_minor': 'Récompense de parrainage (centimes).',
+    'usd_htg_convert_rate': 'Taux de conversion entre portefeuilles HTG/USD (HTG pour 1 USD). À défaut : usd_htg_rate.',
+    'wallet_conversion_fee_bps': 'Frais de conversion entre portefeuilles (points de base : 100 = 1 %). 0 = gratuit.',
+    'seller_rate_max_deviation_pct': 'Écart maximal (en %) entre le taux USD d’une boutique et celui de la plateforme.',
+    'pin_validity_hours': 'Durée de validité des codes PIN/QR de remise (heures). Un code expiré est renouvelé.',
+    'reassign_after_minutes': 'Minutes avant qu’un client puisse demander un autre livreur (si le livreur reste joignable).',
+    'late_immediate_hours': 'Heures avant remboursement automatique d’une commande IMMÉDIATE en retard.',
+    'delivery_no_courier_minutes': 'Minutes sans livreur avant d’alerter le client (moitié pour l’immédiat).',
+    'courier_gps_max_minutes': 'Ancienneté maximale de la position GPS d’un livreur pour voir les missions (minutes).',
+    'delivery_urban_speed_kmh': 'Vitesse urbaine moyenne utilisée pour estimer le trajet (km/h).',
   };
 
   Future<void> edit(String key, String current) async {

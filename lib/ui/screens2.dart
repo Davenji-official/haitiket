@@ -71,6 +71,7 @@ class _CheckoutState extends State<CheckoutScreen> {
   String mode = 'pickup';
   String kind = 'home';
   String speed = 'standard'; // type de commande : immediate | standard (valable pour le retrait ET la livraison)
+  bool payInHtg = false; // payer en gourdes une commande en USD, au taux de la boutique
   List<Map<String, dynamic>> estimates = [];
   bool estimating = false;
   String? _estKey;
@@ -245,11 +246,8 @@ class _CheckoutState extends State<CheckoutScreen> {
       try {
         for (final o in orders) {
           final r = await Repo.setOrderDeliveryDetails(o['id'].toString(), mode == 'delivery' ? kind : 'pickup', landmark.text.trim(), recipient.text.trim(), ph, wa, speed);
-          if (r['fixed_fee'] == true) {
-            final old = (o['delivery_minor'] as num?) ?? 0;
-            o['total_minor'] = ((o['total_minor'] as num) - old + (r['delivery_minor'] as num)).toInt();
-            o['delivery_minor'] = r['delivery_minor'];
-          }
+          // Le supplément d'immédiat (fixé par le vendeur) modifie le total ; le prix de livraison vient des livreurs.
+          if (r['total_minor'] is num) o['total_minor'] = (r['total_minor'] as num).toInt();
         }
       } catch (e) {
         for (final o in orders) {
@@ -258,6 +256,18 @@ class _CheckoutState extends State<CheckoutScreen> {
           } catch (_) {}
         }
         rethrow;
+      }
+      if (payInHtg) {
+        for (final o in orders) {
+          if (o['currency'] == 'USD') {
+            final r = await Repo.convertOrderCurrency('${o['id']}');
+            if (r['status'] == 'converted') {
+              o['currency'] = 'HTG';
+              o['total_minor'] = (r['total_minor'] as num).toInt();
+              if (mounted) toast(context, 'Converti en gourdes au taux de ${(r['rate'] as num).toStringAsFixed(2)} HTG pour 1 USD (${r['source'] == 'shop' ? 'taux de la boutique' : 'taux de la plateforme'}).');
+            }
+          }
+        }
       }
       if (!mounted) return;
       final paidIds = await offerPayment(orders);
@@ -335,14 +345,14 @@ class _CheckoutState extends State<CheckoutScreen> {
                     RadioListTile<String>(
                       value: 'standard',
                       title: const Text('Standard'),
-                      subtitle: Text(estimates.isEmpty ? 'Le vendeur prépare selon son délai annoncé.' : 'Préparation selon le vendeur · estimation ~${fmt(standardMinutes)}${mode == 'delivery' ? ' (avec livraison)' : ''}. Indicatif.'),
+                      subtitle: Text(estimates.isEmpty ? 'Prix normal des articles, sans supplément. Le vendeur prépare selon son délai annoncé.' : 'Préparation selon le vendeur · estimation ~${fmt(standardMinutes)}${mode == 'delivery' ? ' (avec livraison)' : ''}. Indicatif.'),
                     ),
                     RadioListTile<String>(
                       value: 'immediate',
                       enabled: immediateAvailable,
                       title: Text(immediateAvailable ? '⚡ Immédiate (~45 min)' : '⚡ Immédiate (indisponible)'),
                       subtitle: Text(immediateAvailable
-                          ? 'Prête dès que possible · estimation ~${fmt(immediateMinutes)}${immediateMinutes > 45 ? ' (au-delà de l’objectif de 45 min)' : ''}. Objectif indicatif, sans garantie.${mode == 'delivery' ? ' Prix de livraison fixé par le vendeur s’il en a défini un, sinon proposé par les livreurs.' : ' À retirer chez le vendeur.'}'
+                          ? 'Prête dès que possible · estimation ~${fmt(immediateMinutes)}${immediateMinutes > 45 ? ' (au-delà de l’objectif de 45 min)' : ''}. Objectif indicatif, sans garantie.${mode == 'delivery' ? ' Le prix de livraison est toujours proposé par les livreurs : vous choisissez l’offre qui vous convient. Un supplément d’immédiat peut être demandé par le vendeur.' : ' À retirer chez le vendeur (supplément d’immédiat possible).'}'
                           : (blockers.isEmpty ? 'Vérification en cours…' : blockers.join('\n'))),
                     ),
                   ]),
@@ -351,6 +361,19 @@ class _CheckoutState extends State<CheckoutScreen> {
               ]),
             );
           }),
+          if (CartStore.lines.value.values.any((l) => l.currency == 'USD'))
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: payInHtg,
+                onChanged: (v) => setState(() => payInHtg = v),
+                title: const Text('Payer en gourdes (HTG) les articles en USD'),
+                subtitle: const Text('Conversion au taux fixé par la boutique (à défaut, celui de la plateforme), affichée avant le paiement et conservée dans la commande.'),
+              ),
+            ),
           const SizedBox(height: 8),
           Text('Vos coordonnées (obligatoires)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.ink)),
           Text('Le vendeur et le livreur vous appellent ou vous écrivent sur WhatsApp pendant la livraison.', style: TextStyle(color: C.muted, fontSize: 12)),
@@ -1220,6 +1243,7 @@ class _ShopPanelState extends State<ShopPanel> {
             style: TextStyle(color: active ? C.green : C.terracotta, fontWeight: FontWeight.w700),
           ),
           if (active) SellerDeliverySettingsCard(shopId: '${widget.shop['id']}'),
+          if (active) SellerUsdRateCard(shopId: '${widget.shop['id']}'),
           if (!official && widget.shop['status'] != 'closed') Wrap(spacing: 8, runSpacing: 4, children: [
             OutlinedButton.icon(onPressed: () => manageShop('rename'), icon: const Icon(Icons.edit_outlined), label: const Text('Modifier le nom')),
             if (widget.shop['status'] == 'active') OutlinedButton.icon(onPressed: () => manageShop('suspend'), icon: const Icon(Icons.pause_circle_outline), label: const Text('Suspendre')),
@@ -1873,6 +1897,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with WidgetsB
                 ),
               ],
               OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderDetailsScreen(widget.orderId))), icon: const Icon(Icons.receipt_long_outlined), label: const Text('Voir les détails de la commande')),
+              TextButton.icon(
+                onPressed: () async {
+                  try {
+                    await Repo.customerRequestReassignment(widget.orderId);
+                    if (context.mounted) toast(context, 'Votre livreur a été retiré et sa livraison remboursée : choisissez une nouvelle offre.');
+                  } catch (e) {
+                    if (context.mounted) toast(context, Repo.err(e));
+                  }
+                },
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Mon livreur ne répond pas : en demander un autre'),
+              ),
               ContactsCard(orderId: widget.orderId),
               const Text('Offres des coursiers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               if (_offersLoading && _offers.isEmpty) const LinearProgressIndicator(),

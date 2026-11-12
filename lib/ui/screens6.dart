@@ -1,3 +1,4 @@
+import 'wallet_convert.dart';
 import 'dart:async';
 import 'dark_mode.dart';
 import 'package:flutter/foundation.dart';
@@ -180,8 +181,8 @@ class _WalletScreenState extends State<WalletScreen> {
     } else {
       _silentCheck();
     }
-    // Filet de sécurité : tant qu'une recharge est en attente, on la revérifie toutes les 15 s (le webhook peut être en retard).
-    pendingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _silentCheck());
+    // Filet de sécurité : tant qu'une recharge est en attente, on la revérifie toutes les 30 s (le webhook peut être en retard).
+    pendingTimer = Timer.periodic(const Duration(seconds: 30), (_) => _silentCheck());
   }
   Timer? pendingTimer;
   Future<void> _silentCheck() async {
@@ -259,7 +260,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
     const MascotHeader(mascot: Mascot.wallet, title: 'Portefeuille HAITIKET', subtitle: 'Ajoutez, gardez et retirez votre argent en sécurité.'),
     if(currentUser()==null) const EmptyState(title:'Connexion requise',text:'Connecte-toi pour utiliser le portefeuille.') else ...[
-      FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};return ValueListenableBuilder<bool>(valueListenable:BalancePrivacy.hidden,builder:(context,hid,_){String bal(String c)=>hid?'••••••':money(((balances[c] as num?)??0),c);return Column(children:[Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>BalancePrivacy.set(!hid),icon:Icon(hid?Icons.visibility_outlined:Icons.visibility_off_outlined,size:20),label:Text(hid?'Afficher les soldes':'Masquer les soldes'))),card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);});}),
+      FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());if(s.hasError)return ErrorState(s.error);final d=s.data??{};final balances=(d['balances'] as Map?)??{};return ValueListenableBuilder<bool>(valueListenable:BalancePrivacy.hidden,builder:(context,hid,_){String bal(String c)=>hid?'••••••':money(((balances[c] as num?)??0),c);return Column(children:[Align(alignment:Alignment.centerRight,child:Wrap(spacing:4,children:[TextButton.icon(onPressed:()async{final done=await showWalletConvert(context,htgMinor:((balances['HTG'] as num?)??0).toInt(),usdMinor:((balances['USD'] as num?)??0).toInt());if(done==true)reload();},icon:const Icon(Icons.currency_exchange,size:20),label:const Text('Convertir HTG ↔ USD')),TextButton.icon(onPressed:()=>BalancePrivacy.set(!hid),icon:Icon(hid?Icons.visibility_outlined:Icons.visibility_off_outlined,size:20),label:Text(hid?'Afficher les soldes':'Masquer les soldes'))])),card('Solde disponible · HTG',bal('HTG')),card('Solde disponible · USD',bal('USD'))]);});}),
       const SizedBox(height:8), Text('Ajouter de l’argent par MonCash ou NatCash',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:C.ink)),
       DropdownButtonFormField<String>(value:topupCurrency,decoration:const InputDecoration(labelText:'Devise à créditer'),items:const [DropdownMenuItem(value:'HTG',child:Text('Portefeuille HTG')),DropdownMenuItem(value:'USD',child:Text('Portefeuille USD'))],onChanged:busy?null:(v)=>setState(()=>topupCurrency=v??'HTG')),
       Field(amount,'Montant à créditer en $topupCurrency'),

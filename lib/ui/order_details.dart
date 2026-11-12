@@ -162,7 +162,8 @@ class SellerDeliverySettingsCard extends StatefulWidget {
 
 class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard> {
   final prep = TextEditingController(text: '30'), immPrep = TextEditingController(text: '20'), feeHtg = TextEditingController(), feeUsd = TextEditingController();
-  bool immediate = true, loaded = false, busy = false;
+  bool immediate = false, loaded = false, busy = false;
+  String prepUnit = 'min';
 
   @override
   void initState() {
@@ -175,7 +176,17 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
       final r = await Supabase.instance.client.from('shops').select('prep_minutes,immediate_delivery_enabled,immediate_prep_minutes,immediate_fee_htg_minor,immediate_fee_usd_minor').eq('id', widget.shopId).maybeSingle();
       if (r != null && mounted) {
         setState(() {
-          prep.text = '${r['prep_minutes'] ?? 30}';
+          final pm = ((r['prep_minutes'] as num?) ?? 30).toInt();
+          if (pm >= 1440 && pm % 1440 == 0) {
+            prepUnit = 'j';
+            prep.text = '${pm ~/ 1440}';
+          } else if (pm >= 60 && pm % 60 == 0) {
+            prepUnit = 'h';
+            prep.text = '${pm ~/ 60}';
+          } else {
+            prepUnit = 'min';
+            prep.text = '$pm';
+          }
           immPrep.text = '${r['immediate_prep_minutes'] ?? 20}';
           immediate = r['immediate_delivery_enabled'] == true;
           feeHtg.text = r['immediate_fee_htg_minor'] == null ? '' : (((r['immediate_fee_htg_minor'] as num) / 100).toString());
@@ -194,9 +205,10 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
   }
 
   Future<void> save() async {
-    final p = int.tryParse(prep.text.trim());
+    final pv = double.tryParse(prep.text.trim().replaceAll(',', '.'));
+    final p = pv == null ? null : (pv * (prepUnit == 'j' ? 1440 : (prepUnit == 'h' ? 60 : 1))).round();
     final ip = int.tryParse(immPrep.text.trim()) ?? 20;
-    if (p == null || p < 1 || p > 1440) return toast(context, 'Délai de préparation standard : 1 à 1440 minutes (pour plus long, réglez-le produit par produit).');
+    if (p == null || p < 1 || p > 14400) return toast(context, 'Délai de préparation standard : de 1 minute à 10 jours.');
     if (ip < 5 || ip > 240) return toast(context, 'Préparation immédiate : 5 à 240 minutes.');
     setState(() => busy = true);
     try {
@@ -215,17 +227,76 @@ class _SellerDeliverySettingsCardState extends State<SellerDeliverySettingsCard>
         decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Commandes immédiates et standard', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
-          Text('Standard : vous annoncez votre délai de préparation (réglable aussi produit par produit). Immédiate : le client est servi dès que possible, objectif indicatif ~45 min, sans garantie, en retrait comme en livraison. Vous choisissez les produits concernés dans leur fiche.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text('Standard : prix normal, vous annoncez votre délai (minutes, heures ou jours ; réglable aussi produit par produit). Immédiate : objectif indicatif de 45 min, sans garantie, en retrait comme en livraison ; réservée aux produits que vous marquez « immédiat possible ».', style: TextStyle(color: C.muted, fontSize: 12)),
           if (!loaded) const LinearProgressIndicator(),
-          Field(prep, 'Délai de préparation standard par défaut (minutes)', type: TextInputType.number),
+          Row(children: [
+            Expanded(child: Field(prep, 'Délai de préparation standard par défaut', type: const TextInputType.numberWithOptions(decimal: true))),
+            const SizedBox(width: 10),
+            DropdownButton<String>(value: prepUnit, items: const [DropdownMenuItem(value: 'min', child: Text('minutes')), DropdownMenuItem(value: 'h', child: Text('heures')), DropdownMenuItem(value: 'j', child: Text('jours'))], onChanged: (v) => setState(() => prepUnit = v ?? 'min')),
+          ]),
           SwitchListTile(contentPadding: EdgeInsets.zero, value: immediate, onChanged: (v) => setState(() => immediate = v), title: const Text('Accepter les commandes immédiates (retrait et livraison)')),
           if (immediate) ...[
             Field(immPrep, 'Temps de préparation en immédiat (minutes)', type: TextInputType.number),
-            Field(feeHtg, 'Prix de livraison immédiate en HTG (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
-            Field(feeUsd, 'Prix de livraison immédiate en USD (vide = proposé par les livreurs)', type: const TextInputType.numberWithOptions(decimal: true)),
+            Text('Supplément de commande immédiate (facultatif) : s’ajoute au prix normal des articles. Le prix de la livraison, lui, est toujours proposé par les livreurs.', style: TextStyle(color: C.muted, fontSize: 12)),
+            Field(feeHtg, 'Supplément immédiat en HTG (vide = aucun)', type: const TextInputType.numberWithOptions(decimal: true)),
+            Field(feeUsd, 'Supplément immédiat en USD (vide = aucun)', type: const TextInputType.numberWithOptions(decimal: true)),
           ],
           const SizedBox(height: 6),
           FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Enregistrement…' : 'Enregistrer')),
+        ]),
+      );
+}
+
+
+/// Taux USD propre à la boutique : permet aux clients de payer en gourdes vos produits en USD à VOTRE taux.
+class SellerUsdRateCard extends StatefulWidget {
+  final String shopId;
+  const SellerUsdRateCard({super.key, required this.shopId});
+  @override
+  State<SellerUsdRateCard> createState() => _SellerUsdRateCardState();
+}
+
+class _SellerUsdRateCardState extends State<SellerUsdRateCard> {
+  final rate = TextEditingController();
+  double? platform;
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Repo.shopUsdRate(widget.shopId).then((r) {
+      if (r == null || !mounted) return;
+      setState(() {
+        platform = (r['platform_rate'] as num?)?.toDouble();
+        if (r['own'] == true) rate.text = '${r['rate']}';
+      });
+    });
+  }
+
+  Future<void> save() async {
+    final t = rate.text.trim().replaceAll(',', '.');
+    final v = t.isEmpty ? null : double.tryParse(t);
+    if (t.isNotEmpty && (v == null || v <= 0)) return toast(context, 'Taux invalide.');
+    setState(() => busy = true);
+    try {
+      await Repo.sellerSetUsdRate(widget.shopId, v);
+      if (mounted) toast(context, v == null ? 'Taux de la plateforme appliqué.' : 'Votre taux est enregistré.');
+    } catch (e) {
+      if (mounted) toast(context, Repo.err(e));
+    }
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: C.mint, borderRadius: BorderRadius.circular(16)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Mon taux pour les produits en USD', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.ink)),
+          Text('Un client qui n’a que des gourdes peut payer vos produits en USD à ce taux (HTG pour 1 USD). Vous recevez alors des gourdes. Vide = taux de la plateforme${platform == null ? '' : ' (${platform!.toStringAsFixed(2)})'}. Écart maximal autorisé par rapport au taux de la plateforme : défini par l’administration.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Field(rate, 'Mon taux : 1 USD = … HTG', type: const TextInputType.numberWithOptions(decimal: true)),
+          FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Enregistrement…' : 'Enregistrer mon taux')),
         ]),
       );
 }
