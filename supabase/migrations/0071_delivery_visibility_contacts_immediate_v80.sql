@@ -10,6 +10,13 @@ create or replace function public._gps_max_age() returns interval language sql s
 revoke all on function public._gps_max_age() from public, anon;
 grant execute on function public._gps_max_age() to authenticated;
 
+-- Distance en km (formule de haversine) — fonction utilitaire
+create or replace function public._km(lat1 double precision, lng1 double precision, lat2 double precision, lng2 double precision)
+returns double precision language sql immutable as $$
+  select 6371 * 2 * asin(least(1, sqrt(
+    power(sin(radians(lat2 - lat1) / 2), 2) +
+    cos(radians(lat1)) * cos(radians(lat2)) * power(sin(radians(lng2 - lng1) / 2), 2)))) $$;
+
 -- Colonnes de livraison détaillée
 alter table public.orders add column if not exists delivery_kind text;
 alter table public.orders add column if not exists delivery_landmark text;
@@ -94,16 +101,14 @@ begin
          o.delivery_kind, o.delivery_speed, o.promised_minutes,
          (select count(*) from public.order_items i where i.order_id = o.id),
          (select string_agg(i.qty || '× ' || i.name, ', ') from public.order_items i where i.order_id = o.id),
-         case when s.lat is null or s.lng is null then null else round((6371.0 * 2 * asin(sqrt(least(1.0, greatest(0.0,
-           power(sin(radians(s.lat - v_lat) / 2), 2) + cos(radians(v_lat)) * cos(radians(s.lat)) * power(sin(radians(s.lng - v_lng) / 2), 2)))))))::numeric, 1) end,
+         case when s.lat is null or s.lng is null then null else round(public._km(s.lat, s.lng, v_lat, v_lng)::numeric, 1) end,
          s.name
   from public.delivery_jobs j
   join public.orders o on o.id = j.order_id
   join public.shops s on s.id = o.shop_id
   where j.status = 'open' and o.delivery_mode = 'delivery'
     and o.status in ('PAID','CONFIRMED','PREPARING','READY_FOR_PICKUP') and s.status = 'active'
-    and (s.lat is null or s.lng is null or 6371.0 * 2 * asin(sqrt(least(1.0, greatest(0.0,
-         power(sin(radians(s.lat - v_lat) / 2), 2) + cos(radians(v_lat)) * cos(radians(s.lat)) * power(sin(radians(s.lng - v_lng) / 2), 2))))) <= 25.0)
+    and (s.lat is null or s.lng is null or public._km(s.lat, s.lng, v_lat, v_lng) <= 25.0)
   order by j.created_at desc limit 50;
 end $$;
 revoke all on function public.list_open_jobs_v80() from public, anon;
@@ -112,7 +117,7 @@ grant execute on function public.list_open_jobs_v80() to authenticated;
 -- Diagnostic : pourquoi je ne vois aucune mission ?
 create or replace function public.courier_mission_diagnostic() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_uid uuid := auth.uid(); cs public.courier_status; v_open int; v_nopos int; v_far int := 0; v_age int; r jsonb;
+declare v_uid uuid := auth.uid(); cs public.courier_status; v_open int; v_nopos int; v_far int := 0; v_age int;
 begin
   if v_uid is null then raise exception 'Connexion requise'; end if;
   select * into cs from public.courier_status where user_id = v_uid;
@@ -123,8 +128,7 @@ begin
     where j.status = 'open' and (s.lat is null or s.lng is null);
   if cs.lat is not null then
     select count(*) into v_far from public.delivery_jobs j join public.orders o on o.id = j.order_id join public.shops s on s.id = o.shop_id
-      where j.status = 'open' and s.lat is not null and 6371.0 * 2 * asin(sqrt(least(1.0, greatest(0.0,
-        power(sin(radians(s.lat - cs.lat) / 2), 2) + cos(radians(cs.lat)) * cos(radians(s.lat)) * power(sin(radians(s.lng - cs.lng) / 2), 2))))) > 25.0;
+      where j.status = 'open' and s.lat is not null and s.lng is not null and public._km(s.lat, s.lng, cs.lat, cs.lng) > 25.0;
   end if;
   return jsonb_build_object('approved', public._is_approved_courier(), 'available', coalesce(cs.available,false), 'has_gps', cs.lat is not null,
     'gps_age_s', v_age, 'gps_max_s', extract(epoch from public._gps_max_age())::int, 'open_jobs_total', v_open,
@@ -271,9 +275,7 @@ begin
   where o.id=v_job.order_id and o.delivery_mode='delivery'
     and o.status in ('PAID','CONFIRMED','PREPARING','READY_FOR_PICKUP') and s.status='active';
   if not found then raise exception 'Commande non éligible à une offre de livraison'; end if;
-  v_distance := case when v_shop_lat is null or v_shop_lng is null then 0 else 6371.0 * 2 * asin(sqrt(least(1.0,greatest(0.0,
-    power(sin(radians(v_shop_lat-v_lat)/2),2) + cos(radians(v_lat))*cos(radians(v_shop_lat))*power(sin(radians(v_shop_lng-v_lng)/2),2)
-  )))) end;
+  v_distance := case when v_shop_lat is null or v_shop_lng is null then 0 else public._km(v_shop_lat, v_shop_lng, v_lat, v_lng) end;
   if v_distance > 25.0 then raise exception 'Mission hors du rayon autorisé de 25 km'; end if;
 
   select greatest(1, least(60, coalesce(value::integer, 10))) into v_expiry
