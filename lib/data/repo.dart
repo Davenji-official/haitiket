@@ -1144,12 +1144,17 @@ class Repo {
   }
 
   /// Après le retour de la page de paiement : vérifie auprès du serveur les recharges encore en attente.
+  /// Revérifie les recharges RÉCENTES en attente (45 min, 3 au maximum) : évite de saturer Plop Plop (limite « trop de requêtes »).
   static Future<int> checkPendingTopups() async {
     final w = await myWalletV2();
     final txs = (w['transactions'] as List?) ?? const [];
-    var confirmed = 0;
+    var confirmed = 0, checked = 0;
     for (final t in txs) {
+      if (checked >= 3) break;
       if (t is Map && t['kind'] == 'topup' && t['status'] == 'pending') {
+        final at = DateTime.tryParse('${t['created_at'] ?? ''}');
+        if (at != null && DateTime.now().difference(at.toLocal()).inMinutes > 45) continue;
+        checked++;
         try {
           if (await checkWalletTopup('${t['reference']}') == 'successful') confirmed++;
         } catch (_) {}
@@ -1201,7 +1206,29 @@ class Repo {
     }
   }
 
-  static Future<void> acceptFixedPriceJob(String jobId) async => _c.rpc('accept_fixed_price_job', params: {'p_job': jobId});
+  static Future<void> declineJob(String jobId) async => _c.rpc('decline_job', params: {'p_job': jobId});
+  static Future<void> courierReleaseJob(String jobId, {String? reason}) async => _c.rpc('courier_release_job', params: {'p_job': jobId, 'p_reason': reason});
+  static Future<void> customerRequestReassignment(String orderId, {String? reason}) async => _c.rpc('customer_request_reassignment', params: {'p_order': orderId, 'p_reason': reason});
+  static Future<void> adminReopenJob(String orderId, String reason) async => _c.rpc('admin_reopen_job', params: {'p_order': orderId, 'p_reason': reason});
+
+  // Conversion HTG <-> USD entre ses propres portefeuilles (taux fixé par l'administration)
+  static Future<Map<String, dynamic>> walletConversionQuote(String from, int amountMinor) async =>
+      Map<String, dynamic>.from(await _c.rpc('wallet_conversion_quote', params: {'p_from': from, 'p_amount_minor': amountMinor}) as Map);
+  static Future<Map<String, dynamic>> walletConvert(String from, int amountMinor, String requestId) async =>
+      Map<String, dynamic>.from(await _c.rpc('wallet_convert', params: {'p_from': from, 'p_amount_minor': amountMinor, 'p_request': requestId}) as Map);
+
+  // Taux USD propre à la boutique ; paiement en gourdes d'une commande en USD
+  static Future<Map<String, dynamic>?> shopUsdRate(String shopId) async {
+    try {
+      return Map<String, dynamic>.from(await _c.rpc('shop_usd_rate', params: {'p_shop': shopId}) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> sellerSetUsdRate(String shopId, double? rate) async => _c.rpc('seller_set_usd_rate', params: {'p_shop': shopId, 'p_rate': rate});
+  static Future<Map<String, dynamic>> convertOrderCurrency(String orderId) async =>
+      Map<String, dynamic>.from(await _c.rpc('convert_order_currency', params: {'p_order': orderId}) as Map);
 
   static Future<Map<String, dynamic>> orderFullDetails(String orderId) async =>
       Map<String, dynamic>.from(await _c.rpc('order_full_details', params: {'p_order': orderId}) as Map);
